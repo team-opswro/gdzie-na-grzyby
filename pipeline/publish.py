@@ -2,6 +2,7 @@
 import argparse
 import gzip
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path
 
 IMMUTABLE = "public, max-age=31536000, immutable"
 NO_CACHE = "no-cache"
+log = logging.getLogger("pipeline.publish")
 JSON = "application/json"
 BINARY = "application/octet-stream"
 FILES = {
@@ -36,6 +38,8 @@ def upload_plan(out_dir, build):
     plan = []
     for p in paths:
         rel = p.relative_to(out_dir).as_posix()
+        if p.suffix not in (".json", ".pmtiles"):
+            raise ValueError(f"niedozwolony plik w katalogu builda: {rel}")
         ct = BINARY if p.suffix == ".pmtiles" else JSON
         plan.append((p, f"v/{build}/{rel}", ct, IMMUTABLE))
     return plan
@@ -80,10 +84,13 @@ def prune(client, bucket, current, keep):
         ):
             keys += [o["Key"] for o in page.get("Contents", [])]
         for i in range(0, len(keys), 1000):
-            client.delete_objects(
+            resp = client.delete_objects(
                 Bucket=bucket,
                 Delete={"Objects": [{"Key": k} for k in keys[i:i + 1000]], "Quiet": True},
             )
+            for err in (resp or {}).get("Errors", []):
+                log.warning("nie usunieto %s: %s %s", err.get("Key"),
+                            err.get("Code"), err.get("Message"))
 
 
 def publish(client, bucket, out_dir, build, keep, now=None, transfer_config=None):
@@ -105,7 +112,10 @@ def publish(client, bucket, out_dir, build, keep, now=None, transfer_config=None
     manifest = json.dumps(make_manifest(build, now), indent=1).encode()
     _put_json(client, bucket, "manifest.json", manifest, NO_CACHE)
     if keep:
-        prune(client, bucket, build, keep)
+        try:
+            prune(client, bucket, build, keep)
+        except Exception as e:  # manifest juz wyslany - sprzatanie nie moze psuc publikacji
+            log.warning("sprzatanie starych wersji nie powiodlo sie: %s", e)
 
 
 def set_cors(client, bucket, origins):
@@ -122,9 +132,14 @@ def set_cors(client, bucket, origins):
 
 
 def _git_sha():
-    return subprocess.check_output(
-        ["git", "rev-parse", "--short=7", "HEAD"], text=True
-    ).strip()
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short=7", "HEAD"], text=True, stderr=subprocess.PIPE
+        ).strip()
+    except (FileNotFoundError, subprocess.CalledProcessError) as e:
+        raise RuntimeError(
+            "nie mozna ustalic hasha gita (brak git albo katalog nie jest repozytorium)"
+        ) from e
 
 
 def _client():
@@ -137,7 +152,12 @@ def _client():
         region_name=os.environ.get("S3_REGION", "auto"),
         aws_access_key_id=os.environ["S3_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["S3_SECRET_ACCESS_KEY"],
-        config=Config(s3={"addressing_style": "path"}, signature_version="s3v4"),
+        config=Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+            request_checksum_calculation="when_required",
+            response_checksum_validation="when_required",
+        ),
     )
 
 
@@ -150,11 +170,15 @@ def main(argv=None):
     a = ap.parse_args(argv)
 
     now = datetime.now(timezone.utc)
-    build = build_id(now, _git_sha())
+    try:
+        build = build_id(now, _git_sha())
+    except RuntimeError as e:
+        print(str(e), file=sys.stderr)
+        return 1
     try:
         plan = upload_plan(a.out, build)
-    except FileNotFoundError as e:
-        print(f"brak pliku builda: {e}", file=sys.stderr)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"zly katalog builda: {e}", file=sys.stderr)
         return 1
     if a.dry_run:
         print(f"build: {build}")

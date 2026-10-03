@@ -148,3 +148,48 @@ def test_missing_env_error(out, monkeypatch, capsys):
 def test_missing_out_file(tmp_path):
     with pytest.raises(FileNotFoundError):
         publish.upload_plan(tmp_path, BUILD)
+
+
+def test_upload_plan_rejects_unknown_extension(out):
+    (out / "sekret.env").write_text("x")
+    with pytest.raises(ValueError):
+        publish.upload_plan(out, BUILD)
+
+
+def test_prune_failure_is_warning(out, caplog):
+    class Boom(Stub):
+        def get_paginator(self, name):
+            raise RuntimeError("list failed")
+
+    c = Boom()
+    publish.publish(c, "b", out, BUILD, 3)
+    assert c.calls[-1] == ("put", "manifest.json")
+    assert "sprzatanie" in caplog.text
+
+
+def test_delete_errors_logged(out, caplog):
+    class Err(Stub):
+        def delete_objects(self, Bucket, Delete):
+            return {"Errors": [{"Key": "v/old/a", "Code": "AccessDenied", "Message": "no"}]}
+
+    c = Err(prefixes=["v/20200101-0000-aaaaaaa/", f"v/{BUILD}/"])
+    publish.prune(c, "b", BUILD, 1)
+    assert "AccessDenied" in caplog.text
+
+
+def test_missing_git_clear_message(out, monkeypatch, capsys):
+    def nogit(*a, **k):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr(publish.subprocess, "check_output", nogit)
+    assert publish.main(["--out", str(out), "--dry-run"]) == 1
+    assert "git" in capsys.readouterr().err
+
+
+def test_client_checksum_config(monkeypatch):
+    for k, v in (("S3_ENDPOINT", "https://e"), ("S3_ACCESS_KEY_ID", "a"),
+                 ("S3_SECRET_ACCESS_KEY", "b")):
+        monkeypatch.setenv(k, v)
+    c = publish._client()
+    assert c.meta.config.request_checksum_calculation == "when_required"
+    assert c.meta.config.response_checksum_validation == "when_required"
