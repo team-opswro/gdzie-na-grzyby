@@ -17,11 +17,21 @@ export function weatherFor(pogoda, cell, species, dayIdx) {
   const sp = pogoda?.cells?.[cell]?.[species];
   if (!sp || sp.w?.[dayIdx] == null) return null;
   const x = pogoda.wx?.[cell];
-  const wx = x ? { rain_mm: x.rain_mm?.[dayIdx], soil_t: x.soil_t?.[dayIdx], soil_m: x.soil_m?.[dayIdx] } : null;
+  const wx = x ? {
+    rain_mm: x.rain_mm?.[dayIdx],
+    soil_t: x.soil_t?.[dayIdx],
+    soil_m: x.soil_m?.[dayIdx],
+    ...(x.et0_mm && { et0_mm: x.et0_mm[dayIdx] }),
+    ...(x.soil_m_deep && { soil_m_deep: x.soil_m_deep[dayIdx] }),
+    ...(x.t2m_min && { t2m_min: x.t2m_min[dayIdx] }),
+  } : null;
+  const hasBaseWx = wx && wx.rain_mm != null && wx.soil_t != null && wx.soil_m != null;
   return {
     w: sp.w[dayIdx], rain: sp.rain[dayIdx], temp: sp.temp[dayIdx], season: sp.season[dayIdx],
+    pulse: sp.pulse?.[dayIdx] ?? null,
+    frost: sp.frost?.[dayIdx] ?? null,
     lim: sp.lim?.[dayIdx] ?? null,
-    wx: wx && wx.rain_mm != null && wx.soil_t != null && wx.soil_m != null ? wx : null,
+    wx: hasBaseWx ? wx : null,
   };
 }
 

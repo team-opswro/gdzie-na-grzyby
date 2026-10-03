@@ -51,6 +51,7 @@ export const LIM_TEXT = {
   cold: "Ogranicza: za zimna gleba",
   hot: "Ogranicza: za ciepła gleba",
   season: "Ogranicza: poza sezonem",
+  frost: "Ogranicza: niedawny przymrozek",
 };
 export const SOIL_DRY = 0.15;
 export const SOIL_WET = 0.3;
@@ -94,10 +95,14 @@ export function actionLinks(lat, lon) {
 }
 
 export function formatWx(wx) {
-  return {
+  const out = {
     rain: `Deszcz (5–21 dni wcześniej): ${dec(wx.rain_mm)} mm`,
     soil: `Gleba: ${dec(wx.soil_t)} °C, ${moistureLabel(wx.soil_m)}`,
   };
+  if (wx.et0_mm != null) {
+    out.et0 = `Parowanie (5–21 dni): ${dec(wx.et0_mm)} mm`;
+  }
+  return out;
 }
 
 export function trendArrow(dir) {
@@ -209,15 +214,14 @@ export function renderPopup(props, ctx) {
   row(t, "Siedlisko", pct(h / 100));
   if (weather && weather.wx && !props.rez) {
     const f = formatWx(weather.wx);
-    const r1 = document.createElement("tr");
-    const c1 = el("td", f.rain);
-    c1.colSpan = 2;
-    r1.append(c1);
-    const r2 = document.createElement("tr");
-    const c2 = el("td", f.soil);
-    c2.colSpan = 2;
-    r2.append(c2);
-    t.append(r1, r2);
+    for (const line of [f.rain, f.soil, f.et0]) {
+      if (line == null) continue;
+      const r = document.createElement("tr");
+      const c = el("td", line);
+      c.colSpan = 2;
+      r.append(c);
+      t.append(r);
+    }
   }
   root.append(t);
   if (weather && !props.rez) {
@@ -227,6 +231,12 @@ export function renderPopup(props, ctx) {
     row(dt, "Opad", pct(weather.rain));
     row(dt, "Temperatura", pct(weather.temp));
     row(dt, "Sezon", pct(weather.season));
+    if (typeof weather.pulse === "number") {
+      row(dt, "Ochłodzenie", `+${Math.round((weather.pulse - 1) * 100)}%`);
+    }
+    if (typeof weather.frost === "number") {
+      row(dt, "Przymrozek", pct(weather.frost));
+    }
     d.append(dt);
     root.append(d);
   }
