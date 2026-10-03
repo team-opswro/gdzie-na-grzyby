@@ -98,9 +98,9 @@ dialog h3 { margin: 12px 0 4px; font-size: 15px; }
 .ps-bar { flex: 1; height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
 .ps-bar i { display: block; height: 100%; }
 .ps-val { width: 2.6em; text-align: right; font-weight: 600; }
-@media (max-width: 700px) {
-  .topbar select { padding: 8px 2px; font-size: 14px; }
-  .topbar button { min-width: 36px; }
-  .topbar #species-info { min-width: 40px; }
-  .day { gap: 2px; }
+@media (max-width: 420px) {
+  .topbar { flex-wrap: wrap; }
+  .topbar select { flex: 1 1 calc(100% - 44px); }
+  .topbar .day { flex: 1; justify-content: space-between; }
+  #day-label { flex: 1; }
 }

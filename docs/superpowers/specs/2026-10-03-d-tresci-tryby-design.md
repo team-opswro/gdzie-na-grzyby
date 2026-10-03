@@ -27,7 +27,7 @@ w kilku akapitach.
   (klucz najlepszego). Wiersz: „72 · borowik”.
 - Popup: lista gatunków posortowana malejąco po wyniku, każdy z paskiem (szerokość ∝ wynik,
   kolor klasy) i wynikiem; reszta popupu (A, B, C) dotyczy najlepszego gatunku. Wykres z A
-  pokazuje maksimum na dzień.
+  pokazuje maksimum na dzień; trend i szczyt w popupie `all` również liczone z maksimum na dzień.
 
 ## 3. Karta gatunku (11)
 

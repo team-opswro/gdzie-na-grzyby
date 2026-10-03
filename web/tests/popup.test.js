@@ -69,3 +69,20 @@ test("rankLabel w trybie all dopisuje krótką nazwę gatunku", () => {
   assert.ok(l.line1.endsWith(" · koźlarz"));
   assert.equal(popup.shortName("Borowik szlachetny"), "borowik");
 });
+
+import fs from "node:fs";
+import { installDom, walk } from "./dom-stub.js";
+
+test("renderPopup w trybie all: bez pogody i ze starą pogodą — paski gatunków, bez wyjątku", () => {
+  installDom();
+  const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
+  const old = { ...P, wx: undefined };
+  for (const s of old.days ? Object.values(old.cells) : []) for (const k of Object.keys(s)) delete s[k].lim;
+  const props = { id: "x", cell: "506_178", h_borowik: 80, h_podgrzybek: 50, h_kurka: 40, h_kozlarz: 30, h_maslak: 20, h_rydz: 10 };
+  for (const pg of [null, old]) {
+    const root = popup.renderPopup(props, { pogoda: pg, species: "all", dayIdx: 0, todayIso: P.days[0] });
+    let items = 0;
+    walk(root, (n) => { if (n.tag === "li") items++; });
+    assert.equal(items, 6);
+  }
+});

@@ -36,9 +36,9 @@ export function topN(centroids, pogoda, species = ALL, dayIdx, origin, radiusKm 
     const [id, lat, lon, cell] = row;
     if (Math.abs(lat - origin.lat) > dLat || Math.abs(lon - origin.lon) > dLon) continue;
     if (haversineKm(origin, { lat, lon }) > radiusKm) continue;
-    let s, h, sp;
+    let s, h, sp, hBy;
     if (isAll) {
-      const hBy = {};
+      hBy = {};
       centroids.species.forEach((k, i) => { hBy[k] = row[4 + i]; });
       const b = bestFor(pogoda, cell, hBy, dayIdx);
       if (!b) continue;
@@ -51,7 +51,7 @@ export function topN(centroids, pogoda, species = ALL, dayIdx, origin, radiusKm 
     if (!s) continue;
     const key = oddzKey(id) ?? id;
     const cand = { id, lat, lon, cell, h, score: s };
-    if (isAll) cand.species = sp;
+    if (isAll) { cand.species = sp; cand.hBy = hBy; }
     const g = groups.get(key);
     if (!g) groups.set(key, { key, best: cand, count: 1 });
     else {

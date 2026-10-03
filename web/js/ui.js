@@ -240,7 +240,7 @@ export async function init() {
       const tr = document.createElement("span");
       tr.className = "rank-trend";
       const t = state.species === ALL
-        ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, hBySpecies(r.best.id), i)?.score ?? null), dayIdx())
+        ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, r.best.hBy, i)?.score ?? null), dayIdx())
         : trend(effective, r.best.cell, state.species, r.best.h, dayIdx());
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
@@ -265,13 +265,6 @@ export async function init() {
       item.append(btn);
       list.append(item);
     });
-  }
-
-  function hBySpecies(id) {
-    const row = centroids.rows.find((x) => x[0] === id);
-    const out = {};
-    centroids.species.forEach((k, i) => { out[k] = row ? row[4 + i] : null; });
-    return out;
   }
 
   function li(text, cls) {

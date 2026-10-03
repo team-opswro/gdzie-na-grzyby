@@ -46,3 +46,20 @@ test("aboutForecastText", () => {
   assert.equal(aboutForecastText("nonsense"), "brak prognozy");
   assert.match(aboutForecastText("2026-10-03T03:00:00Z"), /^Prognoza z: \d{1,2} paź, \d{2}:\d{2}$/);
 });
+
+import { installDom, walk, texts } from "./dom-stub.js";
+import { speciesCardModel as scm, renderSpeciesCard } from "../js/dialogs.js";
+
+test("renderSpeciesCard: link do Wikipedii tylko https, null -> Brak opisu", () => {
+  installDom();
+  const card = renderSpeciesCard(scm(info, "borowik"));
+  let href = null;
+  walk(card, (n) => { if (n.tag === "a") href = n.href; });
+  assert.equal(href, info.species[0].wiki);
+  assert.ok(texts(card).includes(DISCLAIMER));
+  const bad = renderSpeciesCard(scm({ ...info, species: [{ ...info.species[0], wiki: "javascript:alert(1)" }] }, "borowik"));
+  let a = false;
+  walk(bad, (n) => { if (n.tag === "a") a = true; });
+  assert.equal(a, false);
+  assert.deepEqual(texts(renderSpeciesCard(null)), ["Brak opisu gatunku"]);
+});

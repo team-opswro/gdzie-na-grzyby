@@ -73,12 +73,14 @@ export function renderSpeciesCard(model) {
     }
     root.append(ul);
   }
-  if (model.wiki) {
+  if (typeof model.wiki === "string" && model.wiki.startsWith("https://")) {
     const a = el("a", "Więcej w Wikipedii");
     a.href = model.wiki;
     a.target = "_blank";
     a.rel = "noopener";
-    root.append(el("p")).lastChild.append(a);
+    const p = el("p");
+    p.append(a);
+    root.append(p);
   }
   root.append(el("p", DISCLAIMER, "card-disclaimer"));
   if (model.unreviewed) root.append(el("p", UNREVIEWED_TEXT, "card-unreviewed"));
