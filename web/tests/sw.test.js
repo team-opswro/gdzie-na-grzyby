@@ -37,19 +37,24 @@ test("strategyFor: pliki wersji cache-first, podkład swr, POST pass, nieznane p
   assert.equal(strat("https://example.com/unknown"), "pass");
 });
 
-test("strategyFor: pliki powłoki cache-first", () => {
+test("strategyFor: powłoka network-first (nowe wdrożenie widać od razu), także wejście na /", () => {
   const scope = "https://example.com/";
-  assert.equal(strat(scope + "index.html"), "cache-first");
-  assert.equal(strat(scope + "js/ui.js"), "cache-first");
-  assert.equal(strat(scope + "vendor/pmtiles.js"), "cache-first");
-  assert.equal(strat(scope + "manifest.webmanifest"), "cache-first");
-  assert.equal(strat(scope + "icons/icon.svg"), "cache-first");
+  assert.equal(strat(scope), "network-first");
+  assert.equal(strat(scope + "index.html"), "network-first");
+  assert.equal(strat(scope + "js/ui.js"), "network-first");
+  assert.equal(strat(scope + "vendor/pmtiles.js"), "network-first");
+  assert.equal(strat(scope + "manifest.webmanifest"), "network-first");
+  assert.equal(strat(scope + "icons/icon.svg"), "network-first");
+  assert.equal(strat("https://example.com/app/", "GET", "https://example.com/app/"), "network-first");
 });
 
 test("cacheKey z Range i bez", () => {
   const { core } = loadCore();
   assert.equal(core.cacheKey("https://x/a"), "https://x/a");
-  assert.equal(core.cacheKey("https://x/a", "bytes=0-100"), "https://x/a#range=bytes=0-100");
+  // Cache API pomija fragment (#) przy dopasowaniu — zakres musi być w zapytaniu, inaczej zakresy się nadpisują
+  assert.equal(core.cacheKey("https://x/a", "bytes=0-100"), "https://x/a?__range=bytes%3D0-100");
+  assert.equal(core.cacheKey("https://x/a?v=1", "bytes=5-9"), "https://x/a?v=1&__range=bytes%3D5-9");
+  assert.ok(!core.cacheKey("https://x/a", "bytes=0-100").includes("#"));
   assert.equal(core.cacheKey("https://x/a", null), "https://x/a");
 });
 

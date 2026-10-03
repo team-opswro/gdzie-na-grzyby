@@ -53,9 +53,10 @@ function strategyFor(url, method, scope) {
   const host = u.hostname;
   if (host === "tile.openstreetmap.org" || host === "mapy.geoportal.gov.pl") return "swr";
 
-  // Powłoka aplikacji.
+  // Powłoka aplikacji (i wejście na stronę): network-first — nowe wdrożenie widać od razu,
+  // a cache służy tylko offline (cache-first wymagałby ręcznego podbijania SHELL_VERSION).
   const rel = relativeToScope(url, scope);
-  if (rel && SHELL_FILES.includes(rel)) return "cache-first";
+  if (rel === "" || (rel && SHELL_FILES.includes(rel))) return "network-first";
 
   return "pass";
 }
@@ -79,8 +80,11 @@ function relativeToScope(url, scope) {
   return rel;
 }
 
+// Klucz wpisu dla żądania z nagłówkiem Range. Cache API pomija fragment (#) przy dopasowaniu,
+// więc zakres idzie do zapytania (klucz nigdy nie trafia do sieci).
 function cacheKey(url, range) {
-  return range ? url + "#range=" + range : url;
+  if (!range) return url;
+  return url + (url.includes("?") ? "&" : "?") + "__range=" + encodeURIComponent(range);
 }
 
 function trimPlan(keysOldestFirst, limit) {

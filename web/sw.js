@@ -35,22 +35,32 @@ async function handle(request, strategy) {
   return fetch(request);
 }
 
+// Sieć najpierw; po NETWORK_TIMEOUT_MS bez odpowiedzi — kopia z cache, jeśli jest (inaczej dalej
+// czekamy na sieć: pierwsza wizyta na wolnym łączu nie może się nie udać przez limit czasu).
 async function networkFirst(request) {
   const cache = await caches.open(core.SHELL_CACHE);
-  try {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), core.NETWORK_TIMEOUT_MS);
-    const resp = await fetch(request.clone(), { signal: controller.signal });
-    clearTimeout(id);
-    if (resp.ok) {
-      cache.put(request, resp.clone()).catch(() => {});
-    }
+  const network = fetch(request).then((resp) => {
+    if (resp.ok) cache.put(request, resp.clone()).catch(() => {});
     return resp;
+  });
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(null), core.NETWORK_TIMEOUT_MS));
+  try {
+    const first = await Promise.race([network, timeout]);
+    if (first) return first;
+    return (await cachedFallback(cache, request)) ?? (await network);
   } catch (e) {
-    const cached = await cache.match(request);
+    const cached = await cachedFallback(cache, request);
     if (cached) return cached;
     throw e;
   }
+}
+
+async function cachedFallback(cache, request) {
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  // wejście na stronę offline bez wpisu dla tego adresu — prekeszowany index.html
+  if (request.mode === "navigate") return (await cache.match("index.html")) ?? null;
+  return null;
 }
 
 async function cacheFirst(request) {
