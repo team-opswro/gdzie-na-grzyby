@@ -31,7 +31,7 @@ test("topN radius, order, ties, skips missing/zero", () => {
   assert.deepEqual(r.map((x) => x.id), ["09", "02-04-1-07-368-a-00", "02-40-1-12-363-i-00"]);
   assert.equal(r[0].score, score(90, wWet));
   assert.equal(r[1].score, score(50, wWet));
-  assert.deepEqual(Object.keys(r[0]).sort(), ["distanceKm", "id", "lat", "lon", "score"]);
+  assert.deepEqual(Object.keys(r[0]).sort(), ["cell", "distanceKm", "h", "id", "lat", "lon", "score"]);
   assert.equal(r[0].distanceKm, Math.round(r[0].distanceKm * 10) / 10);
 });
 test("topN limits n, larger radius includes far", () => {

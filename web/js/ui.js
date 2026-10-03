@@ -1,8 +1,9 @@
-import { SPECIES, loadData, weatherFor, availableDays, bannerText } from "./data.js";
+import { SPECIES, loadData, availableDays, bannerText } from "./data.js";
+import { trend } from "./chart.js";
 import { topN } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
-import { renderPopup, renderReserve } from "./popup.js";
+import { renderPopup, renderReserve, trendArrow } from "./popup.js";
 
 const OPOLSKIE_CENTER = [17.9, 50.65];
 const DEFAULT_ZOOM = 9;
@@ -26,6 +27,7 @@ export async function init() {
   let days = []; // availableDays(...) — pozycja w tej tablicy to „day” w hashu
   let gps = null; // {lat, lon} po zgodzie na lokalizację
   let popup = null;
+  let lastPopup = null; // {props, lngLat} ostatnio otwartego wydzielenia
   let mapReady = false;
   let loaded = false;
 
@@ -69,9 +71,24 @@ export async function init() {
 
   function showPopup(props, lngLat) {
     popup?.remove();
-    const wx = effective ? weatherFor(effective, props.cell, state.species, dayIdx()) : null;
-    const content = renderPopup(props, wx, state.species);
+    lastPopup = { props, lngLat };
+    const content = renderPopup(props, {
+      pogoda: effective,
+      species: state.species,
+      dayIdx: dayIdx(),
+      todayIso: todayLocalIso(),
+      onDaySelect,
+    });
     popup = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+  }
+
+  function onDaySelect(idx) {
+    const p = days.findIndex((d) => d.idx === idx);
+    if (p < 0) return;
+    const keep = lastPopup;
+    state.day = p;
+    refresh();
+    if (keep) showPopup(keep.props, keep.lngLat);
   }
 
   function writeHash() {
@@ -115,7 +132,14 @@ export async function init() {
       const dist = document.createElement("span");
       dist.className = "rank-dist";
       dist.textContent = `${r.distanceKm.toString().replace(".", ",")} km`;
-      btn.append(sc, name, dist);
+      const tr = document.createElement("span");
+      tr.className = "rank-trend";
+      const t = trend(effective, r.cell, state.species, r.h, dayIdx());
+      if (t.dir) {
+        tr.textContent = trendArrow(t.dir);
+        tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
+      }
+      btn.append(sc, tr, name, dist);
       btn.addEventListener("click", () => flyToRow(r));
       item.append(btn);
       list.append(item);
