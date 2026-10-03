@@ -34,12 +34,15 @@ powinien pobrać `manifest.json` ponownie.
 | `v/<build>/**/*.json` | `application/json` | `gzip` | `public, max-age=31536000, immutable` |
 | `v/<build>/lasy.pmtiles` | `application/octet-stream` | — (bez kompresji, Range) | `public, max-age=31536000, immutable` |
 
-- Pliki JSON są zapisane w buckecie już skompresowane gzipem (R2 nie kompresuje w locie);
-  przeglądarki i typowe klienty HTTP rozpakowują je przezroczyście. Klient bez obsługi
-  `Content-Encoding` musi rozpoznać gzip po pierwszych bajtach `1f 8b`.
+- Pliki JSON są zapisane w buckecie już skompresowane gzipem (R2 nie kompresuje w locie) i wysyłane
+  z `Content-Encoding: gzip` klientom z `Accept-Encoding: gzip`; przeglądarki i typowe klienty HTTP
+  rozpakowują je przezroczyście. Klientowi bez `Accept-Encoding` Cloudflare oddaje treść rozpakowaną
+  (sprawdzone na `r2.dev`). Bezpiecznie: rozpoznawać gzip po pierwszych bajtach `1f 8b`.
 - `lasy.pmtiles` czytany zapytaniami `Range` (odpowiedź `206 Partial Content`).
 - CORS: `GET`, `HEAD` z dowolnego originu (`*`); dozwolone nagłówki żądania `Range`, `If-Match`,
   `If-None-Match`; eksponowane `ETag`, `Content-Range`, `Content-Length`.
+  Reguła CORS jest konfiguracją bucketu (panel R2 albo `publish --cors` z tokenem Admin) — patrz README,
+  „Wdrożenie z R2”.
 
 ## `manifest.json`
 
