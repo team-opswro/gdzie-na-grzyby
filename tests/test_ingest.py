@@ -271,3 +271,54 @@ def test_outputs_written_atomically_no_tmp_left(tmp_path):
     run_ingest(tmp_path, tmp_path)
     left = sorted(p.name for p in db.parent.iterdir())
     assert left == sorted([db.name, pq.name, outline.name])
+
+
+def _api_raw(raw: Path, prefix: str) -> None:
+    raw.mkdir(exist_ok=True)
+    g = gpd.GeoDataFrame(
+        pd.DataFrame({"adr_for": [f"{prefix}-1-01-1     -a   -00", f"{prefix}-1-01-2     -b   -00"],
+                      "species_cd": ["SO", "BK"], "spec_age": [60, 90],
+                      "site_type": ["BMW", "LMW"], "forest_fun": ["GOSP", "OCHR"],
+                      "area_type": ["D-STAN", "D-STAN"]}),
+        geometry=[box(20, 51, 20.01, 51.01), box(20.02, 51, 20.03, 51.01)], crs=4326)
+    g.to_file(raw / f"{prefix}.geojson", driver="GeoJSON")
+
+
+def test_api_district_loaded_with_source_api_and_stands(tmp_path):
+    make_pkg(tmp_path)
+    raw = tmp_path / "raw"
+    _api_raw(raw, "06-20")
+    db, pq, outline = tmp_path / "o.duckdb", tmp_path / "o.parquet", tmp_path / "o.geojson"
+    stats = ingest.ingest(tmp_path, db, pq, outline,
+                          [{"name": "Wieluń", "prefix": "06-20"}], raw)
+    assert stats["06-20"]["d_stan"] == 2 and stats["06-20"]["source"] == "api"
+    con = duckdb.connect(str(db), read_only=True)
+    assert con.execute("select source from district where prefix='06-20'").fetchall() == [("api",)]
+    assert con.execute("select count(*) from storey_species where prefix='06-20'").fetchone()[0] == 0
+    con.close()
+    st = load_stands(db, pq)
+    api = st[st["prefix"] == "06-20"].set_index("id")
+    assert api.loc["06-20-1-01-1-a-00", "sp_main"] == "SO"
+    assert api.loc["06-20-1-01-1-a-00", "partners"] == ()
+    assert ingest.list_districts(db) == [{"prefix": "02-99", "name": "Testowo"},
+                                         {"prefix": "06-20", "name": "Wieluń"}]
+
+
+def test_package_wins_over_api_district(tmp_path):
+    make_pkg(tmp_path)
+    raw = tmp_path / "raw"
+    _api_raw(raw, "02-99")
+    db, pq, outline = tmp_path / "o.duckdb", tmp_path / "o.parquet", tmp_path / "o.geojson"
+    stats = ingest.ingest(tmp_path, db, pq, outline, [{"name": "X", "prefix": "02-99"}], raw)
+    assert stats["02-99"]["source"] == "package"
+    con = duckdb.connect(str(db), read_only=True)
+    assert con.execute("select source from district").fetchall() == [("package",)]
+    con.close()
+
+
+def test_api_district_without_raw_file_is_skipped(tmp_path, capsys):
+    make_pkg(tmp_path)
+    stats = ingest.ingest(tmp_path, tmp_path / "o.duckdb", tmp_path / "o.parquet",
+                          tmp_path / "o.geojson", [{"name": "Y", "prefix": "06-20"}],
+                          tmp_path / "brak")
+    assert "06-20" not in stats and "06-20" in capsys.readouterr().err

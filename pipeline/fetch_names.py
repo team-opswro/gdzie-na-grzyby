@@ -5,10 +5,12 @@ import re
 import sys
 from pathlib import Path
 
+import duckdb
 import requests
 import yaml
 
 from pipeline.fetch_bdl import DEFAULT_BASE_URL, FIELDS_YAML, PAGE_LIMIT, ROOT, _get_json
+from pipeline.ingest import DEFAULT_DB, list_districts
 
 NAMES_PATH = ROOT / "web" / "data" / "nazwy.json"
 LAYER = "lesnictwa"
@@ -55,19 +57,23 @@ def fetch_ranges(session, base_url: str, prefix: str) -> list[dict]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", type=Path, default=NAMES_PATH)
+    ap.add_argument("--db", type=Path, default=DEFAULT_DB)
     args = ap.parse_args(argv)
     try:
         cfg = yaml.safe_load(FIELDS_YAML.read_text(encoding="utf-8"))
         base_url = cfg.get("base_url", DEFAULT_BASE_URL)
         session = requests.Session()
+        districts = list_districts(args.db)
+        known = {d["prefix"] for d in districts}
+        districts += [d for d in (cfg.get("api_districts") or []) if d["prefix"] not in known]
         by_prefix = {}
-        for d in cfg["districts"]:
+        for d in districts:
             by_prefix[d["prefix"]] = fetch_ranges(session, base_url, d["prefix"])
             n = len(by_prefix[d["prefix"]])
             if n == 0:
                 print(f"Ostrzeżenie: {d['name']} ({d['prefix']}) — 0 leśnictw", file=sys.stderr)
             print(f"{d['name']}: {n} leśnictw")
-        names = build_names(cfg["districts"], by_prefix)
+        names = build_names(districts, by_prefix)
         if not names["lesn"]:
             raise ValueError("BDL nie zwróciło żadnych nazw leśnictw")
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -75,7 +81,7 @@ def main(argv=None) -> int:
         tmp.write_text(json.dumps(names, ensure_ascii=False, separators=(",", ":"),
                                   sort_keys=True), encoding="utf-8")
         tmp.replace(args.out)
-    except (ValueError, RuntimeError, OSError) as exc:
+    except (ValueError, RuntimeError, OSError, duckdb.Error) as exc:
         print(f"Błąd: {exc}", file=sys.stderr)
         return 1
     print(f"nazwy: {len(names['nadl'])} nadleśnictw, {len(names['lesn'])} leśnictw -> {args.out}")

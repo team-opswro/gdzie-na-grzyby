@@ -127,7 +127,10 @@ def main(argv=None) -> int:
     base_url = cfg.get("base_url", DEFAULT_BASE_URL)
     args.out.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
-    for d in cfg["districts"]:
+    api = cfg.get("api_districts") or []
+    if not api:
+        print("api_districts puste: wszystkie nadleśnictwa pochodzą z paczek (pipeline.ingest)")
+    for d in api:
         target = args.out / f"{d['prefix']}.geojson"
         if target.exists() and not args.force:
             print(f"{d['name']}: pomijam (jest {target.name})")

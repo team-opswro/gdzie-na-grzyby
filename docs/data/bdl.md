@@ -76,3 +76,5 @@ Obrys z kolekcji `nadlesnictwa` (`region_cd`, `inspectorate_cd`) jest łączony 
 Kody siedlisk spoza list gatunków:
 - dodane jako odpowiedniki (wariant górski "G", jak `BMGSW` ≙ `BMSW`): `BMWYZ` ≙ `BMW` (1 wydz., Henryków/Oława), `BGSW` ≙ `BSW` (1), `BGW` ≙ `BW` (1) - dopisane obok odpowiedników na tych samych listach w `species.yaml`;
 - bez odpowiednika, dostają współczynnik "inne siedlisko": `OL` (940 w nowych nadleśnictwach), `LL` (670), `OLJ` (302), `LMB` (31, las mieszany bagienny; `BMB` jest tylko na liście kozlarza), `OLJWYZ` (3), `LLWYZ` (3; wariant `LL`, ale `LL` nie jest mapowany).
+
+> Aktualizacja (plan E): obszar to suma obrysów nadleśnictw z paczek (`G_INSPECTORATE`) i `api_districts`; lista `districts` usunięta z `bdl_fields.yaml` (źródłem listy jest tabela `district` w DuckDB). `opolskie.geojson` jest nieużywany (plik zostaje).

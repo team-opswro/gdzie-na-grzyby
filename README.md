@@ -16,7 +16,7 @@ node --test web/tests/*.test.js     # JS (podaj pliki jawnie; katalog nie dział
 Wykonywana lokalnie; wynik (`web/data/lasy.pmtiles`, `centroidy.json`, `grid.json`) trafia do repozytorium.
 
 ```sh
-python -m pipeline.area                            # obrys obszaru: opolskie + nadleśnictwa `whole: true` -> pipeline/data/obszar.geojson
+python -m pipeline.area                            # obszar = suma obrysów nadleśnictw (ingest + api_districts) -> pipeline/data/obszar.geojson; opolskie.geojson nieużywany
 python -m pipeline.fetch_reserves                  # rezerwaty przyrody z GDOŚ (WFS) -> pipeline/data/rezerwaty.geojson
 python -m pipeline.fetch_bdl                       # pobranie danych BDL do pipeline/data/raw
 python -m pipeline.fetch_names                     # nazwy nadleśnictw i leśnictw -> web/data/nazwy.json

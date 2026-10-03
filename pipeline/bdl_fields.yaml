@@ -6,37 +6,9 @@ fields: {id: adr_for, sp_main: species_cd, sp_admix: null, age: spec_age, hab: s
 # id = adres lesny; loader MUSI znormalizowac: usunac wszystkie biale znaki (re.sub(r"\s+","",v)) -> "02-40-1-12-363-i-00"; unikalny w probce Opole (6687/6687). a_i_num = alternatywny numeryczny klucz.
 # dodatkowo przydatne: part_cd (udzial gatunku panujacego w dziesiatych, 10 = czysty), sub_area (ha), stand_stru, adr_for (adres lesny)
 forest_filter: {column: area_type, values: ["D-STAN"], require_not_null: [species_cd]}
-# prefix = poczatek surowego adr_for (filter=adr_for LIKE '<prefix>%'); name = dokladnie jak inspectorate_name w kolekcji nadlesnictwa
-districts:
-  - {name: "Prudnik", prefix: "02-23", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Namysłów", prefix: "02-20", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Tułowice", prefix: "02-32", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Kluczbork", prefix: "02-11", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Opole", prefix: "02-40", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Strzelce Opolskie", prefix: "02-29", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Brzeg", prefix: "02-04", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Prószków", prefix: "02-24", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Rudy Raciborskie", prefix: "02-26", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Olesno", prefix: "02-21", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Kup", prefix: "02-18", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Kędzierzyn", prefix: "02-10", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Turawa", prefix: "02-33", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Zawadzkie", prefix: "02-14", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Wieluń", prefix: "06-20", layer: "RDLP_Lodz_wydzielenia"}
-  - {name: "Lubliniec", prefix: "02-19", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Rudziniec", prefix: "02-25", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Kłobuck", prefix: "02-12", layer: "RDLP_Katowice_wydzielenia"}
-  - {name: "Henryków", prefix: "13-02", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
-  - {name: "Oława", prefix: "13-20", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
-  - {name: "Miękinia", prefix: "13-17", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
-  - {name: "Oborniki Śląskie", prefix: "13-19", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
-  - {name: "Oleśnica Śląska", prefix: "13-09", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
-  - {name: "Żmigród", prefix: "13-31", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
-  - {name: "Milicz", prefix: "13-18", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
-  - {name: "Złoty Potok", prefix: "02-38", layer: "RDLP_Katowice_wydzielenia", whole: true}
-  - {name: "Koniecpol", prefix: "02-15", layer: "RDLP_Katowice_wydzielenia", whole: true}
-# whole: true = nadlesnictwo poza woj. wlaczone w calosci, bez przycinania do granicy woj.: RDLP Wroclaw (dolnoslaskie: Grodkow, okolice Wroclawia, lasy trzebnickie i milickie)
-# oraz RDLP Katowice (Zloty Potok, Koniecpol - okolice Drochlina kolo Czestochowy);
-# jego obrys (kolekcja nadlesnictwa: region_cd, inspectorate_cd) trafia do pipeline/data/obszar.geojson (python -m pipeline.area).
-# adr_for w RDLP_Wroclaw_wydzielenia ma ten sam format (np. "13-02-1-03-63    -b   -00"), filtr LIKE '13-02%' dziala.
-# Wieluń = RDLP Łódź. Pominiete slivery granicy (<1.1 km2 w woj.): Syców, Bardo Śląskie, Przedborów, Herby (Oleśnica Śląska jest teraz wlaczona w calosci).
+# Wszystkie nadlesnictwa pochodza z paczek BDL (Nadlesnictwa/, python -m pipeline.ingest); lista nadlesnictw = tabela `district` w DuckDB.
+# api_districts = nadlesnictwa bez paczki, pobierane z OGC API (python -m pipeline.fetch_bdl -> pipeline/data/raw/<prefix>.geojson, wczytywane przez ingest ze source='api').
+# prefix = poczatek surowego adr_for (filter=adr_for LIKE '<prefix>%'); name = dokladnie jak inspectorate_name w kolekcji nadlesnictwa.
+# Paczka tego samego prefiksu ma pierwszenstwo. Obecnie puste (Wielun 06-20 ma paczke).
+# Przyklad wpisu: {name: "Wieluń", prefix: "06-20", layer: "RDLP_Lodz_wydzielenia"}
+api_districts: []

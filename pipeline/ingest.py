@@ -19,6 +19,7 @@ import geopandas as gpd
 import pandas as pd
 import pyarrow.parquet as pq
 import pyogrio
+import yaml
 
 from pipeline.habitat import normalize_habitat, normalize_species_code
 
@@ -28,6 +29,8 @@ DEFAULT_PACKAGES = ROOT / "Nadlesnictwa"
 DEFAULT_DB = DATA_DIR / "bdl.duckdb"
 DEFAULT_PARQUET = DATA_DIR / "stands.parquet"
 DEFAULT_OUTLINE = DATA_DIR / "nadlesnictwa.geojson"
+DEFAULT_RAW = DATA_DIR / "raw"
+FIELDS_YAML = Path(__file__).resolve().parent / "bdl_fields.yaml"
 
 PKG_RE = re.compile(r"^BDL_(\d{2})_(\d{2})_(.+?)_(\d{4})\s*(\(\d+\))?(\.zip)?$", re.IGNORECASE)
 PRODUCED_RE = re.compile(r"Data wytworzenia danych:\s*(\d{4}-\d{2}-\d{2})")
@@ -212,6 +215,53 @@ def _load_package(prefix: str, pkg: Path) -> dict:
             "outline": outline}
 
 
+def _load_api_district(d: dict, raw_dir: Path) -> dict:
+    """Wydzielenia nadleśnictwa pobrane z OGC API (`raw/<prefix>.geojson`) do tych samych
+    struktur co paczka (bez składu gatunkowego: tabele pięter puste)."""
+    prefix = d["prefix"]
+    path = Path(raw_dir) / f"{prefix}.geojson"
+    if not path.exists():
+        raise PackageError(f"brak pliku {path.name} (uruchom python -m pipeline.fetch_bdl)")
+    g = gpd.read_file(path)
+    if g.crs is None:
+        g = g.set_crs(4326)
+    g = g.to_crs(4326)
+    g = g[g.geometry.notna()].copy().reset_index(drop=True)
+    if "a_i_num" in g.columns and g["a_i_num"].notna().all():
+        a_i = pd.to_numeric(g["a_i_num"]).astype("int64")
+    else:
+        a_i = pd.Series(range(1, len(g) + 1), dtype="int64")
+    ids = g["adr_for"].astype(str).map(lambda v: re.sub(r"\s+", "", v))
+    col = lambda c: [_strip(v) for v in g[c]] if c in g.columns else [None] * len(g)  # noqa: E731
+    attrs = pd.DataFrame({
+        "prefix": prefix, "a_i_num": a_i.values, "id": ids.values,
+        "area_type": col("area_type"), "site_type": col("site_type"),
+        "forest_fun": col("forest_fun"), "species_cd": col("species_cd"),
+        "spec_age": pd.array(pd.to_numeric(g["spec_age"], errors="coerce"), dtype="Int64")
+        if "spec_age" in g.columns else pd.array([None] * len(g), dtype="Int64"),
+    })
+    attrs = attrs.drop_duplicates(subset="a_i_num").reset_index(drop=True)
+    keep = g.index[~pd.Series(a_i.values).duplicated().values]
+    geo = gpd.GeoDataFrame({"a_i_num": attrs["a_i_num"].values, "id": attrs["id"].values,
+                            "prefix": prefix}, geometry=g.geometry.loc[keep].values, crs=4326)
+    sub = pd.DataFrame({c: None for c in TABLES["subarea"][1]}, index=range(len(attrs)),
+                       dtype=object)
+    sub["arodes_int_num"] = attrs["a_i_num"].values
+    sub["area_type_cd"] = attrs["area_type"].values
+    sub["site_type_cd"] = attrs["site_type"].values
+    sub["forest_func_cd"] = attrs["forest_fun"].values
+    sub.insert(0, "prefix", prefix)
+    tables = {"subarea": sub,
+              "storey_species": _with_columns(pd.DataFrame(columns=TABLES["storey_species"][1]),
+                                              TABLES["storey_species"][1], prefix),
+              "arod_storey": _with_columns(pd.DataFrame(columns=TABLES["arod_storey"][1]),
+                                           TABLES["arod_storey"][1], prefix)}
+    district = {"prefix": prefix, "name": d.get("name"), "source": "api",
+                "produced_at": None, "package": path.name}
+    return {"district": district, "tables": tables, "g_subarea": attrs, "geo": geo,
+            "outline": None}
+
+
 def load_package(prefix: str, pkg: Path) -> dict:
     """Wczytuje paczkę; każdy błąd (brak pliku, zip, GDAL, wartości) → PackageError."""
     try:
@@ -285,10 +335,12 @@ class _GeoParquetWriter:
             self.writer.close()
 
 
-def ingest(root: Path, db_path: Path, parquet_path: Path, outline_path: Path) -> dict:
+def ingest(root: Path, db_path: Path, parquet_path: Path, outline_path: Path,
+           api_districts=(), raw_dir: Path = DEFAULT_RAW) -> dict:
     """Wczytuje wszystkie paczki z `root` paczka po paczce (zapis przyrostowy do DuckDB
     i GeoParquet); zwraca statystyki per prefix (tylko wczytane). Gdy wybrana paczka jest
-    uszkodzona, próbuje kolejnego kandydata dla tego nadleśnictwa."""
+    uszkodzona, próbuje kolejnego kandydata dla tego nadleśnictwa. Nadleśnictwa z `api_districts`
+    (bez paczki) czyta z `raw_dir/<prefix>.geojson` (source='api'); paczka ma pierwszeństwo."""
     db_path, parquet_path, outline_path = Path(db_path), Path(parquet_path), Path(outline_path)
     for path in (db_path, parquet_path, outline_path):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,27 +354,39 @@ def ingest(root: Path, db_path: Path, parquet_path: Path, outline_path: Path) ->
     try:
         for sql in SCHEMA_SQL:
             con.execute(sql)
+        def accept(prefix, pkg_name, part):
+            _insert_package(con, part)
+            writer.write(part["geo"])
+            if part["outline"] is not None:
+                outlines.append(part["outline"])
+            sub = part["tables"]["subarea"]
+            stats[prefix] = {
+                "name": part["district"]["name"],
+                "package": pkg_name,
+                "source": part["district"]["source"],
+                "produced_at": part["district"]["produced_at"],
+                "subareas": len(sub),
+                "d_stan": int((sub["area_type_cd"] == "D-STAN").sum()),
+                "geometries": len(part["geo"]),
+            }
+
         for prefix, candidates in find_candidates(root).items():
             for pkg in candidates:
                 try:
                     part = load_package(prefix, pkg)
-                    _insert_package(con, part)
+                    accept(prefix, pkg.name, part)
                 except Exception as exc:  # noqa: BLE001
                     warn(f"{prefix} ({pkg.name}) pominięte: {exc}")
                     continue
-                writer.write(part["geo"])
-                outlines.append(part["outline"])
-                sub = part["tables"]["subarea"]
-                stats[prefix] = {
-                    "name": part["district"]["name"],
-                    "package": pkg.name,
-                    "produced_at": part["district"]["produced_at"],
-                    "subareas": len(sub),
-                    "d_stan": int((sub["area_type_cd"] == "D-STAN").sum()),
-                    "geometries": len(part["geo"]),
-                }
                 del part
                 break
+        for d in api_districts:
+            if d["prefix"] in stats:
+                continue  # paczka wygrywa z API
+            try:
+                accept(d["prefix"], f"{d['prefix']}.geojson", _load_api_district(d, raw_dir))
+            except Exception as exc:  # noqa: BLE001
+                warn(f"{d['prefix']} (API) pominięte: {exc}")
     finally:
         con.close()
         writer.close()
@@ -332,13 +396,27 @@ def ingest(root: Path, db_path: Path, parquet_path: Path, outline_path: Path) ->
             t.unlink(missing_ok=True)
         return stats
 
-    gpd.GeoDataFrame(pd.concat(outlines, ignore_index=True), geometry="geometry",
-                     crs=4326).to_file(tmp_outline, driver="GeoJSON")
+    if outlines:
+        gpd.GeoDataFrame(pd.concat(outlines, ignore_index=True), geometry="geometry",
+                         crs=4326).to_file(tmp_outline, driver="GeoJSON")
+    else:
+        gpd.GeoDataFrame({"prefix": [], "name": []}, geometry=[], crs=4326).to_file(
+            tmp_outline, driver="GeoJSON")
     Path(str(db_path) + ".wal").unlink(missing_ok=True)
     tmp_db.replace(db_path)
     tmp_pq.replace(parquet_path)
     tmp_outline.replace(outline_path)
     return stats
+
+
+def list_districts(db_path: Path = DEFAULT_DB) -> list[dict]:
+    """Nadleśnictwa z tabeli `district` (prefix, name), posortowane po prefiksie."""
+    con = duckdb.connect(str(db_path), read_only=True)
+    try:
+        rows = con.execute("SELECT prefix, name FROM district ORDER BY prefix").fetchall()
+    finally:
+        con.close()
+    return [{"prefix": p, "name": n} for p, n in rows]
 
 
 # --- odczyt wydzieleń ----------------------------------------------------------------------
@@ -436,10 +514,13 @@ def main(argv=None) -> int:
     ap.add_argument("--db", type=Path, default=DEFAULT_DB)
     ap.add_argument("--parquet", type=Path, default=DEFAULT_PARQUET)
     ap.add_argument("--outline", type=Path, default=DEFAULT_OUTLINE)
+    ap.add_argument("--raw", type=Path, default=DEFAULT_RAW, help="pliki API dla api_districts")
     args = ap.parse_args(argv)
+    cfg = yaml.safe_load(FIELDS_YAML.read_text(encoding="utf-8")) or {}
 
     t0 = time.monotonic()
-    stats = ingest(args.packages, args.db, args.parquet, args.outline)
+    stats = ingest(args.packages, args.db, args.parquet, args.outline,
+                   cfg.get("api_districts") or [], args.raw)
     if not stats:
         print(f"BŁĄD: nie wczytano żadnej paczki z {args.packages}", file=sys.stderr)
         return 1
