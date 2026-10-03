@@ -41,6 +41,10 @@ def build_info(species_yaml: dict, content: dict) -> dict:
         if text is None:
             raise ValueError(f"brak treści gatunku: {key}")
         for lk in text["lookalikes"]:
+            for f in ("name", "latin", "risk", "how"):
+                v = lk.get(f)
+                if not isinstance(v, str) or not v.strip():
+                    raise ValueError(f"{key}: sobowtór bez pola {f}")
             if lk["risk"] not in RISKS:
                 raise ValueError(f"{key}: nieznane ryzyko {lk['risk']!r}")
         out.append({

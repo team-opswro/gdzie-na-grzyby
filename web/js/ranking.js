@@ -25,7 +25,7 @@ export function bearing(origin, point) {
 // centroids.rows: [id, lat, lon, cell, h_<species>...] with h columns in centroids.species order
 // Wynik: grupy po oddziale [{ key, best, count, distanceKm, bearing }].
 // species === "all": wynik wiersza = bestFor; grupa ma dodatkowo `species` (klucz najlepszego).
-export function topN(centroids, pogoda, species = ALL, dayIdx, origin, radiusKm = 20, n = 10) {
+export function topN(centroids, pogoda, species, dayIdx, origin, radiusKm = 20, n = 10) {
   const isAll = species === ALL;
   const col = isAll ? 4 : 4 + centroids.species.indexOf(species);
   if (col < 4) return [];

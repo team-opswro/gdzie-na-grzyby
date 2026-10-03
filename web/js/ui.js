@@ -391,6 +391,13 @@ function openDialog(dlg, opener) {
   dlg._opener = opener;
   if (typeof dlg.showModal === "function") dlg.showModal();
   else dlg.setAttribute("open", "");
+  // showModal fokusuje pierwszy element interaktywny (na dole) — startujemy od nagłówka.
+  const h = dlg.querySelector("h2");
+  if (h) {
+    h.tabIndex = -1;
+    h.focus({ preventScroll: true });
+  }
+  dlg.scrollTop = 0;
 }
 
 function buildLegend() {

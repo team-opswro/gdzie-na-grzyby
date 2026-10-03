@@ -86,15 +86,25 @@ export async function loadData(base = "data/") {
   };
 }
 
-// Lista gatunków z gatunki.json; przy błędzie — wbudowane SPECIES (info: null).
-export async function loadSpecies(base = "data/") {
-  try {
-    const r = await fetch(base + "gatunki.json");
+// Lista gatunków z gatunki.json (limit czasu timeoutMs); przy błędzie lub zawieszeniu — wbudowane SPECIES (info: null).
+export async function loadSpecies(base = "data/", timeoutMs = 3000) {
+  const ctl = new AbortController();
+  let timer;
+  const timeout = new Promise((_, rej) => {
+    timer = setTimeout(() => { ctl.abort(); rej(new Error("gatunki.json: timeout")); }, timeoutMs);
+  });
+  const load = async () => {
+    const r = await fetch(base + "gatunki.json", { signal: ctl.signal });
     if (!r.ok) throw new Error(`gatunki.json: HTTP ${r.status}`);
     const info = await r.json();
     if (!Array.isArray(info?.species) || info.species.length === 0) throw new Error("gatunki.json: brak listy");
     return { list: info.species, info };
+  };
+  try {
+    return await Promise.race([load(), timeout]);
   } catch {
     return { list: SPECIES, info: null };
+  } finally {
+    clearTimeout(timer);
   }
 }

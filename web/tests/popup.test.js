@@ -86,3 +86,13 @@ test("renderPopup w trybie all: bez pogody i ze starą pogodą — paski gatunk�
     assert.equal(items, 6);
   }
 });
+
+test("renderPopup w trybie all: plakietka wyniku z krótką nazwą gatunku", () => {
+  installDom();
+  const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
+  const props = { id: "x", cell: "506_178", h_borowik: 80, h_podgrzybek: 50, h_kurka: 40, h_kozlarz: 30, h_maslak: 20, h_rydz: 10 };
+  const root = popup.renderPopup(props, { pogoda: P, species: "all", dayIdx: 0, todayIso: P.days[0] });
+  let text = null;
+  walk(root, (n) => { if (n.className === "popup-score") text = (n.children ?? []).map((c) => c.textContent ?? c).join(""); });
+  assert.match(String(text), /^Wynik: \d+\/100 \([^)]+\) · [a-ząćęłńóśźż]+/);
+});

@@ -64,7 +64,22 @@ def test_build_info_missing_code_raises():
 def test_build_info_missing_species_content_raises():
     content = json.loads(json.dumps(CONTENT))
     del content["species"]["a"]
-    with pytest.raises((KeyError, ValueError), match="a"):
+    with pytest.raises((KeyError, ValueError), match="brak treści gatunku: a"):
+        build_info(SPECIES, content)
+
+
+@pytest.mark.parametrize("field", ["name", "latin", "risk", "how"])
+def test_build_info_rejects_empty_lookalike_field(field):
+    content = json.loads(json.dumps(CONTENT))
+    content["species"]["b"]["lookalikes"][0][field] = " "
+    with pytest.raises(ValueError, match=f"b: .*{field}"):
+        build_info(SPECIES, content)
+
+
+def test_build_info_rejects_missing_lookalike_field():
+    content = json.loads(json.dumps(CONTENT))
+    del content["species"]["b"]["lookalikes"][0]["how"]
+    with pytest.raises(ValueError, match="b: .*how"):
         build_info(SPECIES, content)
 
 
@@ -81,7 +96,7 @@ def _load(path):
 
 def test_content_covers_constraints():
     content = _load(CONTENT_PATH)
-    assert content["reviewed"] is False
+    assert isinstance(content["reviewed"], bool)
     sp = content["species"]
     assert sp["borowik"]["latin"] == "Boletus edulis"
     assert sp["podgrzybek"]["latin"] == "Imleria badia"

@@ -50,7 +50,9 @@ export function renderSpeciesCard(model) {
   }
   const h = el("h2", model.title);
   h.append(" ", el("i", model.latin, "card-latin"));
+  h.id = "species-card-title";
   root.append(h);
+  if (model.unreviewed) root.append(el("p", UNREVIEWED_TEXT, "card-unreviewed"));
   const dl = el("dl", null, "card-facts");
   const fact = (k, v) => { if (v) dl.append(el("dt", k), el("dd", v)); };
   fact("Sezon", model.season);
@@ -83,6 +85,5 @@ export function renderSpeciesCard(model) {
     root.append(p);
   }
   root.append(el("p", DISCLAIMER, "card-disclaimer"));
-  if (model.unreviewed) root.append(el("p", UNREVIEWED_TEXT, "card-unreviewed"));
   return root;
 }

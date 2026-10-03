@@ -161,7 +161,8 @@ export function renderPopup(props, ctx) {
     const s = weather ? score(h, weather.w) : null;
     if (s != null) {
       const badge = el("div", null, "popup-score");
-      badge.append(`Wynik: ${s}/100 (${CLASS_LABELS[scoreClass(s)]})`);
+      const who = isAll ? ` · ${shortName(speciesList.find((x) => x.key === species)?.name ?? species)}` : "";
+      badge.append(`Wynik: ${s}/100 (${CLASS_LABELS[scoreClass(s)]})${who}`);
       badge.style.borderLeftColor = COLORS.classes[scoreClass(s)];
       const tr = isAll ? trendBy(pogoda, scoreAtAll, dayIdx) : trend(pogoda, props.cell, species, h, dayIdx);
       if (tr.dir) {

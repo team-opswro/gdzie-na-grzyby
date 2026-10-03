@@ -130,6 +130,16 @@ test("loadSpecies falls back to SPECIES on 404 / exception / bad shape", async (
   } finally { globalThis.fetch = orig; }
 });
 
+test("loadSpecies: zawieszony fetch -> po limicie czasu SPECIES", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = () => new Promise(() => {});
+  try {
+    const r = await loadSpecies("data/", 20);
+    assert.deepEqual(r.list, SPECIES);
+    assert.equal(r.info, null);
+  } finally { globalThis.fetch = orig; }
+});
+
 import { bestFor } from "../js/data.js";
 
 test("bestFor: max over species, skips species without data, null when none", () => {
