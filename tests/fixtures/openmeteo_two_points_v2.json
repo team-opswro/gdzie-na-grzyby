@@ -1,0 +1,196 @@
+[
+ {
+  "latitude": 50.65,
+  "longitude": 17.9,
+  "timezone": "Europe/Warsaw",
+  "daily_units": {
+   "time": "iso8601",
+   "precipitation_sum": "mm",
+   "et0_fao_evapotranspiration": "mm",
+   "temperature_2m_min": "°C"
+  },
+  "daily": {
+   "time": [
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-03"
+   ],
+   "precipitation_sum": [
+    2.5,
+    null,
+    0.4
+   ],
+   "et0_fao_evapotranspiration": [
+    1.2,
+    null,
+    0.8
+   ],
+   "temperature_2m_min": [
+    5.0,
+    6.0,
+    2.0
+   ]
+  },
+  "hourly_units": {
+   "time": "iso8601",
+   "soil_temperature_6cm": "°C",
+   "soil_moisture_3_to_9cm": "m³/m³",
+   "soil_moisture_9_to_27cm": "m³/m³"
+  },
+  "hourly": {
+   "time": [
+    "2026-10-01T00:00",
+    "2026-10-01T06:00",
+    "2026-10-01T12:00",
+    "2026-10-01T18:00",
+    "2026-10-02T00:00",
+    "2026-10-02T06:00",
+    "2026-10-02T12:00",
+    "2026-10-02T18:00",
+    "2026-10-03T00:00",
+    "2026-10-03T06:00",
+    "2026-10-03T12:00",
+    "2026-10-03T18:00"
+   ],
+   "soil_temperature_6cm": [
+    10.0,
+    12.0,
+    null,
+    14.0,
+    null,
+    null,
+    null,
+    null,
+    8.0,
+    9.0,
+    10.0,
+    11.0
+   ],
+   "soil_moisture_3_to_9cm": [
+    0.3,
+    0.32,
+    0.34,
+    null,
+    null,
+    null,
+    null,
+    null,
+    0.2,
+    0.22,
+    0.24,
+    0.26
+   ],
+   "soil_moisture_9_to_27cm": [
+    0.25,
+    0.26,
+    null,
+    0.27,
+    null,
+    null,
+    null,
+    null,
+    0.15,
+    0.16,
+    0.17,
+    0.18
+   ]
+  }
+ },
+ {
+  "latitude": 50.75,
+  "longitude": 17.9,
+  "timezone": "Europe/Warsaw",
+  "daily_units": {
+   "time": "iso8601",
+   "precipitation_sum": "mm",
+   "et0_fao_evapotranspiration": "mm",
+   "temperature_2m_min": "°C"
+  },
+  "daily": {
+   "time": [
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-03"
+   ],
+   "precipitation_sum": [
+    0.0,
+    1.0,
+    3.0
+   ],
+   "et0_fao_evapotranspiration": [
+    0.9,
+    1.0,
+    0.7
+   ],
+   "temperature_2m_min": [
+    4.0,
+    5.0,
+    3.0
+   ]
+  },
+  "hourly_units": {
+   "time": "iso8601",
+   "soil_temperature_6cm": "°C",
+   "soil_moisture_3_to_9cm": "m³/m³",
+   "soil_moisture_9_to_27cm": "m³/m³"
+  },
+  "hourly": {
+   "time": [
+    "2026-10-01T00:00",
+    "2026-10-01T06:00",
+    "2026-10-01T12:00",
+    "2026-10-01T18:00",
+    "2026-10-02T00:00",
+    "2026-10-02T06:00",
+    "2026-10-02T12:00",
+    "2026-10-02T18:00",
+    "2026-10-03T00:00",
+    "2026-10-03T06:00",
+    "2026-10-03T12:00",
+    "2026-10-03T18:00"
+   ],
+   "soil_temperature_6cm": [
+    11.0,
+    11.0,
+    12.0,
+    12.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0
+   ],
+   "soil_moisture_3_to_9cm": [
+    0.4,
+    0.4,
+    0.4,
+    0.4,
+    0.35,
+    0.35,
+    0.35,
+    0.35,
+    0.3,
+    0.3,
+    0.3,
+    0.3
+   ],
+   "soil_moisture_9_to_27cm": [
+    0.22,
+    0.22,
+    0.22,
+    0.22,
+    0.2,
+    0.2,
+    0.2,
+    0.2,
+    0.18,
+    0.18,
+    0.18,
+    0.18
+   ]
+  }
+ }
+]

@@ -14,8 +14,8 @@ TIMEOUT_S = 30
 RATE_LIMIT_WAIT_S = 65
 RATE_LIMIT_RETRIES = 6
 PARAMS = {
-    "daily": "precipitation_sum",
-    "hourly": "soil_temperature_6cm,soil_moisture_3_to_9cm",
+    "daily": "precipitation_sum,et0_fao_evapotranspiration,temperature_2m_min",
+    "hourly": "soil_temperature_6cm,soil_moisture_3_to_9cm,soil_moisture_9_to_27cm",
     "past_days": 30,
     "forecast_days": 7,
     "timezone": "Europe/Warsaw",
@@ -49,6 +49,16 @@ def _fill_nearest(values: list[float | None], name: str) -> list[float]:
     ]
 
 
+def _try_series(obj: dict, path: list[str]) -> list | None:
+    """Zwraca listę wartości lub None, gdy klucz nie istnieje."""
+    cur = obj
+    for p in path:
+        if not isinstance(cur, dict) or p not in cur:
+            return None
+        cur = cur[p]
+    return cur if isinstance(cur, list) else None
+
+
 def daily_from_response(obj: dict) -> DailySeries:
     try:
         day_strs = obj["daily"]["time"]
@@ -59,11 +69,35 @@ def daily_from_response(obj: dict) -> DailySeries:
         dates = [date.fromisoformat(d) for d in day_strs]
     except (KeyError, TypeError, ValueError) as e:
         raise WeatherError(f"nieprawidłowa odpowiedź Open-Meteo: {e!r}") from e
+
+    # Nowe zmienne opcjonalne: brak klucza lub same null → None.
+    et0_raw = _try_series(obj, ["daily", "et0_fao_evapotranspiration"])
+    et0 = [0.0 if e is None else float(e) for e in et0_raw] if et0_raw is not None else None
+
+    t2m_min_raw = _try_series(obj, ["daily", "temperature_2m_min"])
+    t2m_min = None
+    if t2m_min_raw is not None:
+        try:
+            t2m_min = _fill_nearest(t2m_min_raw, "temperature_2m_min")
+        except WeatherError:
+            t2m_min = None
+
+    moist_deep_raw = _try_series(obj, ["hourly", "soil_moisture_9_to_27cm"])
+    moist_deep = None
+    if moist_deep_raw is not None:
+        try:
+            moist_deep = _fill_nearest(_daily_means(h_time, moist_deep_raw, day_strs), "soil_moisture_9_to_27cm")
+        except WeatherError:
+            moist_deep = None
+
     return DailySeries(
         dates=dates,
         precip=[0.0 if p is None else float(p) for p in precip],
         soil_temp=_fill_nearest(temp, "soil_temperature_6cm"),
         soil_moisture=_fill_nearest(moist, "soil_moisture_3_to_9cm"),
+        et0=et0,
+        t2m_min=t2m_min,
+        soil_moisture_deep=moist_deep,
     )
 
 

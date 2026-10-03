@@ -22,6 +22,9 @@ class DailySeries:
     precip: list[float]
     soil_temp: list[float]
     soil_moisture: list[float]
+    et0: list[float] | None = None
+    t2m_min: list[float] | None = None
+    soil_moisture_deep: list[float] | None = None
 
 
 @dataclass
