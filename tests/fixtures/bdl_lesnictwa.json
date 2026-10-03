@@ -1,0 +1,6 @@
+{"type": "FeatureCollection", "features": [
+ {"type": "Feature", "id": 1, "geometry": null, "properties": {"forest_range_name": "Zieleniec", "a_year": 2026, "adress_forest": "02-04-1-07-      -    -"}},
+ {"type": "Feature", "id": 2, "geometry": null, "properties": {"forest_range_name": "Lipki", "a_year": 2026, "adress_forest": "02-04-1-03-      -    -"}},
+ {"type": "Feature", "id": 3, "geometry": null, "properties": {"forest_range_name": null, "a_year": 2026, "adress_forest": "02-04-1-09-      -    -"}},
+ {"type": "Feature", "id": 4, "geometry": null, "properties": {"forest_range_name": "Bez adresu", "a_year": 2026, "adress_forest": "02-04"}}
+]}
