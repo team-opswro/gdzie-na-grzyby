@@ -120,7 +120,7 @@ export async function init() {
     placeTried = true;
     const byId = (x) => x.properties.id === state.place;
     const [hLon, hLat] = hash.center ?? [map.getCenter().lng, map.getCenter().lat];
-    const row = centroids ? await centroids.findRow(state.place, hLat, hLon) : null;
+    const row = centroids ? await centroids.findRow(state.place, hLat, hLon).catch(() => null) : null;
     const open = (lngLat) => {
       const f = (lngLat ? map.queryRenderedFeatures(map.project([lngLat.lng, lngLat.lat]), { layers: ["lasy-fill"] }).find(byId) : null)
         ?? map.queryRenderedFeatures({ layers: ["lasy-fill"] }).find(byId);
@@ -400,7 +400,7 @@ export async function init() {
   ({ pogoda, nazwy } = data);
   const tilesIdx = fileUrl(dataBase, manifest, "centroidy");
   if (data.centroidIndex && tilesIdx) {
-    centroids = createCentroidStore((u) => fetch(u), tilesIdx.slice(0, tilesIdx.lastIndexOf("/") + 1), data.centroidIndex);
+    centroids = createCentroidStore((u, init) => fetch(u, init), tilesIdx.slice(0, tilesIdx.lastIndexOf("/") + 1), data.centroidIndex);
   }
   todayIso = todayLocalIso();
   if (pogoda) days = availableDays(pogoda.days, todayIso);

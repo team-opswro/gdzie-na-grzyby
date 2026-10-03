@@ -83,8 +83,44 @@ test("rowsNear: missing/failed tile → skipped, others returned; retried later"
   assert.deepEqual(rows.map((r) => r[0]), ["a"]);
   await store.rowsNear({ lat: 50.5, lon: 17.1 }, 8);
   assert.equal(f.calls.filter((u) => u === "c/50.0_17.0.json").length, 2);
+});
+
+test("rowsNear: all needed tiles failed → rejects (ranking shows the error message)", async () => {
   const thrower = async () => { throw new Error("net"); };
-  assert.deepEqual(await createCentroidStore(thrower, "c/", IDX).rowsNear({ lat: 50.5, lon: 17.1 }, 8), []);
+  await assert.rejects(createCentroidStore(thrower, "c/", IDX).rowsNear({ lat: 50.5, lon: 17.1 }, 8), /kafelków/);
+  const f = tileFetch(ROWS, { fail: ["50.5_17.0"] });
+  await assert.rejects(createCentroidStore(f, "c/", IDX).rowsNear({ lat: 50.75, lon: 17.25 }, 5));
+});
+
+test("tile fetch: hung server → aborted after timeoutMs, then rejects; retried on next call", async () => {
+  const signals = [];
+  let hang = true;
+  const f = (url, init) => {
+    signals.push(init?.signal);
+    if (!hang) return Promise.resolve({ ok: true, status: 200, json: async () => ({ rows: ROWS["50.5_17.0"] }) });
+    return new Promise(() => {}); // never resolves
+  };
+  const store = createCentroidStore(f, "c/", IDX, { timeoutMs: 20 });
+  const t0 = Date.now();
+  await assert.rejects(store.rowsNear({ lat: 50.75, lon: 17.25 }, 5));
+  assert.ok(Date.now() - t0 < 1000);
+  assert.ok(signals[0]?.aborted, "fetch aborted via AbortSignal");
+  hang = false;
+  assert.deepEqual((await store.rowsNear({ lat: 50.75, lon: 17.25 }, 5)).map((r) => r[0]), ["a"]);
+});
+
+test("tile fetch: default timeout is 30 s, immutable tiles use default HTTP cache", async () => {
+  const { TILE_TIMEOUT_MS } = await import("../js/tiles.js");
+  assert.equal(TILE_TIMEOUT_MS, 30000);
+  const inits = [];
+  const f = async (url, init) => { inits.push(init); return { ok: true, status: 200, json: async () => ({ rows: [] }) }; };
+  await createCentroidStore(f, "c/", IDX).rowsNear({ lat: 50.75, lon: 17.25 }, 5);
+  assert.equal(inits[0].cache, "default");
+});
+
+test("findRow: neighbours all failing → rejects (caller treats as not found)", async () => {
+  const f = tileFetch(ROWS, { fail: IDX.tiles });
+  await assert.rejects(createCentroidStore(f, "c/", IDX).findRow("a", 50.7, 17.3));
 });
 
 test("rowsNear: area without tiles → [] without fetching", async () => {

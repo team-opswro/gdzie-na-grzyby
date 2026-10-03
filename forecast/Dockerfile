@@ -23,6 +23,6 @@ COPY schema schema
 COPY forecast forecast
 RUN chmod +x forecast/entrypoint.sh && mkdir -p /state
 
-HEALTHCHECK --interval=1h --timeout=10s --start-period=2m --start-interval=30s --retries=1 \
+HEALTHCHECK --interval=1h --timeout=10s --start-period=15m --start-interval=30s --retries=1 \
   CMD python -m forecast.healthcheck
 ENTRYPOINT ["/app/forecast/entrypoint.sh"]

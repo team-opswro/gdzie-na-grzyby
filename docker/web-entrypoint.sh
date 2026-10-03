@@ -10,6 +10,7 @@
 set -eu
 out="${WEB_CONFIG_PATH:-/usr/share/nginx/html/config.json}"
 proxy_conf="${WEB_PROXY_CONF:-/etc/nginx/dane.d/dane.conf}"
+resolv_conf="${WEB_RESOLV_CONF:-/etc/resolv.conf}"
 url="${DATA_BASE_URL:-}"
 direct="${DATA_DIRECT:-}"
 
@@ -41,6 +42,11 @@ fi
 case "$url" in */) ;; *) url="$url/" ;; esac
 
 if [ "$direct" = "1" ]; then
+  # Przeglądarka czyta bucket wprost ze strony HTTPS — tylko https:// (mixed content, javascript: itp.).
+  case "$url" in
+    https://?*) ;;
+    *) die "DATA_BASE_URL przy DATA_DIRECT=1 musi zaczynać się od https:// (jest: $(json_escape "$url"))" ;;
+  esac
   write_config "$url"
   exit 0
 fi
@@ -55,6 +61,18 @@ host="${rest%%/*}"
 path="/${rest#*/}"
 case "$host" in ''|.*|*.|*..*) die "DATA_BASE_URL: niepoprawny host" ;; esac
 
+# Resolver DNS: nginx z proxy_pass przez zmienną rozwiązuje nazwę przy żądaniu (z cache valid=300s),
+# a nie raz przy starcie — start bez DNS działa, zmiana IP bucketu nie wymaga restartu.
+# Serwery nazw z resolv.conf (jak 15-local-resolvers.envsh obrazu nginx; IPv6 w nawiasach), awaryjnie publiczne.
+resolvers=""
+if [ -r "$resolv_conf" ]; then
+  resolvers=$(awk '$1 == "nameserver" && $2 ~ /^[0-9A-Fa-f.:]+$/ {
+    if ($2 ~ /:/) printf "[%s] ", $2; else printf "%s ", $2
+  }' "$resolv_conf")
+  resolvers="${resolvers% }"
+fi
+[ -n "$resolvers" ] || resolvers="1.1.1.1 8.8.8.8"
+
 mkdir -p "$(dirname "$proxy_conf")"
 tmp="$proxy_conf.tmp"
 cat > "$tmp" <<EOF
@@ -62,14 +80,19 @@ cat > "$tmp" <<EOF
 # Dane z bucketu pod tą samą domeną co strona (bez CORS na buckecie).
 location ^~ /dane/ {
     limit_except GET { deny all; }
-    proxy_pass https://$host$path;
+    resolver $resolvers valid=300s ipv6=off;
+    resolver_timeout 5s;
+    set \$dane_host "$host";
+    # /dane/<plik>?<arg> -> https://<host><ścieżka><plik>?<arg> (argumenty zachowane).
+    rewrite ^/dane/(.*)\$ $path\$1 break;
+    proxy_pass https://\$dane_host;
     proxy_http_version 1.1;
-    proxy_set_header Host $host;
+    proxy_set_header Host \$dane_host;
     proxy_set_header Connection "";
     proxy_set_header Cookie "";
     proxy_set_header Authorization "";
     proxy_ssl_server_name on;
-    proxy_ssl_name $host;
+    proxy_ssl_name \$dane_host;
     proxy_ssl_verify on;
     proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
     proxy_ssl_verify_depth 3;
@@ -77,6 +100,8 @@ location ^~ /dane/ {
     proxy_read_timeout 30s;
     proxy_send_timeout 30s;
     proxy_buffering on;
+    # Duże odpowiedzi (lasy.pmtiles bez Range) strumieniowane, nie buforowane na dysk.
+    proxy_max_temp_file_size 0;
     proxy_hide_header Set-Cookie;
     proxy_ignore_headers Set-Cookie;
     # JSON w buckecie jest już skompresowany (Content-Encoding: gzip) — bez drugiej kompresji.
@@ -85,4 +110,4 @@ location ^~ /dane/ {
 EOF
 mv "$tmp" "$proxy_conf"
 write_config "/dane/"
-printf '%s\n' "web-entrypoint: proxy /dane/ -> https://$host$path"
+printf '%s\n' "web-entrypoint: proxy /dane/ -> https://$host$path (resolver: $resolvers)"

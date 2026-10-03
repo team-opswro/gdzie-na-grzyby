@@ -82,10 +82,13 @@ Obraz `web` nie zawiera danych: bez `DATA_BASE_URL` strona szuka ich w `data/`, 
      więc **bucket nie potrzebuje reguły CORS**. `DATA_BASE_URL` musi mieć postać `https://host[/ścieżka/]`
      (znaki `A-Z a-z 0-9 . _ ~ / -`) — inaczej kontener nie wystartuje (czytelny błąd w logu).
      Koszt: cały ruch danych (≈110 MB PMTiles na wersję, czytane fragmentami) idzie przez VPS, a `r2.dev`
-     ma limit żądań i brak cache Cloudflare — przy większym ruchu podłącz do bucketu własną domenę
-     (cache Cloudflare) i rozważ tryb bezpośredni.
+     ma limit żądań i brak cache Cloudflare — w produkcji podłącz do bucketu własną domenę (punkt 9).
+     nginx rozwiązuje nazwę hosta przy żądaniach (resolver z `/etc/resolv.conf`, cache 5 min), więc start
+     kontenera nie zależy od DNS, a zmiana adresów IP bucketu nie wymaga restartu. Duże odpowiedzi bez
+     `Range` są strumieniowane (bez buforowania na dysku VPS).
    - **Wprost (`DATA_DIRECT=1`):** `config.json` dostaje sam `DATA_BASE_URL`, przeglądarka czyta bucket
-     bezpośrednio (bez obciążania VPS). Wymaga reguły CORS na buckecie (GET, HEAD, nagłówek `Range`).
+     bezpośrednio (bez obciążania VPS). `DATA_BASE_URL` musi zaczynać się od `https://` (inaczej kontener
+     nie wystartuje — strona HTTPS nie może czytać danych po HTTP). Wymaga reguły CORS na buckecie (GET, HEAD, nagłówek `Range`).
      Token **Object Read & Write nie ma prawa** zmieniać konfiguracji bucketu (`PutBucketCors` →
      `AccessDenied`; `publish --cors` zgłasza to po wysłaniu danych, kod wyjścia 3). Ustaw regułę w panelu:
      R2 → bucket → **Settings → CORS Policy → Add/Edit**:
@@ -113,9 +116,27 @@ Obraz `web` nie zawiera danych: bez `DATA_BASE_URL` strona szuka ich w `data/`, 
 7. **Deploy.** `forecast` przy starcie pobiera `manifest.json` i `grid.json` z `DATA_BASE_URL`, liczy
    prognozę i wysyła `live/pogoda.json` do bucketu; potem cron o 05:00 i 14:00 (`Europe/Warsaw`).
    Healthcheck: ostatnie udane wysłanie młodsze niż 36 h (znacznik w `/state`, bez wolumenu — po
-   restarcie kontener jest niezdrowy do pierwszego wysłania). Brak zmiennych → błąd w logu.
+   restarcie kontener jest niezdrowy do pierwszego wysłania; `start-period` 15 min obejmuje pierwszy przebieg
+   z oczekiwaniem na limit Open-Meteo). Brak zmiennych → błąd w logu.
+   **Limity Open-Meteo:** darmowe API ma limity minutowe, godzinowe i dzienne (liczone w „wywołaniach”;
+   jeden przebieg dla całego gridu to ~14 partii po ~130, czyli ~1800). Na `429` `forecast` czeka ~minutę (do 6 razy);
+   jeśli limit nadal obowiązuje, przerywa cały przebieg (błąd w logu: `przerwano: Open-Meteo: limit żądań
+   (429)…`), a `live/pogoda.json` zostaje bez zmian do następnego uruchomienia z crona. Każdy redeploy /
+   restart `forecast` robi pełny przebieg przy starcie — unikaj serii redeployów w krótkim czasie, bo
+   wyczerpią limit godzinowy/dzienny.
 8. **Nowa wersja danych:** build + `pipeline.publish` — strona i `forecast` same przechodzą na nowy
    `manifest.json`; redeploy nie jest potrzebny.
+9. **Własna domena bucketu (krok do wykonania przed produkcją):** `r2.dev` służy do testów — ma limit
+   żądań, brak cache Cloudflare i Cloudflare nie zaleca go do ruchu produkcyjnego. W Cloudflare → R2 →
+   bucket → **Settings → Custom Domains → Connect Domain** podłącz domenę ze strefy w Cloudflare (np.
+   `dane.example.pl`) i poczekaj na status *Active*. Przełączenie:
+   - w Coolify ustaw `DATA_BASE_URL=https://dane.example.pl/` w usługach `web` **i** `forecast`, redeploy
+     (dane w buckecie bez zmian — publikacja nie jest potrzebna);
+   - sprawdź `curl -sI https://dane.example.pl/manifest.json` (`200`, `content-encoding: gzip`) i stronę
+     (`/dane/…` → `206` dla `Range`);
+   - opcjonalnie tryb wprost (ruch danych z pominięciem VPS, z cache Cloudflare): reguła CORS z punktu 5
+     dla tej domeny, potem `DATA_DIRECT=1` w `web` i redeploy;
+   - na koniec można wyłączyć publiczny dostęp przez `r2.dev`.
 
 Weryfikacja: `curl -sI <DATA_BASE_URL>manifest.json` (`content-encoding: gzip`, `cache-control: no-cache`).
 Tryb proxy: `curl -s -D - -o /dev/null -H 'Range: bytes=0-99' https://<domena strony>/dane/v/<build>/lasy.pmtiles`

@@ -7,7 +7,7 @@ import requests
 import responses
 
 from forecast.weather import (
-    API_URL, RATE_LIMIT_RETRIES, RATE_LIMIT_WAIT_S, WeatherError, daily_from_response, fetch_series,
+    API_URL, RATE_LIMIT_RETRIES, RATE_LIMIT_WAIT_S, RateLimitError, WeatherError, daily_from_response, fetch_series,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "openmeteo_two_points.json"
@@ -125,9 +125,13 @@ def test_fetch_waits_out_minute_rate_limit():
 
 @responses.activate
 def test_fetch_rate_limit_gives_up():
-    for _ in range(RATE_LIMIT_RETRIES + 2):
+    # 429 po wszystkich oczekiwaniach → koniec przebiegu, bez zwykłych prób i bez kolejnych partii.
+    for _ in range(RATE_LIMIT_RETRIES + 5):
         responses.get(API_URL, status=429)
     sleeps = []
-    with pytest.raises(WeatherError):
-        fetch_series(POINTS, sleep=sleeps.append)
-    assert sleeps == [RATE_LIMIT_WAIT_S] * RATE_LIMIT_RETRIES + [1, 2]
+    pts = [(f"p{i}", 51.0, 17.0) for i in range(3)]
+    with pytest.raises(RateLimitError, match="429"):
+        fetch_series(pts, batch=1, sleep=sleeps.append)
+    assert sleeps == [RATE_LIMIT_WAIT_S] * RATE_LIMIT_RETRIES
+    assert len(responses.calls) == RATE_LIMIT_RETRIES + 1
+    assert issubclass(RateLimitError, WeatherError)

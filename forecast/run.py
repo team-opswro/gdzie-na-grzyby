@@ -15,7 +15,7 @@ import requests
 
 from forecast.model import DailySeries, limiting_factor, weather_multiplier, weather_values
 from forecast.species import ROOT, Species, load_species
-from forecast.weather import WeatherError, fetch_series
+from forecast.weather import RateLimitError, WeatherError, fetch_series
 
 log = logging.getLogger("forecast.run")
 
@@ -181,6 +181,9 @@ def main(argv: list[str] | None = None) -> int:
                 upload_pogoda(client, bucket, out)
                 write_marker()
                 log.info("wysłano %s", LIVE_KEY)
+    except RateLimitError as e:
+        log.error("przerwano: %s (pogoda.json bez zmian, następna próba z crona)", e)
+        return 1
     except (WeatherError, ValueError, ConfigError, jsonschema.ValidationError) as e:
         log.error("nie wygenerowano pogoda.json: %s", e)
         return 1

@@ -26,6 +26,10 @@ class WeatherError(Exception):
     pass
 
 
+class RateLimitError(WeatherError):
+    """429 utrzymuje się po RATE_LIMIT_RETRIES oczekiwaniach (np. limit dzienny/godzinowy) — przerywa cały przebieg."""
+
+
 def _daily_means(times: list[str], values: list, dates: list[str]) -> list[float | None]:
     groups: dict[str, list[float]] = defaultdict(list)
     for t, v in zip(times, values):
@@ -71,7 +75,12 @@ def _request(params: dict, retries: int, sleep, session) -> list[dict]:
     while attempt < retries:
         try:
             r = http.get(API_URL, params=params, timeout=TIMEOUT_S)
-            if r.status_code == 429 and limited < RATE_LIMIT_RETRIES:
+            if r.status_code == 429:
+                if limited >= RATE_LIMIT_RETRIES:
+                    # Kolejne partie też dostałyby 429 — kończymy przebieg zamiast zużywać limit.
+                    raise RateLimitError(
+                        f"Open-Meteo: limit żądań (429) nadal po {RATE_LIMIT_RETRIES} oczekiwaniach "
+                        f"po {RATE_LIMIT_WAIT_S} s; przerywam przebieg")
                 limited += 1
                 last = requests.HTTPError("429 Too Many Requests")
                 sleep(RATE_LIMIT_WAIT_S)

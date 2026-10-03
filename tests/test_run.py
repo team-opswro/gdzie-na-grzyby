@@ -10,7 +10,7 @@ from forecast import run
 from forecast.model import DailySeries
 from forecast.run import build_payload, main, write_atomic
 from forecast.species import ROOT, load_species
-from forecast.weather import WeatherError
+from forecast.weather import RateLimitError, WeatherError
 
 SCHEMA = json.loads((ROOT / "schema/pogoda.schema.json").read_text())
 FIXTURES = ROOT / "tests/fixtures"
@@ -149,6 +149,19 @@ def test_main_returns_1_and_keeps_old_on_weather_error(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "fetch_series", boom)
     assert main(["--grid", str(FIXTURES / "grid.json"), "--out", str(out)]) == 1
     assert out.read_text() == '{"old": 1}'
+
+
+def test_main_rate_limit_aborts_run_logged(tmp_path, monkeypatch, caplog):
+    out = tmp_path / "pogoda.json"
+    out.write_text('{"old": 1}')
+
+    def limited(points, **kw):
+        raise RateLimitError("Open-Meteo: limit żądań (429)")
+
+    monkeypatch.setattr(run, "fetch_series", limited)
+    assert main(["--grid", str(FIXTURES / "grid.json"), "--out", str(out)]) == 1
+    assert out.read_text() == '{"old": 1}'
+    assert "przerwano" in caplog.text and "429" in caplog.text
 
 
 def test_main_returns_1_on_missing_days(tmp_path, monkeypatch):
