@@ -16,13 +16,43 @@ function row(table, label, value) {
   table.append(tr);
 }
 
+export const ZAKAZY_URL = "https://www.bdl.lasy.gov.pl/portal/zakazy-wstepu";
+
+export function reserveText(rez) {
+  const name = rez && rez !== "rezerwat" ? ` „${rez}”` : "";
+  return `Rezerwat przyrody${name} — zbieranie grzybów jest co do zasady zabronione.`;
+}
+
+function zakazyLink() {
+  const a = el("a", "Sprawdź aktualne zakazy wstępu (BDL)", "popup-zakazy");
+  a.href = ZAKAZY_URL;
+  a.target = "_blank";
+  a.rel = "noopener";
+  const p = el("p", null, "popup-link");
+  p.append(a);
+  return p;
+}
+
+export function renderReserve(name) {
+  const n = typeof name === "string" ? name.trim() : "";
+  const box = el("div", reserveText(n || "rezerwat"), "popup-score popup-reserve");
+  box.style.borderLeftColor = COLORS.reserve;
+  return box;
+}
+
 export function renderPopup(props, weather, speciesKey) {
   const root = el("div", null, "popup");
   root.append(el("div", props.id || "—", "popup-id"));
 
   const h = Number(props["h_" + speciesKey] ?? 0);
+  if (props.rez) {
+    weather = null;
+    root.append(renderReserve(props.rez));
+  }
   const s = weather ? score(h, weather.w) : null;
-  if (s != null) {
+  if (props.rez) {
+    // ramka rezerwatu pokazana wyżej, zamiast wyniku
+  } else if (s != null) {
     const badge = el("div", `Wynik: ${s}/100 (${CLASS_LABELS[scoreClass(s)]})`, "popup-score");
     badge.style.borderLeftColor = COLORS.classes[scoreClass(s)];
     root.append(badge);
@@ -41,5 +71,6 @@ export function renderPopup(props, weather, speciesKey) {
     row(t, "Sezon", pct(weather.season));
   }
   root.append(t);
+  root.append(zakazyLink());
   return root;
 }

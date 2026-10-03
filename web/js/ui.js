@@ -1,8 +1,8 @@
 import { SPECIES, loadData, weatherFor, availableDays, bannerText } from "./data.js";
 import { topN } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
-import { createMap, setView, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
-import { renderPopup } from "./popup.js";
+import { createMap, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
+import { renderPopup, renderReserve } from "./popup.js";
 
 const OPOLSKIE_CENTER = [17.9, 50.65];
 const DEFAULT_ZOOM = 9;
@@ -21,7 +21,7 @@ function formatDay(iso) {
 
 export async function init() {
   const hash = parseHash(location.hash);
-  const state = { species: hash.species, day: hash.day };
+  const state = { species: hash.species, day: hash.day, basemap: hash.basemap };
   let data = { pogoda: null, centroids: null };
   let days = []; // availableDays(...) — pozycja w tej tablicy to „day” w hashu
   let gps = null; // {lat, lon} po zgodzie na lokalizację
@@ -33,6 +33,7 @@ export async function init() {
   for (const s of SPECIES) sel.append(new Option(s.name, s.key));
   sel.value = state.species;
   buildLegend();
+  updateAttribution(state.basemap);
 
   // Mapa powstaje od razu (styl samego h); pogoda i centroidy dołączają po załadowaniu.
   let pogoda = null;
@@ -46,7 +47,15 @@ export async function init() {
     pogoda: null,
     species: state.species,
     dayIdx: 0,
+    basemap: state.basemap,
     onFeatureClick: (props, lngLat) => showPopup(props, lngLat),
+    onReserveClick: (name, lngLat) => {
+      popup?.remove();
+      const content = document.createElement("div");
+      content.className = "popup";
+      content.append(renderReserve(name));
+      popup = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    },
     onMove: () => {
       writeHash();
       if (!gps) updateRanking();
@@ -63,7 +72,7 @@ export async function init() {
 
   function writeHash() {
     const c = map.getCenter();
-    history.replaceState(null, "", formatHash({ species: state.species, day: state.day, zoom: map.getZoom(), center: [c.lng, c.lat] }));
+    history.replaceState(null, "", formatHash({ species: state.species, day: state.day, zoom: map.getZoom(), center: [c.lng, c.lat], basemap: state.basemap }));
   }
 
   function origin() {
@@ -158,6 +167,13 @@ export async function init() {
     );
   });
 
+  buildSwitcher(state.basemap, (key) => {
+    state.basemap = key;
+    setBasemap(map, key);
+    updateAttribution(key);
+    writeHash();
+  });
+
   function setPanelOpen(open) {
     $("panel").classList.toggle("open", open);
     $("panel-toggle").setAttribute("aria-expanded", String(open));
@@ -185,14 +201,48 @@ export async function init() {
 
 function buildLegend() {
   const box = $("legend");
-  const add = (color, text, opacity) => {
+  const add = (color, text, opacity, cls) => {
     const s = document.createElement("span");
     const sw = document.createElement("i");
-    sw.style.background = color;
+    if (cls) sw.className = cls;
+    else sw.style.background = color;
     if (opacity) sw.style.opacity = String(opacity);
     s.append(sw, text);
     box.append(s);
   };
   COLORS.classes.forEach((c, i) => add(c, CLASS_LABELS[i], i === 0 ? FILL_OPACITY.weak : FILL_OPACITY.normal));
   add(COLORS.noData, "brak danych", FILL_OPACITY.noData);
+  add("#757575", "rezerwat — zbiór zabroniony", null, "hatch");
+}
+
+const BASEMAP_LABELS = [["osm", "Mapa"], ["orto", "Satelita"], ["topo", "Topo"]];
+
+function updateAttribution(key) {
+  const box = $("attr-base");
+  if (!box) return;
+  box.replaceChildren();
+  if (key === "osm") {
+    const a = document.createElement("a");
+    a.href = "https://www.openstreetmap.org/copyright";
+    a.textContent = "OpenStreetMap";
+    box.append("© ", a);
+  } else {
+    box.append(BASEMAPS[key].attribution);
+  }
+}
+
+function buildSwitcher(current, onChange) {
+  const box = $("basemap");
+  const buttons = BASEMAP_LABELS.map(([key, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "radio");
+    b.dataset.key = key;
+    b.textContent = label;
+    b.addEventListener("click", () => { select(key); onChange(key); });
+    return b;
+  });
+  const select = (key) => buttons.forEach((b) => b.setAttribute("aria-checked", String(b.dataset.key === key)));
+  box.append(...buttons);
+  select(current);
 }

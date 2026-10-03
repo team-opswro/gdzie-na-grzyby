@@ -12,10 +12,17 @@ body { display: flex; flex-direction: column; font: 15px/1.35 system-ui, sans-se
 .stale[hidden] { display: none; }
 .mapwrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 #map { position: absolute; inset: 0; }
-.legend { position: absolute; top: 8px; left: 8px; right: 56px; display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 4px 8px;
+.legend { position: absolute; top: 8px; left: 8px; right: 84px; display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 4px 8px;
   background: rgba(255,255,255,.88); border-radius: 6px; font-size: 12px; pointer-events: none; }
 .legend span { display: inline-flex; align-items: center; gap: 4px; }
 .legend i { width: 12px; height: 12px; border: 1px solid rgba(0,0,0,.35); display: inline-block; }
+.legend i.hatch { background: repeating-linear-gradient(45deg, #757575 0 2px, #fff 2px 5px); }
+.basemap { position: absolute; top: 84px; right: 10px; z-index: 1; display: flex; flex-direction: column; gap: 2px;
+  background: #fff; border-radius: 4px; box-shadow: 0 0 0 2px rgba(0,0,0,.1); }
+.basemap button { font: inherit; font-size: 13px; min-width: 64px; height: 40px; padding: 0 8px; border: 0; background: #fff; cursor: pointer; border-radius: 4px; }
+.basemap button[aria-checked="true"] { background: var(--bar); color: #fff; font-weight: 600; }
+.popup-reserve { border-left-color: #757575; }
+.popup-link { margin: 6px 0 0; font-size: 12px; }
 .panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; background: #fff; box-shadow: 0 -2px 8px rgba(0,0,0,.25);
   border-radius: 12px 12px 0 0; max-height: var(--panel-h); display: flex; flex-direction: column; }
 .panel > button { font: inherit; font-weight: 600; padding: 12px; border: 0; background: none; text-align: left; cursor: pointer; }

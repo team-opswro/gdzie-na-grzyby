@@ -20,6 +20,7 @@
   <div id="stale" class="stale" role="alert" hidden></div>
   <main class="mapwrap">
     <div id="map"></div>
+    <div id="basemap" class="basemap" role="radiogroup" aria-label="Podkład mapy"></div>
     <div id="legend" class="legend" aria-label="Legenda"></div>
     <section id="panel" class="panel">
       <button id="panel-toggle" type="button" aria-expanded="false" aria-controls="ranking-list">Top 10 w promieniu 20 km</button>
@@ -28,9 +29,11 @@
   </main>
   <footer class="foot">
     Model heurystyczny, bez kalibracji.
-    © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ·
+    <span id="attr-base">© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a></span> ·
+    Rezerwaty: GDOŚ ·
     Źródło: Bank Danych o Lasach (BDL), PGL Lasy Państwowe, stan 2026 ·
-    Pogoda: <a href="https://open-meteo.com/">Open-Meteo</a>
+    Pogoda: <a href="https://open-meteo.com/">Open-Meteo</a> ·
+    <a href="https://www.bdl.lasy.gov.pl/portal/zakazy-wstepu" target="_blank" rel="noopener">Sprawdź aktualne zakazy wstępu (BDL)</a>
   </footer>
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/pmtiles.js"></script>
