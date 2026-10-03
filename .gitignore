@@ -23,3 +23,8 @@ web/data/manifest.json
 web/data/build.json
 pipeline/data/live/
 pipeline/data/walidacja/
+# wyniki lokalnych przebiegów (logi, parkingi z OSM, raporty walidacji)
+pipeline/data/*.log
+pipeline/data/parkingi.geojson
+pipeline/data/build-przed-v2.json
+pipeline/data/walidacja-*/
