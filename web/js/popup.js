@@ -107,6 +107,18 @@ export function actionLinks(lat, lon) {
   return row;
 }
 
+export function renderParking(props, lngLat) {
+  const root = el("div", null, "popup popup-parking");
+  const title = el("div", "Parking", "popup-score");
+  title.style.borderLeftColor = "#1a237e";
+  root.append(title);
+  if (props.name) root.append(el("div", props.name, "popup-place"));
+  if (props.fee === "yes") root.append(el("div", "płatny", "popup-fee"));
+  else if (props.fee === "no") root.append(el("div", "bezpłatny", "popup-fee"));
+  root.append(actionLinks(lngLat.lat, lngLat.lng));
+  return root;
+}
+
 export function formatWx(wx) {
   const out = {
     rain: `Deszcz (5–21 dni wcześniej): ${dec(wx.rain_mm)} mm`,

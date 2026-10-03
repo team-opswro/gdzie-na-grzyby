@@ -97,6 +97,56 @@ export function hatchPattern(size = 8) {
   return { width: size, height: size, data };
 }
 
+// Ikona parkingu: biały kwadrat z zaokrąglonymi rogami i granatowym „P”.
+export function parkingIcon(size = 24) {
+  const data = new Uint8Array(size * size * 4);
+  const r = 5; // promień zaokrąglenia rogów
+  const white = [255, 255, 255];
+  const blue = [0x1a, 0x23, 0x7e];
+  const corners = [[0, 0], [size - 1, 0], [0, size - 1], [size - 1, size - 1]];
+  function cornerDist(x, y) {
+    let best = Infinity;
+    for (const [cx, cy] of corners) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      // Zaokrąglenie rogów — piksele bliżej niż r od rogu są przezroczyste.
+      if (cornerDist(x, y) < r) {
+        data[i + 3] = 0;
+        continue;
+      }
+      const [R, G, B] = parkingPixel(x, y, size) ? blue : white;
+      data[i] = R; data[i + 1] = G; data[i + 2] = B; data[i + 3] = 255;
+    }
+  }
+  return { width: size, height: size, data };
+}
+
+function parkingPixel(x, y, size) {
+  // Litera „P” na środku ikony (szer. 8, wys. 13, grubość 2).
+  const left = Math.floor((size - 8) / 2); // 8
+  const top = Math.floor((size - 13) / 2); // 5
+  const rx = x - left;
+  const ry = y - top;
+  if (rx < 0 || rx >= 8 || ry < 0 || ry >= 13) return false;
+  // Pionowa kreska po lewej.
+  if (rx < 2) return true;
+  // Górna belka.
+  if (ry < 2) return true;
+  // Środkowa belka.
+  if (ry >= 5 && ry < 7) return true;
+  // Prawa krawędź górnej pętli.
+  if (rx >= 6 && ry < 7) return true;
+  return false;
+}
+
 const WMS_QUERY =
   "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Raster&STYLES=&CRS=EPSG:3857" +
   "&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&FORMAT=image/png";
@@ -144,6 +194,7 @@ export function addForestLayers(map, pmtilesUrl, { pogoda = null, species = "bor
   const lc = lineColor(basemap);
   map.addSource("lasy", { type: "vector", url: "pmtiles://" + tilesUrl, minzoom: 8, maxzoom: 14 });
   map.addImage("hatch", hatchPattern());
+  map.addImage("parking", parkingIcon());
   const layers = [
     {
       id: "lasy-fill", type: "fill", source: "lasy", "source-layer": "lasy",
@@ -169,11 +220,15 @@ export function addForestLayers(map, pmtilesUrl, { pogoda = null, species = "bor
       id: "rezerwaty-line", type: "line", source: "lasy", "source-layer": "rezerwaty",
       paint: { "line-color": "#6a1b9a", "line-width": 1.5 },
     },
+    {
+      id: "parkingi", type: "symbol", source: "lasy", "source-layer": "parkingi", minzoom: 11,
+      layout: { "icon-image": "parking", "icon-allow-overlap": true },
+    },
   ];
   for (const l of layers) map.addLayer(l);
 }
 
-export function createMap(container, { center, zoom, onFeatureClick, onReserveClick, onMove, basemap = "osm" }) {
+export function createMap(container, { center, zoom, onFeatureClick, onReserveClick, onParkingClick, onMove, basemap = "osm" }) {
   const protocol = new pmtiles.Protocol();
   maplibregl.addProtocol("pmtiles", protocol.tile);
 
@@ -199,6 +254,11 @@ export function createMap(container, { center, zoom, onFeatureClick, onReserveCl
 
   map.on("click", (e) => {
     if (!map.getLayer("lasy-fill")) return;
+    const p = map.queryRenderedFeatures(e.point, { layers: ["parkingi"] })[0];
+    if (p && onParkingClick) {
+      onParkingClick(p.properties, e.lngLat);
+      return;
+    }
     const f = map.queryRenderedFeatures(e.point, { layers: ["lasy-fill"] })[0];
     if (f) {
       if (onFeatureClick) onFeatureClick(f.properties, e.lngLat);
@@ -211,6 +271,8 @@ export function createMap(container, { center, zoom, onFeatureClick, onReserveCl
   map.on("mouseleave", "lasy-fill", () => (map.getCanvas().style.cursor = ""));
   map.on("mouseenter", "rezerwaty-fill", () => (map.getCanvas().style.cursor = "pointer"));
   map.on("mouseleave", "rezerwaty-fill", () => (map.getCanvas().style.cursor = ""));
+  map.on("mouseenter", "parkingi", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "parkingi", () => (map.getCanvas().style.cursor = ""));
   if (onMove) map.on("moveend", () => onMove(map));
   return map;
 }

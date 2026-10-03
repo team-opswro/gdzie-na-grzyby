@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { fillColorExpression, fillOpacityExpression, COLORS, FILL_OPACITY, hatchPattern, BASEMAPS, lineColor } from "../js/map.js";
 import { BASEMAP_KEYS } from "../js/hash.js";
+import { parkingIcon } from "../js/map.js";
 
 const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
 
@@ -87,10 +88,10 @@ function fakeMap(layers = []) {
     calls,
     getLayer: (id) => (have.has(id) ? { id } : undefined),
     addSource: (id, src) => calls.push(["source", id, src]),
-    addImage: (id) => calls.push(["image", id]),
-    addLayer: (l) => { have.add(l.id); calls.push(["layer", l.id]); },
+    addImage: (id, img) => calls.push(["image", id, img]),
+    addLayer: (l) => { have.add(l.id); calls.push(["layer", l.id, l]); },
     setPaintProperty: (id, k) => calls.push(["paint", id, k]),
-    setLayoutProperty: (id, k, v) => calls.push(["layout", id, v]),
+    setLayoutProperty: (id, k, v) => calls.push(["layout", id, k, v]),
   };
 }
 
@@ -101,8 +102,9 @@ test("addForestLayers: pmtiles source from absolute URL, layers in order", () =>
   assert.equal(src[1], "lasy");
   assert.equal(src[2].url, "pmtiles://https://d.example.pl/v/b1/lasy.pmtiles");
   assert.deepEqual(m.calls.filter((c) => c[0] === "layer").map((c) => c[1]),
-    ["lasy-fill", "lasy-rez-hatch", "lasy-line", "rezerwaty-fill", "rezerwaty-line"]);
+    ["lasy-fill", "lasy-rez-hatch", "lasy-line", "rezerwaty-fill", "rezerwaty-line", "parkingi"]);
   assert.ok(m.calls.some((c) => c[0] === "image" && c[1] === "hatch"));
+  assert.ok(m.calls.some((c) => c[0] === "image" && c[1] === "parking"));
 });
 
 test("setView/setBasemap before forest layers exist: only basemap visibility changes", () => {
@@ -128,4 +130,70 @@ test("fillColorExpression dla listy kluczy = max po gatunkach z listy", () => {
 test("fillColorExpression: jednoelementowa lista jak pojedynczy klucz", () => {
   assert.deepEqual(fillColorExpression(P, ["borowik"], 0), fillColorExpression(P, "borowik", 0));
   assert.deepEqual(fillOpacityExpression(null, ["rydz"], 2), fillOpacityExpression(null, "rydz", 2));
+});
+
+test("parkingIcon ma wymiary i nieprzezroczyste piksele", () => {
+  const icon = parkingIcon();
+  assert.equal(icon.width, 24);
+  assert.equal(icon.height, 24);
+  assert.equal(icon.data.length, 24 * 24 * 4);
+  const alphas = new Set([...icon.data].filter((_, i) => i % 4 === 3));
+  assert.ok(alphas.has(0) && alphas.has(255), "ma przezroczyste i nieprzezroczyste piksele");
+});
+
+test("addForestLayers dodaje warstwę parkingi od zoomu 11", () => {
+  const m = fakeMap();
+  addForestLayers(m, "https://d.example.pl/v/b1/lasy.pmtiles", { pogoda: P, species: "borowik", dayIdx: 0, basemap: "osm" });
+  const layers = m.calls.filter((c) => c[0] === "layer").map((c) => c[1]);
+  assert.deepEqual(layers, ["lasy-fill", "lasy-rez-hatch", "lasy-line", "rezerwaty-fill", "rezerwaty-line", "parkingi"]);
+  const p = m.calls.find((c) => c[0] === "layer" && c[1] === "parkingi")?.[2];
+  assert.ok(p);
+  assert.equal(p.type, "symbol");
+  assert.equal(p["source-layer"], "parkingi");
+  assert.equal(p.minzoom, 11);
+  assert.equal(p.layout["icon-image"], "parking");
+  assert.equal(p.layout["icon-allow-overlap"], true);
+  assert.ok(m.calls.some((c) => c[0] === "image" && c[1] === "parking"));
+});
+
+import { createMap } from "../js/map.js";
+
+test("klik: parking ma pierwszeństwo przed wydzieleniem", () => {
+  globalThis.pmtiles = { Protocol: class { tile() {} } };
+  const calls = [];
+  const features = {};
+  let mapObj;
+  globalThis.maplibregl = {
+    addProtocol: () => {},
+    Map: class {
+      constructor(opts) {
+        this.container = opts.container;
+        mapObj = this;
+      }
+      getLayer(id) { return features[id] ? { id } : undefined; }
+      queryRenderedFeatures(pt, opts) {
+        calls.push(["query", pt, opts.layers]);
+        const id = opts.layers[0];
+        return features[id] ? [features[id]] : [];
+      }
+      getCanvas() { return { style: {} }; }
+      on(ev, fn) { if (ev === "click") this._click = fn; }
+      once() {}
+      addControl() {}
+    },
+    NavigationControl: class {},
+  };
+  createMap("map-container", {
+    center: [0, 0],
+    zoom: 10,
+    onFeatureClick: () => calls.push(["feature"]),
+    onReserveClick: () => calls.push(["reserve"]),
+    onParkingClick: () => calls.push(["parking"]),
+  });
+  features["parkingi"] = { properties: { osm: "n1" } };
+  features["lasy-fill"] = { properties: { id: "x" } };
+  mapObj._click({ point: [5, 5], lngLat: { lat: 0, lng: 0 } });
+  assert.deepEqual(calls, [["query", [5, 5], ["parkingi"]], ["parking"]]);
+  delete globalThis.pmtiles;
+  delete globalThis.maplibregl;
 });

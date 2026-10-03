@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { haversineKm, topN, bearing } from "../js/ranking.js";
+import { haversineKm, topN, bearing, renderLoading } from "../js/ranking.js";
 import { score } from "../js/data.js";
+import { installDom } from "./dom-stub.js";
 
 const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
 const wWet = P.cells["506_178"].borowik.w[0];
@@ -108,4 +109,25 @@ test("topN pomija klucze spoza centroids.species", () => {
   assert.equal(r.length, 1);
   assert.equal(r[0].best.h, 90); // kolumna kurki, nie przesunięta przez nieznany klucz
   assert.deepEqual(topN(C2, P, ["nieznany"], 0, origin), []);
+});
+
+test("renderLoading ustawia aria-busy i komunikat", () => {
+  installDom();
+  const list = {
+    setAttribute: function (k, v) { this.attrs[k] = v; },
+    replaceChildren: function (...c) { this.children = c; },
+    attrs: {},
+    children: [],
+  };
+  renderLoading(list);
+  assert.equal(list.attrs["aria-busy"], "true");
+  assert.equal(list.children.length, 1);
+  assert.equal(list.children[0].tag, "li");
+  assert.equal(list.children[0].className, "empty");
+  assert.equal(list.children[0].textContent, "Ładowanie…");
+});
+
+test("index.html ma tytuł Gdzie na grzyby?", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /<title>\s*Gdzie na grzyby\?\s*<\/title>/);
 });

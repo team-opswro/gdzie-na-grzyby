@@ -3,10 +3,10 @@ import { buildSpeciesOptions } from "./select.js";
 import { loadConfig, loadManifest, fileUrl } from "./config.js";
 import { createCentroidStore } from "./tiles.js";
 import { trend, trendBy } from "./chart.js";
-import { topN, haversineKm } from "./ranking.js";
+import { topN, haversineKm, renderLoading } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, addForestLayers, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
-import { renderPopup, renderReserve, trendArrow, trendLabel, rankLabel } from "./popup.js";
+import { renderPopup, renderReserve, renderParking, trendArrow, trendLabel, rankLabel } from "./popup.js";
 import { shareUrl } from "./share.js";
 import { speciesCardModel, renderSpeciesCard, aboutForecastText } from "./dialogs.js";
 
@@ -28,6 +28,11 @@ function formatDay(iso) {
 const MAP_DATA_ERROR = "Nie udało się wczytać danych mapy";
 
 export async function init() {
+  // Rejestracja service workera (PWA) — tylko przez HTTP(S), nie z file://.
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW:", e));
+  }
+
   // Podkład powstaje od razu (zawieszony bucket ≠ pusta strona); warstwy lasów dochodzą po manifeście.
   // Wstępny hash: środek, zoom i podkład nie zależą od listy gatunków.
   const pre = parseHash(location.hash, selectionValues(SPECIES));
@@ -38,6 +43,7 @@ export async function init() {
     basemap: pre.basemap,
     onFeatureClick: (props, lngLat) => handlers.feature?.(props, lngLat),
     onReserveClick: (name, lngLat) => handlers.reserve?.(name, lngLat),
+    onParkingClick: (props, lngLat) => handlers.parking?.(props, lngLat),
     onMove: () => handlers.move?.(),
   });
   const styleLoaded = new Promise((resolve) => map.once("load", resolve));
@@ -93,6 +99,14 @@ export async function init() {
   const dayIdx = () => (days.length ? days[state.day].idx : 0);
 
   handlers.feature = (props, lngLat) => showPopup(props, lngLat);
+  handlers.parking = (props, lngLat) => {
+    popup?.remove();
+    lastPopup = null;
+    const content = renderParking(props, lngLat);
+    const pp = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    popup = pp;
+    pp.on("close", () => { if (popup === pp) popup = null; });
+  };
   handlers.reserve = (name, lngLat) => {
     popup?.remove();
     lastPopup = null;
@@ -243,11 +257,13 @@ export async function init() {
     const seq = ++rankingSeq;
     const list = $("ranking-list");
     const show = (...items) => { if (seq === rankingSeq) list.replaceChildren(...items); };
+    const setBusy = (v) => { if (seq === rankingSeq) list.setAttribute("aria-busy", v); };
     if (!loaded) return show();
     if (!centroids) return show(li("Nie udało się wczytać danych rankingu.", "empty"));
     if (!effective) return show(li("Brak danych pogodowych", "empty"));
     const o = origin();
     const radius = state.radius;
+    renderLoading(list);
     let top;
     try {
       const rows = await centroids.rowsNear(o, radius);
@@ -255,8 +271,10 @@ export async function init() {
       top = topN({ species: centroids.species, rows }, effective, keys(), dayIdx(), o, radius);
     } catch (e) {
       console.warn("Ranking:", e);
+      setBusy("false");
       return show(li("Nie udało się wczytać danych rankingu.", "empty"));
     }
+    setBusy("false");
     list.replaceChildren();
     if (!top.length) {
       list.append(li(`Brak miejsc o dodatnim wyniku w promieniu ${radius} km`, "empty"));
@@ -419,9 +437,14 @@ export async function init() {
   if (mapReady) map.once("idle", openInitialPlace);
   return map;
 
-  // Baner nad mapą: błąd danych mapy (manifest) + stan prognozy.
+  // Baner nad mapą: błąd danych mapy (manifest) + stan prognozy + tryb offline.
   function showBanner(weather = null) {
-    const text = [mapDataError ? MAP_DATA_ERROR : null, weather].filter(Boolean).join(". ");
+    const parts = [mapDataError ? MAP_DATA_ERROR : null, weather].filter(Boolean);
+    if (navigator.onLine === false && data.pogoda?.generated_at) {
+      const when = aboutForecastText(data.pogoda.generated_at).replace("Prognoza z: ", "");
+      parts.push(`Tryb offline — dane z ${when}`);
+    }
+    const text = parts.join(". ");
     $("stale").textContent = text;
     $("stale").hidden = !text;
   }

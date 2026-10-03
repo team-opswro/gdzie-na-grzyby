@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as popup from "../js/popup.js";
-import { reserveText, ZAKAZY_URL } from "../js/popup.js";
+import { reserveText, ZAKAZY_URL, renderParking } from "../js/popup.js";
 
 test("rankLabel formats grouped place, distance, bearing and count", () => {
   const group = {
@@ -80,7 +80,7 @@ test("rankLabel w trybie all dopisuje krótką nazwę gatunku", () => {
 });
 
 import fs from "node:fs";
-import { installDom, walk } from "./dom-stub.js";
+import { installDom, walk, texts } from "./dom-stub.js";
 
 test("renderPopup w trybie all: bez pogody i ze starą pogodą — paski gatunków, bez wyjątku", () => {
   installDom();
@@ -195,4 +195,15 @@ test("popup: nieznany kod hl_ pomijany, tryb grupy bez hl_", () => {
     walk(root, (n) => { if (n.textContent) all.push(n.textContent); });
     assert.ok(!all.some((t) => String(t).startsWith("Ogranicza siedlisko")));
   }
+});
+
+test("renderParking: nazwa, płatny, Prowadź", () => {
+  installDom();
+  const root = renderParking({ osm: "n123", name: "Parking Leśny", fee: "yes" }, { lat: 50.1, lng: 17.2 });
+  const t = texts(root).join(" ");
+  assert.match(t, /Parking/);
+  assert.match(t, /Parking Leśny/);
+  assert.match(t, /płatny/);
+  assert.match(t, /Prowadź/);
+  assert.match(t, /OSM/);
 });
