@@ -96,3 +96,13 @@ test("renderPopup w trybie all: plakietka wyniku z krótką nazwą gatunku", () 
   walk(root, (n) => { if (n.className === "popup-score") text = (n.children ?? []).map((c) => c.textContent ?? c).join(""); });
   assert.match(String(text), /^Wynik: \d+\/100 \([^)]+\) · [a-ząćęłńóśźż]+/);
 });
+
+test("popup: brak atrybutu h_* = 0 (zerowe h nie są zapisywane w kafelkach)", () => {
+  installDom();
+  const root = popup.renderPopup({ id: "x", cell: "506_178", sp: "OL" }, { pogoda: null, species: "borowik", dayIdx: 0 });
+  const cells = [];
+  walk(root, (n) => { if (n.tag === "td" || n.tag === "th") cells.push(String(n.textContent ?? "")); });
+  const i = cells.indexOf("Siedlisko");
+  assert.ok(i >= 0);
+  assert.equal(cells[i + 1], "0%");
+});

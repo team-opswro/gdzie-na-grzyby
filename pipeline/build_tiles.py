@@ -140,8 +140,10 @@ def write_geojsonseq(gdf, keys: list[str], path: Path) -> None:
             props = {"id": rec.id, "cell": rec.cell, "sp": rec.sp_main,
                      "age": None if rec.age is None or rec.age != rec.age else int(rec.age),
                      "hab": rec.hab}
-            for c in hcols:
-                props[c] = int(getattr(rec, c))
+            for c in hcols:  # h = 0 pomijane (klient: brak atrybutu = 0), mniejsze kafelki
+                h = int(getattr(rec, c))
+                if h:
+                    props[c] = h
             rez = getattr(rec, "rez", None)
             if isinstance(rez, str) and rez:
                 props["rez"] = rez

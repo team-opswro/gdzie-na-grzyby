@@ -112,3 +112,8 @@ test("setView/setBasemap before forest layers exist: only basemap visibility cha
   assert.ok(m.calls.every((c) => c[0] === "layout"));
   assert.equal(m.calls.length, BASEMAP_KEYS.length);
 });
+
+test("hExpr: brak atrybutu h_* = 0", () => {
+  const s = JSON.stringify(fillColorExpression(null, "borowik", 0));
+  assert.ok(s.includes('["to-number",["get","h_borowik"],0]'));
+});

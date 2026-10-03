@@ -79,7 +79,8 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
   - `h_<gatunek>` — ocena siedliska 0–100 dla każdego gatunku z `gatunki.json`
     (np. `h_borowik`, `h_kurka`); wynik dnia = `round(h × w)`, gdzie `w` z `pogoda.json`;
     `h` uwzględnia partnera drzewnego i jego wiek, typ siedliskowy oraz (jako modyfikatory)
-    pokrywę runa, wilgotność, degradację, glebę, uszkodzenia i zadrzewienie z BDL,
+    pokrywę runa, wilgotność, degradację, glebę, uszkodzenia i zadrzewienie z BDL;
+    **brak atrybutu `h_<gatunek>` = 0** (zera nie są zapisywane, żeby zmniejszyć kafelki),
   - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione).
 - `rezerwaty` — obrysy rezerwatów przyrody (GDOŚ), atrybut `name` (opcjonalny).
 

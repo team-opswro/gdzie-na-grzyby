@@ -229,3 +229,12 @@ def test_compute_features_passes_new_fields():
     g["veg"] = ["ZAD", None]
     f = compute_features(g, sp)
     assert list(f["h_kurka"]) == [70, 100]
+
+
+def test_geojsonseq_omits_zero_h(tmp_path):
+    g = compute_features(gdf_from([sq(50.2, 17.2)], [Stand("BRZ", (), 30, "BMW")]), S)
+    path = tmp_path / "x.geojsonseq"
+    write_geojsonseq(g, KEYS, path)
+    props = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["properties"]
+    assert props.get("h_kozlarz", 0) > 0
+    assert "h_borowik" not in props  # brzoza: borowik 0 -> atrybut pominięty
