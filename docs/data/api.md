@@ -166,7 +166,8 @@ schemat: `schema/pogoda.schema.json`.
 
 - `days` — 8 dni: wczoraj, dziś i 6 kolejnych; każda tablica dzienna ma 8 elementów w tej kolejności.
 - `cells[cell][gatunek]` — mnożnik pogodowy `w` (0–1) i jego składowe `rain`, `temp`, `season` (0–1);
-  opcjonalnie `pulse` (1.0–1.2, premia za ochłodzenie gleby) i `frost` (0–1, kara za niedawny przymrozek);
+  opcjonalnie `pulse` (1.0–1.2, premia za ochłodzenie gleby) i `frost` (0–1, kara za niedawny przymrozek) —
+  pomijane, gdy przez wszystkie dni wynoszą 1.0 (brak = 1.0); plik zapisywany bez zbędnych spacji;
   `lim` — czynnik ograniczający dnia: `dry` (za mało opadu), `dry_soil` (sucha gleba), `cold`, `hot`,
   `season` (poza sezonem), `frost` (niedawny przymrozek) albo `null`.
 - `wx[cell]` — wartości, z których liczony jest mnożnik dnia: `rain_mm` (suma

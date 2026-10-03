@@ -110,6 +110,10 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
                 name: [round(getattr(c, name), DIGITS) for c in comps]
                 for name in ("w", "rain", "temp", "season", "pulse", "frost")
             }
+            # neutralne składowe (same 1.0: brak ochłodzenia / przymrozku) pomijane — brak = 1.0
+            for name in ("pulse", "frost"):
+                if all(v == 1.0 for v in per_species[key][name]):
+                    del per_species[key][name]
             per_species[key]["lim"] = [
                 limiting_factor(c, s, i, sp) for c, i in zip(comps, idx)
             ]
@@ -137,7 +141,7 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
 def write_atomic(payload: dict, out: Path, schema: Path = SCHEMA_PATH) -> None:
     tmp = out.with_suffix(".tmp")
     try:
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False))
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")))
         validator = jsonschema.Draft202012Validator(
             json.loads(schema.read_text()), format_checker=jsonschema.FormatChecker()
         )

@@ -90,7 +90,7 @@ def test_current_format_without_new_fields_validates():
     p = payload()
     for cell in p["cells"].values():
         for sp in cell.values():
-            sp.pop("pulse"), sp.pop("frost")
+            sp.pop("pulse", None), sp.pop("frost", None)
     for w in p["wx"].values():
         for k in ("et0_mm", "soil_m_deep", "t2m_min"):
             w.pop(k, None)
@@ -114,13 +114,13 @@ def test_payload_validates_against_schema():
 def test_payload_has_pulse_frost_and_wx_extras():
     series = {
         "506_178": make_series(3.0, et0=1.5, deep=0.25, t2m_min=5.0),
-        "507_178": make_series(0.0, et0=2.0, deep=0.12, t2m_min=4.0),
+        "507_178": make_series(0.0, et0=2.0, deep=0.12, t2m_min=-5.0),  # przymrozki
     }
     p = build_payload(CELLS, series, load_species(), TODAY, NOW)
-    for cid in ("506_178", "507_178"):
-        for sp in SPECIES_KEYS:
-            assert "pulse" in p["cells"][cid][sp]
-            assert "frost" in p["cells"][cid][sp]
+    for sp in SPECIES_KEYS:
+        assert "frost" in p["cells"]["507_178"][sp]       # przymrozek -> tablica obecna
+        assert "frost" not in p["cells"]["506_178"][sp]   # same 1.0 -> pominięta
+        assert "pulse" not in p["cells"]["506_178"][sp]   # stała temperatura gleby -> brak ochłodzenia
     for cid in ("506_178", "507_178"):
         wx = p["wx"][cid]
         assert "et0_mm" in wx
@@ -386,3 +386,19 @@ def test_main_grid_from_url_without_base_url(tmp_path, monkeypatch):
     _setup_main(tmp_path, monkeypatch)
     monkeypatch.delenv("DATA_BASE_URL")
     assert main(["--grid-from-url", "--out", str(tmp_path / "p.json")]) == 1
+
+
+def test_payload_omits_neutral_frost_and_pulse():
+    # bez przymrozku i bez ochłodzenia (same 1.0) — tablice pominięte (brak = 1.0), mniejszy plik
+    p = payload()
+    for cell in p["cells"].values():
+        for sp in cell.values():
+            assert "frost" not in sp or any(v != 1.0 for v in sp["frost"])
+            assert "pulse" not in sp or any(v != 1.0 for v in sp["pulse"])
+    jsonschema.validate(p, SCHEMA)
+
+
+def test_write_atomic_compact(tmp_path):
+    out = tmp_path / "pogoda.json"
+    write_atomic(payload(), out)
+    assert ", " not in out.read_text() and ": " not in out.read_text()
