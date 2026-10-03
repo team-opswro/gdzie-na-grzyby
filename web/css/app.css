@@ -3,7 +3,7 @@
 html, body { height: 100%; margin: 0; }
 body { display: flex; flex-direction: column; font: 15px/1.35 system-ui, sans-serif; color: var(--fg); }
 .topbar { display: flex; gap: 8px; align-items: center; padding: 8px; background: var(--bar); color: #fff; }
-.topbar select { flex: 1; min-width: 0; font: inherit; padding: 8px; border-radius: 6px; border: 0; }
+.topbar select { flex: 1; min-width: 0; min-height: 40px; font: inherit; padding: 8px; border-radius: 6px; border: 0; }
 .topbar button { font: inherit; min-width: 40px; height: 40px; border: 0; border-radius: 6px; background: #fff; cursor: pointer; }
 .topbar button:disabled { opacity: .4; cursor: default; }
 .day { display: flex; align-items: center; gap: 4px; }
