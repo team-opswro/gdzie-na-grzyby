@@ -3,13 +3,13 @@
   "$id": "pogoda.schema.json",
   "title": "pogoda.json",
   "type": "object",
-  "required": ["generated_at", "days", "cells"],
+  "required": ["generated_at", "days", "wx", "cells"],
   "additionalProperties": false,
   "properties": {
     "generated_at": {"type": "string", "format": "date-time"},
     "days": {
       "type": "array",
-      "minItems": 7,
+      "minItems": 8,
       "maxItems": 8,
       "items": {"type": "string", "format": "date"}
     },
@@ -25,13 +25,13 @@
   "$defs": {
     "series": {
       "type": "array",
-      "minItems": 7,
+      "minItems": 8,
       "maxItems": 8,
       "items": {"type": "number", "minimum": 0, "maximum": 1}
     },
     "series_pulse": {
       "type": "array",
-      "minItems": 7,
+      "minItems": 8,
       "maxItems": 8,
       "items": {"type": "number", "minimum": 1, "maximum": 1.2}
     },
@@ -41,17 +41,17 @@
       "required": ["rain_mm", "soil_t", "soil_m"],
       "additionalProperties": false,
       "properties": {
-        "rain_mm": {"type": "array", "minItems": 7, "maxItems": 8, "items": {"type": "number", "minimum": 0}},
-        "soil_t": {"type": "array", "minItems": 7, "maxItems": 8, "items": {"type": "number"}},
-        "soil_m": {"type": "array", "minItems": 7, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}},
-        "et0_mm": {"type": "array", "minItems": 7, "maxItems": 8, "items": {"type": "number", "minimum": 0}},
-        "soil_m_deep": {"type": "array", "minItems": 7, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}},
-        "t2m_min": {"type": "array", "minItems": 7, "maxItems": 8, "items": {"type": "number"}}
+        "rain_mm": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0}},
+        "soil_t": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number"}},
+        "soil_m": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}},
+        "et0_mm": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0}},
+        "soil_m_deep": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}},
+        "t2m_min": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number"}}
       }
     },
     "species": {
       "type": "object",
-      "required": ["w", "rain", "temp", "season"],
+      "required": ["w", "rain", "temp", "season", "lim"],
       "additionalProperties": false,
       "properties": {
         "w": {"$ref": "#/$defs/series"},
@@ -60,7 +60,7 @@
         "season": {"$ref": "#/$defs/series"},
         "pulse": {"$ref": "#/$defs/series_pulse"},
         "frost": {"$ref": "#/$defs/series"},
-        "lim": {"type": "array", "minItems": 7, "maxItems": 8, "items": {"$ref": "#/$defs/lim"}}
+        "lim": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"$ref": "#/$defs/lim"}}
       }
     },
     "cell": {

@@ -78,9 +78,33 @@ def test_missing_yesterday_raises_value_error():
         build_payload(CELLS, series, load_species(), TODAY, NOW)
 
 
-def test_old_v1_fixture_still_validates():
+def test_old_v1_fixture_does_not_validate():
+    # format sprzed wx/lim (7 dni) — schemat produkcyjny ma go odrzucać
     data = json.loads((FIXTURES / "pogoda_v1.json").read_text())
-    jsonschema.validate(data, SCHEMA)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(data, SCHEMA)
+
+
+def test_current_format_without_new_fields_validates():
+    # plik w obecnym formacie bez pulse/frost/et0_mm/... (sprzed specu G) nadal jest poprawny
+    p = payload()
+    for cell in p["cells"].values():
+        for sp in cell.values():
+            sp.pop("pulse"), sp.pop("frost")
+    for w in p["wx"].values():
+        for k in ("et0_mm", "soil_m_deep", "t2m_min"):
+            w.pop(k, None)
+    jsonschema.validate(p, SCHEMA)
+
+
+def test_schema_requires_wx_lim_and_8_days():
+    for mutate in (lambda p: p.pop("wx"),
+                   lambda p: p["cells"]["506_178"]["borowik"].pop("lim"),
+                   lambda p: p["cells"]["506_178"]["borowik"]["w"].pop()):
+        p = payload()
+        mutate(p)
+        with pytest.raises(jsonschema.ValidationError):
+            jsonschema.validate(p, SCHEMA)
 
 
 def test_payload_validates_against_schema():
