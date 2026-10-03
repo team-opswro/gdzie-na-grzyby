@@ -6,7 +6,9 @@ import pytest
 import requests
 import responses
 
-from forecast.weather import API_URL, WeatherError, daily_from_response, fetch_series
+from forecast.weather import (
+    API_URL, RATE_LIMIT_RETRIES, RATE_LIMIT_WAIT_S, WeatherError, daily_from_response, fetch_series,
+)
 
 FIX = Path(__file__).parent / "fixtures" / "openmeteo_two_points.json"
 POINTS = [("a", 50.65, 17.9), ("b", 50.75, 17.9)]
@@ -106,3 +108,26 @@ def test_fetch_sends_required_params():
     assert q["timezone"] == "Europe/Warsaw"
     assert q["daily"] == "precipitation_sum"
     assert q["hourly"] == "soil_temperature_6cm,soil_moisture_3_to_9cm"
+
+
+@responses.activate
+def test_fetch_waits_out_minute_rate_limit():
+    # Open-Meteo: limit minutowy (429) — czekamy ~minutę, nie zużywając zwykłych prób.
+    responses.get(API_URL, status=429, json={"reason": "Minutely API request limit exceeded"})
+    responses.get(API_URL, status=429, json={"reason": "Minutely API request limit exceeded"})
+    responses.get(API_URL, status=500)
+    responses.get(API_URL, json=fixture())
+    sleeps = []
+    out = fetch_series(POINTS, sleep=sleeps.append)
+    assert set(out) == {"a", "b"}
+    assert sleeps == [RATE_LIMIT_WAIT_S, RATE_LIMIT_WAIT_S, 1]
+
+
+@responses.activate
+def test_fetch_rate_limit_gives_up():
+    for _ in range(RATE_LIMIT_RETRIES + 2):
+        responses.get(API_URL, status=429)
+    sleeps = []
+    with pytest.raises(WeatherError):
+        fetch_series(POINTS, sleep=sleeps.append)
+    assert sleeps == [RATE_LIMIT_WAIT_S] * RATE_LIMIT_RETRIES + [1, 2]

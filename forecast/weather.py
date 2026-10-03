@@ -9,6 +9,10 @@ from forecast.model import DailySeries
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT_S = 30
+# Limit minutowy Open-Meteo (429): zapytanie o 50 punktów z 37 dniami godzinowych danych waży ~130
+# „wywołań”, więc przy ~14 partiach limit 600/min wypada w połowie przebiegu. Czekamy ~minutę.
+RATE_LIMIT_WAIT_S = 65
+RATE_LIMIT_RETRIES = 6
 PARAMS = {
     "daily": "precipitation_sum",
     "hourly": "soil_temperature_6cm,soil_moisture_3_to_9cm",
@@ -62,16 +66,24 @@ def daily_from_response(obj: dict) -> DailySeries:
 def _request(params: dict, retries: int, sleep, session) -> list[dict]:
     http = session or requests
     last: Exception | None = None
-    for attempt in range(retries):
-        if attempt:
-            sleep(2 ** (attempt - 1))
+    limited = 0
+    attempt = 0
+    while attempt < retries:
         try:
             r = http.get(API_URL, params=params, timeout=TIMEOUT_S)
+            if r.status_code == 429 and limited < RATE_LIMIT_RETRIES:
+                limited += 1
+                last = requests.HTTPError("429 Too Many Requests")
+                sleep(RATE_LIMIT_WAIT_S)
+                continue
             r.raise_for_status()
             data = r.json()
             return data if isinstance(data, list) else [data]
         except (requests.RequestException, ValueError) as e:
             last = e
+        attempt += 1
+        if attempt < retries:
+            sleep(2 ** (attempt - 1))
     raise WeatherError(f"Open-Meteo niedostępne po {retries} próbach: {last!r}")
 
 
