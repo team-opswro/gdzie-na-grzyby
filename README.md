@@ -16,10 +16,11 @@ node --test web/tests/*.test.js     # JS (podaj pliki jawnie; katalog nie dział
 Wykonywana lokalnie; wynik (`web/data/lasy.pmtiles`, `centroidy.json`, `grid.json`) trafia do repozytorium.
 
 ```sh
+python -m pipeline.area                            # obrys obszaru: opolskie + nadleśnictwa `whole: true` -> pipeline/data/obszar.geojson
 python -m pipeline.fetch_bdl                       # pobranie danych BDL do pipeline/data/raw
 podman build -f pipeline/Dockerfile -t grzyby-pipeline .      # (docker: to samo polecenie)
 podman run --rm -v $PWD:/w -w /w grzyby-pipeline \
-  python -m pipeline.build_tiles --bdl pipeline/data/raw --boundary pipeline/data/opolskie.geojson --out web/data
+  python -m pipeline.build_tiles --bdl pipeline/data/raw --boundary pipeline/data/obszar.geojson --out web/data
 ```
 
 ## Uruchomienie lokalne (Docker Compose)

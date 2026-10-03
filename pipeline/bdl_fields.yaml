@@ -26,4 +26,9 @@ districts:
   - {name: "Lubliniec", prefix: "02-19", layer: "RDLP_Katowice_wydzielenia"}
   - {name: "Rudziniec", prefix: "02-25", layer: "RDLP_Katowice_wydzielenia"}
   - {name: "Kłobuck", prefix: "02-12", layer: "RDLP_Katowice_wydzielenia"}
-# Wieluń = RDLP Łódź. Pominiete slivery granicy (<1.1 km2 w woj.): Syców, Henryków, Oława, Bardo Śląskie, Przedborów, Herby, Oleśnica Śląska.
+  - {name: "Henryków", prefix: "13-02", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
+  - {name: "Oława", prefix: "13-20", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
+# whole: true = nadlesnictwo poza woj. (dolnoslaskie, RDLP Wroclaw, okolice Grodkowa) wlaczone w calosci, bez przycinania do granicy woj.;
+# jego obrys (kolekcja nadlesnictwa: region_cd, inspectorate_cd) trafia do pipeline/data/obszar.geojson (python -m pipeline.area).
+# adr_for w RDLP_Wroclaw_wydzielenia ma ten sam format (np. "13-02-1-03-63    -b   -00"), filtr LIKE '13-02%' dziala.
+# Wieluń = RDLP Łódź. Pominiete slivery granicy (<1.1 km2 w woj.): Syców, Bardo Śląskie, Przedborów, Herby, Oleśnica Śląska.

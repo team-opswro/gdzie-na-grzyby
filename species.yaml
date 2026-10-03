@@ -5,7 +5,7 @@ species:
     name: "Borowik szlachetny"
     partners: [SO, SW, BK, DB]
     age: {min: 30, opt: 50, max: null}
-    habitat: {preferred: [BSW, BMSW, LMSW, LSW, BMGSW, LMWYZ, LMGSW, LWYZS, LGSW], adjacent: [BW, BMW, LMW, LW, BS, LMWYZW, LWYZW, LGW]}
+    habitat: {preferred: [BSW, BMSW, LMSW, LSW, BMGSW, LMWYZ, LMGSW, LWYZS, LGSW], adjacent: [BW, BMW, BMWYZ, LMW, LW, BS, LMWYZW, LWYZW, LGW]}
     season: {start: "07-01", end: "10-31"}
     temp: [6, 12, 20, 26]
     rain_min: 10
@@ -15,7 +15,7 @@ species:
     name: "Podgrzybek brunatny"
     partners: [SO, SW]
     age: {min: 20, opt: 30, max: null}
-    habitat: {preferred: [BSW, BMSW, BW, BMW, BMGSW], adjacent: [BS, LMSW, LMW, LMWYZ, LMGSW, LMWYZW]}
+    habitat: {preferred: [BSW, BMSW, BW, BMW, BMWYZ, BMGSW], adjacent: [BS, LMSW, LMW, LMWYZ, LMGSW, LMWYZW]}
     season: {start: "08-01", end: "11-30"}
     temp: [4, 10, 18, 24]
     rain_min: 10
@@ -25,7 +25,7 @@ species:
     name: "Kurka"
     partners: [SO, SW, BK, DB]
     age: {min: 20, opt: 30, max: null}
-    habitat: {preferred: [BSW, BMSW, BS, BMGSW], adjacent: [BW, BMW, LMSW, LMWYZ, LMGSW]}
+    habitat: {preferred: [BSW, BMSW, BS, BMGSW], adjacent: [BW, BMW, BMWYZ, LMSW, LMWYZ, LMGSW]}
     season: {start: "06-01", end: "10-31"}
     temp: [8, 14, 22, 28]
     rain_min: 8
@@ -35,7 +35,7 @@ species:
     name: "Koźlarz babka"
     partners: [BRZ]
     age: {min: 10, opt: 15, max: null}
-    habitat: {preferred: [BMW, LMW, BW, LMWYZW], adjacent: [BMSW, LMSW, LW, BB, BMB, BMGSW, LMWYZ, LMGSW, LWYZW, LGW]}
+    habitat: {preferred: [BMW, BMWYZ, LMW, BW, LMWYZW], adjacent: [BMSW, LMSW, LW, BB, BMB, BMGSW, LMWYZ, LMGSW, LWYZW, LGW]}
     season: {start: "06-01", end: "10-31"}
     temp: [6, 12, 20, 26]
     rain_min: 10

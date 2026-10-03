@@ -10,7 +10,7 @@ Hobbystyczna strona pokazująca na mapie szanse na grzyby w lasach województwa 
 **Kryterium sukcesu:** użytkownik rano otwiera stronę na telefonie, wybiera gatunek i dzień (dziś … +6), widzi pokolorowane wydzielenia leśne oraz listę 10 najlepszych miejsc w promieniu 20 km od siebie. Utrzymanie sprowadza się do jednego codziennego zadania na VPS.
 
 **W zakresie v1:**
-- obszar: województwo opolskie,
+- obszar: województwo opolskie oraz w całości (bez przycinania do granicy) dwa nadleśnictwa RDLP Wrocław przy Grodkowie: Henryków i Oława,
 - 6 gatunków: borowik szlachetny, podgrzybek brunatny, kurka, koźlarz babka, maślak zwyczajny, rydz,
 - model hybrydowy: stała ocena siedliska × dzienny mnożnik pogodowy,
 - prognoza na 7 dni (dzień 0 = dziś),
@@ -57,7 +57,7 @@ przeglądarka: wynik = h_<gatunek>(polygon) × w[cell][gatunek][dzień]
 
 ## 3. Dane wejściowe
 
-**BDL (Bank Danych o Lasach)** — wydzielenia nadleśnictw, których zasięg obejmuje województwo opolskie (RDLP Katowice i RDLP Wrocław). Wymagane minimum atrybutów na wydzielenie:
+**BDL (Bank Danych o Lasach)** — wydzielenia nadleśnictw, których zasięg obejmuje województwo opolskie (RDLP Katowice, Łódź), plus dwa nadleśnictwa dolnośląskie włączone w całości: Henryków (13-02) i Oława (13-20), warstwa `RDLP_Wroclaw_wydzielenia`. Wymagane minimum atrybutów na wydzielenie:
 
 - geometria (polygon),
 - adres leśny (identyfikator),
@@ -65,7 +65,7 @@ przeglądarka: wynik = h_<gatunek>(polygon) × w[cell][gatunek][dzień]
 - wiek drzewostanu,
 - typ siedliskowy lasu (opcjonalny, patrz §4.1, sytuacja awaryjna).
 
-Wydzielenia nieleśne (zręby, bagna, drogi, grunty nieleśne) są odrzucane. Geometrie przycinane do granicy województwa (granica z PRG/OSM).
+Wydzielenia nieleśne (zręby, bagna, drogi, grunty nieleśne) są odrzucane. Geometrie przycinane do obszaru = granica województwa (OSM) połączona z obrysami nadleśnictw `whole: true` (`pipeline/data/obszar.geojson`); Henryków i Oława nie są przycinane.
 
 **Ryzyko nr 1:** format, licencja i zestaw atrybutów danych BDL nie zostały jeszcze potwierdzone. Pierwsze zadanie planu to ręczne sprawdzenie i pobranie próbki dla jednego nadleśnictwa.
 

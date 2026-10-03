@@ -85,7 +85,7 @@ def test_normalize_habitat(raw, exp):
 
 @pytest.mark.parametrize("upland,lowland", [
     ("LGSW", "LSW"), ("LWYZS", "LSW"), ("LMWYZ", "LMSW"), ("LMGSW", "LMSW"),
-    ("LWYZW", "LW"), ("LGW", "LW"), ("LMWYZW", "LMW"), ("BMGSW", "BMSW"),
+    ("LWYZW", "LW"), ("LGW", "LW"), ("LMWYZW", "LMW"), ("BMGSW", "BMSW"), ("BMWYZ", "BMW"),
 ])
 def test_upland_habitat_scores_like_lowland_analogue(upland, lowland):
     for sp in S.values():

@@ -53,4 +53,8 @@ Kolekcja `nadlesnictwa` (429 obiektow; pola `inspectorate_name`, `region_cd`, `i
 - Pobranie calego woj.: ok. 18 nadlesnictw x ~5-8 tys. rekordow; stronicowac po 1000 z filtrem `adr_for LIKE 'RR-NN%'`. Pole `numberMatched` w odpowiedziach z filtrem bywa nierzetelne — stronicowac do pustej/niepelnej strony.
 
 ## Mapowanie nadlesnictw (bdl_fields.yaml `districts`)
-Kazdy wpis: `name` (jak `inspectorate_name`), `prefix` (`region_cd-inspectorate_cd`, kody z kolekcji `nadlesnictwa`), `layer`. 17 nadlesnictw w RDLP Katowice (region 02), Wieluń 06-20 w `RDLP_Lodz_wydzielenia`.
+Kazdy wpis: `name` (jak `inspectorate_name`), `prefix` (`region_cd-inspectorate_cd`, kody z kolekcji `nadlesnictwa`), `layer`. 17 nadlesnictw w RDLP Katowice (region 02), Wieluń 06-20 w `RDLP_Lodz_wydzielenia`, Henryków 13-02 i Oława 13-20 w `RDLP_Wroclaw_wydzielenia` (`whole: true`).
+
+## Nadleśnictwa spoza województwa, włączone w całości (RDLP Wrocław)
+Henryków (`13-02`) i Oława (`13-20`), dolnośląskie przy Grodkowie, warstwa `RDLP_Wroclaw_wydzielenia`; w `bdl_fields.yaml` oznaczone `whole: true`. Format `adr_for` jak w innych RDLP (np. `13-02-1-03-63    -b   -00`), filtr `LIKE '13-02%'` działa. Dane pobrane w całości (Henryków 2663, Oława 4662 wydzieleń D-STAN), bez przycinania do granicy woj.
+Obrys z kolekcji `nadlesnictwa` (`region_cd='13' AND inspectorate_cd IN ('02','20')`) jest łączony z `opolskie.geojson` krokiem `python -m pipeline.area` do `pipeline/data/obszar.geojson` (EPSG:4326, uproszczony do 100 m w EPSG:2180); build kafelków przycina do tego pliku. Nowe kody siedlisk: `BMWYZ` (1 wydz.) dodany jako odpowiednik `BMW`; `OLJWYZ` (18) nie ma odpowiednika na listach gatunków (jak `OLJ`, `OL`, `LL`) i dostaje współczynnik "inne siedlisko".
