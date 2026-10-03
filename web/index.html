@@ -15,7 +15,8 @@
       <span id="day-label" aria-live="polite">—</span>
       <button id="day-next" type="button" aria-label="Następny dzień">▶</button>
     </div>
-    <button id="locate" type="button" aria-label="Moja lokalizacja" title="Moja lokalizacja">◎</button>
+    <button id="locate" type="button" aria-label="Moja lokalizacja" title="Moja lokalizacja" aria-pressed="false">◎</button>
+    <button id="share" type="button" aria-label="Udostępnij" title="Udostępnij">⤴</button>
   </header>
   <div id="stale" class="stale" role="alert" hidden></div>
   <main class="mapwrap">
@@ -23,9 +24,19 @@
     <div id="basemap" class="basemap" role="radiogroup" aria-label="Podkład mapy"></div>
     <div id="legend" class="legend" aria-label="Legenda"></div>
     <section id="panel" class="panel">
-      <button id="panel-toggle" type="button" aria-expanded="false" aria-controls="ranking-list">Top 10 w promieniu 20 km</button>
+      <div class="panel-head">
+        <button id="panel-toggle" type="button" aria-expanded="false" aria-controls="ranking-list">Top 10 w promieniu</button>
+        <select id="radius" aria-label="Promień rankingu">
+          <option value="5">5 km</option>
+          <option value="10">10 km</option>
+          <option value="20" selected>20 km</option>
+          <option value="40">40 km</option>
+        </select>
+      </div>
+      <div id="ranking-source" class="panel-src">od środka mapy</div>
       <ol id="ranking-list"></ol>
     </section>
+    <div id="toast" role="status" hidden></div>
   </main>
   <footer class="foot">
     Model heurystyczny, bez kalibracji.

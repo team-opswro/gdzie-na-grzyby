@@ -3,7 +3,8 @@ import { trend } from "./chart.js";
 import { topN } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
-import { renderPopup, renderReserve, trendArrow, trendLabel } from "./popup.js";
+import { renderPopup, renderReserve, trendArrow, trendLabel, rankLabel } from "./popup.js";
+import { shareUrl } from "./share.js";
 
 const OPOLSKIE_CENTER = [17.9, 50.65];
 const DEFAULT_ZOOM = 9;
@@ -22,8 +23,9 @@ function formatDay(iso) {
 
 export async function init() {
   const hash = parseHash(location.hash);
-  const state = { species: hash.species, day: hash.day, basemap: hash.basemap };
-  let data = { pogoda: null, centroids: null };
+  const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
+  let data = { pogoda: null, centroids: null, nazwy: null };
+  let nazwy = null;
   let todayIso = todayLocalIso(); // stała data dnia, wspólna dla days i popupu
   let days = []; // availableDays(...) — pozycja w tej tablicy to „day” w hashu
   let gps = null; // {lat, lon} po zgodzie na lokalizację
@@ -31,6 +33,7 @@ export async function init() {
   let lastPopup = null; // {props, lngLat} ostatnio otwartego wydzielenia
   let mapReady = false;
   let loaded = false;
+  let placeTried = false; // jednorazowe otwarcie popupu z parametru w=
 
   const sel = $("species");
   for (const s of SPECIES) sel.append(new Option(s.name, s.key));
@@ -70,6 +73,18 @@ export async function init() {
     setBasemap(map, state.basemap); // przełączenie podkładu kliknięte przed końcem ładowania stylu
     setView(map, effective, state.species, dayIdx());
   });
+  map.on("idle", openInitialPlace);
+
+  // Jednorazowe otwarcie wydzielenia z parametru w= po załadowaniu danych.
+  function openInitialPlace() {
+    if (placeTried || !loaded || !mapReady || !state.place) return;
+    placeTried = true;
+    const c = map.getCenter();
+    const byId = (x) => x.properties.id === state.place;
+    const f = map.queryRenderedFeatures(map.project(c), { layers: ["lasy-fill"] }).find(byId)
+      ?? map.queryRenderedFeatures({ layers: ["lasy-fill"] }).find(byId);
+    if (f) showPopup(f.properties, { lng: c.lng, lat: c.lat });
+  }
 
   function showPopup(props, lngLat) {
     popup?.remove();
@@ -80,11 +95,48 @@ export async function init() {
       dayIdx: dayIdx(),
       todayIso,
       onDaySelect,
+      nazwy,
+      lngLat,
+      onShare: sharePlace,
     });
     const pp = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
     popup = pp;
-    pp.on("close", () => { if (popup === pp) lastPopup = null; });
+    pp.on("close", () => {
+      if (popup === pp) {
+        popup = null;
+        lastPopup = null;
+        writeHash(); // zamknięcie popupu usuwa w z hasha
+      }
+    });
+    // Na telefonie popup ma być w górnej części ekranu, nad zwiniętym panelem.
+    if (window.matchMedia("(max-width: 700px)").matches) {
+      map.easeTo({ center: [lngLat.lng, lngLat.lat], offset: [0, -map.getContainer().clientHeight / 6], duration: 300 });
+    }
+    writeHash();
     return content;
+  }
+
+  function sharePlace(props, lngLat) {
+    const url = location.origin + location.pathname + formatHash({
+      species: state.species,
+      day: state.day,
+      zoom: Math.max(map.getZoom(), 15),
+      center: [lngLat.lng, lngLat.lat],
+      basemap: state.basemap,
+      radius: state.radius,
+      place: props.id,
+    });
+    history.replaceState(null, "", url);
+    return shareUrl(location.href, document.title, { notify: toast });
+  }
+
+  let toastTimer = 0;
+  function toast(text) {
+    const t = $("toast");
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 2000);
   }
 
   function onDaySelect(idx) {
@@ -101,7 +153,15 @@ export async function init() {
 
   function writeHash() {
     const c = map.getCenter();
-    history.replaceState(null, "", formatHash({ species: state.species, day: state.day, zoom: map.getZoom(), center: [c.lng, c.lat], basemap: state.basemap }));
+    history.replaceState(null, "", formatHash({
+      species: state.species,
+      day: state.day,
+      zoom: map.getZoom(),
+      center: [c.lng, c.lat],
+      basemap: state.basemap,
+      radius: state.radius,
+      place: lastPopup?.props.id,
+    }));
   }
 
   function origin() {
@@ -122,9 +182,9 @@ export async function init() {
       list.append(li("Brak danych pogodowych", "empty"));
       return;
     }
-    const top = topN(centroids, effective, state.species, dayIdx(), origin());
+    const top = topN(centroids, effective, state.species, dayIdx(), origin(), state.radius);
     if (!top.length) {
-      list.append(li("Brak miejsc o dodatnim wyniku w promieniu 20 km", "empty"));
+      list.append(li(`Brak miejsc o dodatnim wyniku w promieniu ${state.radius} km`, "empty"));
       return;
     }
     top.forEach((r, i) => {
@@ -134,12 +194,6 @@ export async function init() {
       const sc = document.createElement("span");
       sc.className = "rank-score";
       sc.textContent = r.best.score;
-      const name = document.createElement("span");
-      name.className = "rank-name";
-      name.textContent = `${i + 1}. ${r.best.id}`;
-      const dist = document.createElement("span");
-      dist.className = "rank-dist";
-      dist.textContent = `${r.distanceKm.toString().replace(".", ",")} km`;
       const tr = document.createElement("span");
       tr.className = "rank-trend";
       const t = trend(effective, r.best.cell, state.species, r.best.h, dayIdx());
@@ -148,7 +202,17 @@ export async function init() {
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
         tr.setAttribute("aria-label", trendLabel(t));
       }
-      btn.append(sc, tr, name, dist);
+      const { line1, line2 } = rankLabel(r, nazwy);
+      const text = document.createElement("span");
+      text.className = "rank-text";
+      const name = document.createElement("span");
+      name.className = "rank-name";
+      name.textContent = `${i + 1}. ${line1}`;
+      const dist = document.createElement("span");
+      dist.className = "rank-dist";
+      dist.textContent = line2;
+      text.append(name, dist);
+      btn.append(sc, tr, text);
       btn.addEventListener("click", () => flyToRow(r.best));
       item.append(btn);
       list.append(item);
@@ -191,17 +255,49 @@ export async function init() {
   $("day-prev").addEventListener("click", () => { state.day--; refresh(); });
   $("day-next").addEventListener("click", () => { state.day++; refresh(); });
 
+  function updateSource(gpsError = false) {
+    $("ranking-source").textContent = gps
+      ? "od Twojej lokalizacji"
+      : gpsError
+        ? "Brak zgody na lokalizację — ranking od środka mapy"
+        : "od środka mapy";
+  }
+
   $("locate").addEventListener("click", () => {
+    if (gps) {
+      gps = null;
+      $("locate").setAttribute("aria-pressed", "false");
+      updateSource();
+      updateRanking();
+      return;
+    }
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         gps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        $("locate").setAttribute("aria-pressed", "true");
+        updateSource();
         map.flyTo({ center: [gps.lon, gps.lat], zoom: Math.max(map.getZoom(), 12) });
         updateRanking();
       },
-      () => { gps = null; $("locate").title = "Brak zgody na lokalizację — ranking od środka mapy"; },
+      () => {
+        gps = null;
+        $("locate").setAttribute("aria-pressed", "false");
+        updateSource(true);
+        updateRanking();
+      },
       { enableHighAccuracy: false, timeout: 10000 },
     );
+  });
+
+  $("share").addEventListener("click", () => shareUrl(location.href, document.title, { notify: toast }));
+
+  const radiusSel = $("radius");
+  radiusSel.value = String(state.radius);
+  radiusSel.addEventListener("change", () => {
+    state.radius = Number(radiusSel.value);
+    updateRanking();
+    writeHash();
   });
 
   buildSwitcher(state.basemap, (key) => {
@@ -219,7 +315,7 @@ export async function init() {
 
   updateDayControls();
   data = await loadData();
-  ({ pogoda, centroids } = data);
+  ({ pogoda, centroids, nazwy } = data);
   todayIso = todayLocalIso();
   if (pogoda) days = availableDays(pogoda.days, todayIso);
   state.day = Math.min(state.day, Math.max(days.length - 1, 0));
@@ -234,6 +330,7 @@ export async function init() {
   if (mapReady) setView(map, effective, state.species, dayIdx());
   updateDayControls();
   updateRanking();
+  openInitialPlace();
   return map;
 }
 

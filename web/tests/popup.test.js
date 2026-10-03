@@ -1,6 +1,27 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as popup from "../js/popup.js";
 import { reserveText, ZAKAZY_URL } from "../js/popup.js";
+
+test("rankLabel formats grouped place, distance, bearing and count", () => {
+  const group = {
+    key: "02-04-1-07-368",
+    best: { id: "02-04-1-07-368-a-00" },
+    count: 3,
+    distanceKm: 4.2,
+    bearing: "płn.-wsch.",
+  };
+  const nazwy = {
+    nadl: { "02-04": "Brzeg" },
+    lesn: { "02-04-1-07": "Zieleniec" },
+  };
+
+  assert.equal(typeof popup.rankLabel, "function");
+  assert.deepEqual(popup.rankLabel(group, nazwy), {
+    line1: "Oddz. 368 · Leśn. Zieleniec · Nadl. Brzeg",
+    line2: "4,2 km płn.-wsch. · 3 wydz.",
+  });
+});
 
 test("reserveText with and without name", () => {
   assert.equal(reserveText("Góra Św. Anny"),

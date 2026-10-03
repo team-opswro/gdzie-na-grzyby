@@ -1,6 +1,7 @@
 import { score, scoreClass, weatherFor } from "./data.js";
 import { chartData, trend, renderChart, DOW } from "./chart.js";
 import { CLASS_LABELS, COLORS } from "./map.js";
+import { formatPlace, navUrls } from "./names.js";
 
 const pct = (x) => Math.round(x * 100) + "%";
 
@@ -60,6 +61,28 @@ export function moistureLabel(m) {
 
 const dec = (x) => x.toFixed(1).replace(".", ",");
 
+export function rankLabel(group, nazwy) {
+  return {
+    line1: formatPlace(group.best.id, nazwy),
+    line2: `${dec(group.distanceKm)} km ${group.bearing} · ${group.count} wydz.`,
+  };
+}
+
+export function actionLinks(lat, lon) {
+  const urls = navUrls(lat, lon);
+  const row = el("div", null, "popup-actions");
+  const go = el("a", "Prowadź", "popup-action popup-go");
+  go.href = urls.google;
+  go.target = "_blank";
+  go.rel = "noopener";
+  const osm = el("a", "OSM", "popup-action popup-osm");
+  osm.href = urls.osm;
+  osm.target = "_blank";
+  osm.rel = "noopener";
+  row.append(go, osm);
+  return row;
+}
+
 export function formatWx(wx) {
   return {
     rain: `Deszcz (5–21 dni wcześniej): ${dec(wx.rain_mm)} mm`,
@@ -78,9 +101,14 @@ export function trendLabel(t) {
 }
 
 export function renderPopup(props, ctx) {
-  const { pogoda = null, species, dayIdx, todayIso, onDaySelect } = ctx;
+  const { pogoda = null, species, dayIdx, todayIso, onDaySelect, nazwy = null, lngLat = null, onShare = null } = ctx;
   const root = el("div", null, "popup");
-  root.append(el("div", props.id || "—", "popup-id"));
+  if (props.id) {
+    root.append(el("div", formatPlace(props.id, nazwy), "popup-place"));
+    root.append(el("div", props.id, "popup-id"));
+  } else {
+    root.append(el("div", "—", "popup-id"));
+  }
 
   const h = Number(props["h_" + species] ?? 0);
   const weather = pogoda ? weatherFor(pogoda, props.cell, species, dayIdx) : null;
@@ -115,6 +143,18 @@ export function renderPopup(props, ctx) {
         root.append(box);
       }
     }
+  }
+
+  if (!props.rez && lngLat) {
+    const actions = actionLinks(lngLat.lat, lngLat.lng);
+    if (onShare) {
+      const sh = el("button", "Udostępnij miejsce", "popup-action popup-share");
+      sh.type = "button";
+      sh.id = "popup-share-place";
+      sh.addEventListener("click", () => onShare(props, lngLat));
+      actions.append(sh);
+    }
+    root.append(actions);
   }
 
   const t = document.createElement("table");
