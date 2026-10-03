@@ -11,11 +11,16 @@ from forecast.weather import (
 )
 
 FIX = Path(__file__).parent / "fixtures" / "openmeteo_two_points.json"
+FIX_V2 = Path(__file__).parent / "fixtures" / "openmeteo_two_points_v2.json"
 POINTS = [("a", 50.65, 17.9), ("b", 50.75, 17.9)]
 
 
 def fixture():
     return json.loads(FIX.read_text(encoding="utf-8"))
+
+
+def fixture_v2():
+    return json.loads(FIX_V2.read_text(encoding="utf-8"))
 
 
 def test_daily_aggregates_hourly_ignoring_nulls():
@@ -106,8 +111,8 @@ def test_fetch_sends_required_params():
     assert q["past_days"] == "30"
     assert q["forecast_days"] == "7"
     assert q["timezone"] == "Europe/Warsaw"
-    assert q["daily"] == "precipitation_sum"
-    assert q["hourly"] == "soil_temperature_6cm,soil_moisture_3_to_9cm"
+    assert q["daily"] == "precipitation_sum,et0_fao_evapotranspiration,temperature_2m_min"
+    assert q["hourly"] == "soil_temperature_6cm,soil_moisture_3_to_9cm,soil_moisture_9_to_27cm"
 
 
 @responses.activate
@@ -135,3 +140,31 @@ def test_fetch_rate_limit_gives_up():
     assert sleeps == [RATE_LIMIT_WAIT_S] * RATE_LIMIT_RETRIES
     assert len(responses.calls) == RATE_LIMIT_RETRIES + 1
     assert issubclass(RateLimitError, WeatherError)
+
+
+def test_v2_fixture_parses_new_series():
+    s = daily_from_response(fixture_v2()[0])
+    assert s.et0[0] == pytest.approx(1.2)
+    assert s.t2m_min[0] == pytest.approx(5.0)
+    assert s.soil_moisture_deep[0] == pytest.approx(0.26)
+
+
+def test_missing_new_variables_gives_none():
+    s = daily_from_response(fixture()[0])
+    assert s.et0 is None
+    assert s.t2m_min is None
+    assert s.soil_moisture_deep is None
+
+
+def test_all_null_new_variable_gives_none():
+    obj = fixture_v2()[0]
+    obj["hourly"]["soil_moisture_9_to_27cm"] = [None] * len(obj["hourly"]["time"])
+    s = daily_from_response(obj)
+    assert s.soil_moisture_deep is None
+
+
+def test_params_request_new_variables():
+    from forecast.weather import PARAMS
+    assert "et0_fao_evapotranspiration" in PARAMS["daily"]
+    assert "temperature_2m_min" in PARAMS["daily"]
+    assert "soil_moisture_9_to_27cm" in PARAMS["hourly"]

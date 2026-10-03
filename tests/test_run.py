@@ -23,12 +23,19 @@ CELLS = [
 ]
 
 
-def make_series(precip: float, start=date(2026, 9, 3), n=37) -> DailySeries:
+def _repeat(value, n):
+    return list(value) if isinstance(value, (list, tuple)) else [value] * n
+
+
+def make_series(precip: float, start=date(2026, 9, 3), n=37, *, et0=None, deep=None, t2m_min=None) -> DailySeries:
     return DailySeries(
         dates=[start + timedelta(days=i) for i in range(n)],
         precip=[precip] * n,
         soil_temp=[12.0] * n,
         soil_moisture=[0.3] * n,
+        et0=_repeat(et0, n) if et0 is not None else None,
+        t2m_min=_repeat(t2m_min, n) if t2m_min is not None else None,
+        soil_moisture_deep=_repeat(deep, n) if deep is not None else None,
     )
 
 
@@ -58,7 +65,7 @@ def test_wx_values_and_lim():
     assert p["wx"]["507_178"]["rain_mm"][1] == 0.0
     assert p["wx"]["506_178"]["soil_t"][1] == 12.0
     assert p["wx"]["506_178"]["soil_m"][1] == 0.3
-    allowed = {"dry", "dry_soil", "cold", "hot", "season", None}
+    allowed = {"dry", "dry_soil", "cold", "hot", "season", "frost", None}
     for sp in SPECIES_KEYS:
         assert all(v in allowed for v in p["cells"]["507_178"][sp]["lim"])
         assert len(p["cells"]["507_178"][sp]["lim"]) == 8
@@ -71,14 +78,58 @@ def test_missing_yesterday_raises_value_error():
         build_payload(CELLS, series, load_species(), TODAY, NOW)
 
 
-def test_old_v1_fixture_does_not_validate():
+def test_old_v1_fixture_still_validates():
     data = json.loads((FIXTURES / "pogoda_v1.json").read_text())
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(data, SCHEMA)
+    jsonschema.validate(data, SCHEMA)
 
 
 def test_payload_validates_against_schema():
     jsonschema.validate(payload(), SCHEMA)
+
+
+def test_payload_has_pulse_frost_and_wx_extras():
+    series = {
+        "506_178": make_series(3.0, et0=1.5, deep=0.25, t2m_min=5.0),
+        "507_178": make_series(0.0, et0=2.0, deep=0.12, t2m_min=4.0),
+    }
+    p = build_payload(CELLS, series, load_species(), TODAY, NOW)
+    for cid in ("506_178", "507_178"):
+        for sp in SPECIES_KEYS:
+            assert "pulse" in p["cells"][cid][sp]
+            assert "frost" in p["cells"][cid][sp]
+    for cid in ("506_178", "507_178"):
+        wx = p["wx"][cid]
+        assert "et0_mm" in wx
+        assert "soil_m_deep" in wx
+        assert "t2m_min" in wx
+    jsonschema.validate(p, SCHEMA)
+
+
+def test_payload_frost_lim_appears_for_recent_frost():
+    t2m = [5.0] * 37
+    t2m[30] = -5.0  # przymrozek w dniu i
+    series = {
+        "506_178": make_series(3.0, t2m_min=t2m),
+        "507_178": make_series(0.0, t2m_min=t2m),
+    }
+    p = build_payload(CELLS, series, load_species(), TODAY, NOW)
+    assert "frost" in p["cells"]["506_178"]["borowik"]["lim"][1]
+    assert p["cells"]["506_178"]["borowik"]["frost"][1] < 1.0
+
+
+def test_payload_without_new_series_omits_wx_extras():
+    s = {"506_178": make_series(3.0), "507_178": make_series(0.0)}
+    for s_ in s.values():
+        s_.et0 = None
+        s_.t2m_min = None
+        s_.soil_moisture_deep = None
+    p = build_payload(CELLS, s, load_species(), TODAY, NOW)
+    for cid in ("506_178", "507_178"):
+        wx = p["wx"][cid]
+        assert "et0_mm" not in wx
+        assert "soil_m_deep" not in wx
+        assert "t2m_min" not in wx
+    jsonschema.validate(p, SCHEMA)
 
 
 def test_wet_cell_differs_from_dry_cell():
@@ -105,7 +156,7 @@ def test_schema_rejects_bad_values():
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(p, SCHEMA)
     p = payload()
-    p["days"] = p["days"][:7]
+    p["days"] = p["days"][:6]
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(p, SCHEMA)
 

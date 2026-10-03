@@ -159,13 +159,18 @@ schemat: `schema/pogoda.schema.json`.
 }
 ```
 
-- `days` — 8 dni: wczoraj, dziś i 6 kolejnych; każda tablica dzienna ma 8 elementów w tej kolejności.
+- `days` — zazwyczaj 8 dni (wczoraj, dziś i 6 kolejnych), ale stara wersja z 7 dni jest nadal
+  akceptowana; każda tablica dzienna ma tyle samo elementów co `days`.
 - `cells[cell][gatunek]` — mnożnik pogodowy `w` (0–1) i jego składowe `rain`, `temp`, `season` (0–1);
+  opcjonalnie `pulse` (1.0–1.2, premia za ochłodzenie gleby) i `frost` (0–1, kara za niedawny przymrozek);
   `lim` — czynnik ograniczający dnia: `dry` (za mało opadu), `dry_soil` (sucha gleba), `cold`, `hot`,
-  `season` (poza sezonem) albo `null`.
-- `wx[cell]` — wartości, z których liczony jest mnożnik dnia: `rain_mm` (suma opadu w oknie
-  poprzedzających dni, mm), `soil_t` (średnia temperatura gleby na 6 cm z ostatnich dni, °C),
-  `soil_m` (średnia wilgotność gleby 3–9 cm z ostatnich dni, m³/m³).
+  `season` (poza sezonem), `frost` (niedawny przymrozek) albo `null`.
+- `wx[cell]` — opcjonalna sekcja z wartościami, z których liczony jest mnożnik dnia: `rain_mm` (suma
+  opadu w oknie poprzedzających dni, mm), `soil_t` (średnia temperatura gleby na 6 cm z ostatnich dni,
+  °C), `soil_m` (średnia wilgotność gleby 3–9 cm z ostatnich dni, m³/m³). Gdy prognoza zawiera nowe
+  zmienne Open-Meteo, opcjonalnie dodawane są: `et0_mm` (suma parowania odniesienia ET0 w tym samym
+  oknie, mm), `soil_m_deep` (średnia wilgotność gleby 9–27 cm, m³/m³), `t2m_min` (minimum temperatury
+  powietrza z ostatnich 7 dni, °C).
 - Prognoza starsza niż 36 h jest nieaktualna (strona pokazuje wtedy baner i samą ocenę siedliska).
 
 ## Wersjonowanie i zgodność

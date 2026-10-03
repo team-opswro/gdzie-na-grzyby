@@ -39,6 +39,7 @@ test("LIM_TEXT exact", () => assert.deepEqual(LIM_TEXT, {
   cold: "Ogranicza: za zimna gleba",
   hot: "Ogranicza: za ciepła gleba",
   season: "Ogranicza: poza sezonem",
+  frost: "Ogranicza: niedawny przymrozek",
 }));
 test("moistureLabel", () => {
   assert.equal(moistureLabel(0.149), "sucha");
@@ -49,6 +50,14 @@ test("formatWx", () => assert.deepEqual(formatWx({ rain_mm: 34.2, soil_t: 11.3, 
   rain: "Deszcz (5–21 dni wcześniej): 34,2 mm",
   soil: "Gleba: 11,3 °C, wilgotna",
 }));
+test("formatWx z et0_mm dodaje parowanie", () => assert.deepEqual(
+  formatWx({ rain_mm: 34.2, soil_t: 11.3, soil_m: 0.31, et0_mm: 23.4 }),
+  {
+    rain: "Deszcz (5–21 dni wcześniej): 34,2 mm",
+    soil: "Gleba: 11,3 °C, wilgotna",
+    et0: "Parowanie (5–21 dni): 23,4 mm",
+  }
+));
 test("trendArrow", () => {
   assert.equal(trendArrow("up"), "↑");
   assert.equal(trendArrow("down"), "↓");
@@ -125,4 +134,32 @@ test("popup grupy bez pogody i bez h_* — bez wyjątku, paski po h", () => {
   walk(root, (n) => { if (n.className === "ps-val") vals.push(n.textContent); });
   assert.equal(vals.length, 2);
   assert.ok(vals.every((v) => v === "0%"));
+});
+
+test("popup bez nowych pól nie ma wierszy Ochłodzenie/Przymrozek", () => {
+  installDom();
+  const V1 = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda_v1.json", import.meta.url), "utf8"));
+  const props = { id: "x", cell: "506_178", h_borowik: 80 };
+  const root = popup.renderPopup(props, { pogoda: V1, species: "borowik", dayIdx: 0, todayIso: V1.days[0] });
+  let labels = [];
+  walk(root, (n) => { if (n.tag === "th") labels.push(n.textContent); });
+  assert.ok(!labels.includes("Ochłodzenie"));
+  assert.ok(!labels.includes("Przymrozek"));
+});
+
+test("popup z pulse i frost pokazuje wiersze", () => {
+  installDom();
+  const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
+  P.cells["506_178"].borowik.pulse = [1.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+  P.cells["506_178"].borowik.frost = [0.6, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+  const props = { id: "x", cell: "506_178", h_borowik: 80 };
+  const root = popup.renderPopup(props, { pogoda: P, species: "borowik", dayIdx: 0, todayIso: P.days[0] });
+  const rows = [];
+  walk(root, (n) => {
+    if (n.tag === "tr" && n.children?.length === 2) {
+      rows.push([n.children[0].textContent, n.children[1].textContent]);
+    }
+  });
+  assert.ok(rows.some(([l, v]) => l === "Ochłodzenie" && v === "+10%"));
+  assert.ok(rows.some(([l, v]) => l === "Przymrozek" && v === "60%"));
 });
