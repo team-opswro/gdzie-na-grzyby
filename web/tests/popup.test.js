@@ -79,8 +79,9 @@ test("renderPopup w trybie all: bez pogody i ze starą pogodą — paski gatunk�
   const old = { ...P, wx: undefined };
   for (const s of old.days ? Object.values(old.cells) : []) for (const k of Object.keys(s)) delete s[k].lim;
   const props = { id: "x", cell: "506_178", h_borowik: 80, h_podgrzybek: 50, h_kurka: 40, h_kozlarz: 30, h_maslak: 20, h_rydz: 10 };
+  const six = ["borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"].map((key) => ({ key, name: key }));
   for (const pg of [null, old]) {
-    const root = popup.renderPopup(props, { pogoda: pg, species: "all", dayIdx: 0, todayIso: P.days[0] });
+    const root = popup.renderPopup(props, { pogoda: pg, species: "all", dayIdx: 0, todayIso: P.days[0], speciesList: six });
     let items = 0;
     walk(root, (n) => { if (n.tag === "li") items++; });
     assert.equal(items, 6);

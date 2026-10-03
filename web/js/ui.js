@@ -1,4 +1,5 @@
-import { SPECIES, ALL, bestFor, loadData, loadSpecies, availableDays, bannerText } from "./data.js";
+import { SPECIES, ALL, bestFor, loadData, loadSpecies, availableDays, bannerText, groupsOf, selectionValues, isMulti } from "./data.js";
+import { buildSpeciesOptions } from "./select.js";
 import { loadConfig, loadManifest, fileUrl } from "./config.js";
 import { createCentroidStore } from "./tiles.js";
 import { trend, trendBy } from "./chart.js";
@@ -29,7 +30,7 @@ const MAP_DATA_ERROR = "Nie udało się wczytać danych mapy";
 export async function init() {
   // Podkład powstaje od razu (zawieszony bucket ≠ pusta strona); warstwy lasów dochodzą po manifeście.
   // Wstępny hash: środek, zoom i podkład nie zależą od listy gatunków.
-  const pre = parseHash(location.hash, [...SPECIES.map((x) => x.key), ALL]);
+  const pre = parseHash(location.hash, selectionValues(SPECIES));
   const handlers = {}; // uzupełniane niżej, gdy stan jest gotowy
   const map = createMap($("map"), {
     center: pre.center ?? OPOLSKIE_CENTER,
@@ -47,7 +48,8 @@ export async function init() {
   const mapDataError = manifest.missing || !pmtilesUrl;
   if (mapDataError) showBanner();
   const { list: speciesList, info: speciesInfo } = await loadSpecies(fileUrl(dataBase, manifest, "gatunki"));
-  const hash = parseHash(location.hash, [...speciesList.map((x) => x.key), ALL]);
+  const groups = groupsOf(speciesInfo);
+  const hash = parseHash(location.hash, selectionValues(speciesList, groups));
   const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
   let data = { pogoda: null, centroidIndex: null, nazwy: null };
   let nazwy = null;
@@ -61,12 +63,11 @@ export async function init() {
   let placeTried = false; // jednorazowe otwarcie popupu z parametru w=
 
   const sel = $("species");
-  sel.append(new Option("Wszystkie gatunki", ALL));
-  for (const s of speciesList) sel.append(new Option(s.name, s.key));
+  buildSpeciesOptions(sel, speciesList, groups);
   sel.value = state.species;
   buildLegend();
   const infoBtn = $("species-info");
-  const syncInfoBtn = () => { infoBtn.disabled = state.species === ALL; };
+  const syncInfoBtn = () => { infoBtn.disabled = isMulti(state.species); };
   syncInfoBtn();
   infoBtn.addEventListener("click", () => {
     $("species-card-body").replaceChildren(renderSpeciesCard(speciesCardModel(speciesInfo, state.species)));

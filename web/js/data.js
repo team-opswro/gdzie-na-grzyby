@@ -1,15 +1,53 @@
 import { loadConfig, loadManifest, fileUrl, pogodaUrl, getJson } from "./config.js";
 
+// Awaryjna lista (brak gatunki.json) — kolejność jak w species.yaml.
 export const SPECIES = [
   { key: "borowik", name: "Borowik szlachetny" },
   { key: "podgrzybek", name: "Podgrzybek brunatny" },
   { key: "kurka", name: "Kurka" },
   { key: "kozlarz", name: "Koźlarz babka" },
   { key: "maslak", name: "Maślak zwyczajny" },
-  { key: "rydz", name: "Rydz" },
+  { key: "rydz", name: "Rydz mleczaj" },
+  { key: "kozlarz_czerwony", name: "Koźlarz czerwony" },
+  { key: "kozlarz_pomaranczowy", name: "Koźlarz pomarańczowożółty" },
+  { key: "kozlarz_grabowy", name: "Koźlarz grabowy" },
+  { key: "kozlarz_debowy", name: "Koźlarz dębowy" },
+  { key: "borowik_sosnowy", name: "Borowik sosnowy" },
+  { key: "borowik_usiatkowany", name: "Borowik usiatkowany" },
+  { key: "podgrzybek_zajaczek", name: "Podgrzybek zajączek" },
+  { key: "podgrzybek_zlotawy", name: "Podgrzybek złotawy" },
+  { key: "podgrzybek_czerwonawy", name: "Podgrzybek czerwonawy" },
+  { key: "maslak_zolty", name: "Maślak żółty" },
+  { key: "maslak_sitarz", name: "Maślak sitarz" },
+  { key: "rydz_swierkowy", name: "Rydz świerkowy" },
 ];
 
 export const ALL = "all";
+export const GROUP_PREFIX = "g-";
+
+export function groupsOf(info) {
+  return info?.groups ?? [];
+}
+
+// Wybór z listy (gatunek / "g-<grupa>" / "all") -> klucze gatunków; nieznane -> [].
+export function selectionKeys(sel, speciesList, groups = []) {
+  const keys = speciesList.map((s) => s.key);
+  if (sel === ALL) return keys;
+  if (typeof sel === "string" && sel.startsWith(GROUP_PREFIX)) {
+    const g = groups.find((x) => GROUP_PREFIX + x.key === sel);
+    return g ? g.species.filter((k) => keys.includes(k)) : [];
+  }
+  return keys.includes(sel) ? [sel] : [];
+}
+
+export function isMulti(sel) {
+  return sel === ALL || (typeof sel === "string" && sel.startsWith(GROUP_PREFIX));
+}
+
+// Dozwolone wartości wyboru (dla parseHash).
+export function selectionValues(speciesList, groups = []) {
+  return [ALL, ...groups.map((g) => GROUP_PREFIX + g.key), ...speciesList.map((s) => s.key)];
+}
 
 const STALE_HOURS = 36;
 

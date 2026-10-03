@@ -59,3 +59,12 @@ test("s=all is a valid species; keys param overrides", () => {
   assert.equal(parseHash("#s=all", ["borowik"]).species, "borowik");
   assert.equal(parseHash("#s=kurka", ["borowik", "kurka"]).species, "kurka");
 });
+
+
+test("parseHash akceptuje g-kozlarze i stare klucze", () => {
+  const keys = ["all", "g-kozlarze", "kozlarz", "rydz"];
+  assert.equal(parseHash("#s=g-kozlarze", keys).species, "g-kozlarze");
+  assert.equal(parseHash("#s=kozlarz", keys).species, "kozlarz");
+  assert.equal(parseHash("#s=g-xyz", keys).species, "borowik");
+  assert.equal(parseHash("#s=g-kozlarze").species, "borowik"); // awaryjna lista bez grup
+});

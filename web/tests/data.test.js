@@ -8,7 +8,8 @@ import { FETCH_TIMEOUT_MS } from "../js/config.js";
 const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
 
 test("SPECIES order", () => {
-  assert.deepEqual(SPECIES.map((s) => s.key), ["borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"]);
+  assert.deepEqual(SPECIES.map((s) => s.key).slice(0, 6), ["borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"]);
+  assert.equal(SPECIES.length, 18);
 });
 test("weatherFor returns fixture values", () => {
   const w = weatherFor(P, "506_178", "borowik", 2);
@@ -211,4 +212,31 @@ test("loadData: hanging files → nulls after timeout (page not blocked)", async
 test("limity czasu: pliki danych 30 s, config/manifest 4 s", () => {
   assert.equal(DATA_TIMEOUT_MS, 30000);
   assert.equal(FETCH_TIMEOUT_MS, 4000);
+});
+
+
+import { GROUP_PREFIX, groupsOf, selectionKeys, isMulti, selectionValues } from "../js/data.js";
+
+const LIST = [{ key: "borowik" }, { key: "kozlarz" }, { key: "kozlarz_czerwony" }, { key: "kurka" }];
+const GROUPS = [{ key: "kozlarze", name: "Koźlarze (kozaki)", all: "Wszystkie koźlarze", species: ["kozlarz", "kozlarz_czerwony", "nieznany"] }];
+
+test("selectionKeys: grupa, all, gatunek, nieznane", () => {
+  assert.equal(GROUP_PREFIX, "g-");
+  assert.deepEqual(selectionKeys("g-kozlarze", LIST, GROUPS), ["kozlarz", "kozlarz_czerwony"]);
+  assert.deepEqual(selectionKeys("all", LIST, GROUPS), ["borowik", "kozlarz", "kozlarz_czerwony", "kurka"]);
+  assert.deepEqual(selectionKeys("kurka", LIST, GROUPS), ["kurka"]);
+  assert.deepEqual(selectionKeys("g-nie", LIST, GROUPS), []);
+  assert.deepEqual(selectionKeys("xyz", LIST, GROUPS), []);
+});
+
+test("isMulti i selectionValues", () => {
+  assert.equal(isMulti("all"), true);
+  assert.equal(isMulti("g-kozlarze"), true);
+  assert.equal(isMulti("kurka"), false);
+  assert.deepEqual(selectionValues(LIST, GROUPS), ["all", "g-kozlarze", "borowik", "kozlarz", "kozlarz_czerwony", "kurka"]);
+});
+
+test("groupsOf: brak gatunki.json -> brak grup", () => {
+  assert.deepEqual(groupsOf(null), []);
+  assert.deepEqual(groupsOf({ groups: GROUPS }), GROUPS);
 });
