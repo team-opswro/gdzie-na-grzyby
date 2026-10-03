@@ -23,6 +23,6 @@ COPY forecast forecast
 COPY web/data/grid.json web/data/grid.json
 RUN chmod +x forecast/entrypoint.sh && mkdir -p /out
 
-HEALTHCHECK --interval=1h --timeout=10s --start-period=2m --retries=1 \
+HEALTHCHECK --interval=1h --timeout=10s --start-period=2m --start-interval=30s --retries=1 \
   CMD python -m forecast.healthcheck /out/pogoda.json
 ENTRYPOINT ["/app/forecast/entrypoint.sh"]

@@ -128,3 +128,10 @@ def test_main_returns_1_on_missing_days(tmp_path, monkeypatch):
     monkeypatch.setattr(run, "fetch_series", lambda points, **kw: series)
     assert main(["--grid", str(FIXTURES / "grid.json"), "--out", str(out)]) == 1
     assert out.read_text() == '{"old": 1}'
+
+
+def test_main_returns_1_on_missing_grid_file(tmp_path, caplog):
+    out = tmp_path / "pogoda.json"
+    assert run.main(["--grid", str(tmp_path / "nope.json"), "--out", str(out)]) == 1
+    assert not out.exists()
+    assert "nieoczekiwany błąd" in caplog.text

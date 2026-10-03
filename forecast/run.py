@@ -81,6 +81,9 @@ def main(argv: list[str] | None = None) -> int:
     except (WeatherError, ValueError, jsonschema.ValidationError) as e:
         log.error("nie wygenerowano pogoda.json: %s", e)
         return 1
+    except Exception:
+        log.exception("nieoczekiwany błąd, nie wygenerowano pogoda.json")
+        return 1
     log.info("zapisano %s (%d komórek)", args.out, len(cells))
     return 0
 
