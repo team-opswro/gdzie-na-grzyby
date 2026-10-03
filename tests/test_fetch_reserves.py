@@ -52,3 +52,17 @@ def test_main_writes_output(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch_reserves, "_get_json", lambda *a, **k: fc)
     assert fetch_reserves.main(["--area", str(area_file), "--out", str(out)]) == 0
     assert len(gpd.read_file(out)) == 2
+
+
+def test_clip_reserves_nothing_in_area_raises():
+    fc = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    with pytest.raises(ValueError):
+        clip_reserves(fc, box(10.0, 40.0, 10.5, 40.5))
+
+
+def test_clip_reserves_missing_nazwa_raises():
+    fc = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    for f in fc["features"]:
+        f["properties"].pop("nazwa")
+    with pytest.raises(ValueError, match="nazwa"):
+        clip_reserves(fc, AREA)

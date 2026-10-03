@@ -36,10 +36,14 @@ def clip_reserves(fc: dict, area) -> gpd.GeoDataFrame:
     if not features:
         raise ValueError("WFS GDOŚ nie zwrócił żadnych rezerwatów")
     g = gpd.GeoDataFrame.from_features(features, crs=4326)
+    if "nazwa" not in g.columns:
+        raise ValueError("odpowiedź WFS GDOŚ nie zawiera pola 'nazwa'")
     g = g.rename(columns={"nazwa": "name"})[["name", "geometry"]]
     g["geometry"] = shapely.make_valid(g.geometry.values)
     g = gpd.clip(g, area, keep_geom_type=True)
     g = g[~g.geometry.is_empty & g.geometry.notna()].reset_index(drop=True)
+    if g.empty:
+        raise ValueError("żaden rezerwat nie przecina obszaru mapy")
     return g[["name", "geometry"]]
 
 
