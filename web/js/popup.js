@@ -1,5 +1,5 @@
-import { score, scoreClass, weatherFor } from "./data.js";
-import { chartData, trend, renderChart, DOW } from "./chart.js";
+import { score, scoreClass, weatherFor, bestFor, SPECIES, ALL } from "./data.js";
+import { chartData, chartDataBy, trend, trendBy, renderChart, DOW } from "./chart.js";
 import { CLASS_LABELS, COLORS } from "./map.js";
 import { formatPlace, navUrls } from "./names.js";
 
@@ -61,9 +61,19 @@ export function moistureLabel(m) {
 
 const dec = (x) => x.toFixed(1).replace(".", ",");
 
-export function rankLabel(group, nazwy) {
+// „Borowik szlachetny” -> „borowik”
+export function shortName(name) {
+  return String(name ?? "").split(/\s+/)[0].toLowerCase();
+}
+
+export function rankLabel(group, nazwy, speciesList = SPECIES) {
+  let line1 = formatPlace(group.best.id, nazwy);
+  if (group.species) {
+    const sp = speciesList.find((x) => x.key === group.species);
+    line1 += ` · ${shortName(sp?.name ?? group.species)}`;
+  }
   return {
-    line1: formatPlace(group.best.id, nazwy),
+    line1,
     line2: `${dec(group.distanceKm)} km ${group.bearing} · ${group.count} wydz.`,
   };
 }
@@ -100,8 +110,41 @@ export function trendLabel(t) {
   return `${word}, ${t.delta > 0 ? "+" : ""}${t.delta}`;
 }
 
+// Lista gatunków trybu „all”: malejąco po wyniku dnia (bez pogody — po h).
+function speciesBars(props, list, pogoda, dayIdx) {
+  const items = list.map((sp) => {
+    const h = Number(props["h_" + sp.key] ?? 0);
+    const wf = pogoda ? weatherFor(pogoda, props.cell, sp.key, dayIdx) : null;
+    const value = pogoda ? (wf ? score(h, wf.w) : null) : h;
+    return { sp, value };
+  });
+  items.sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
+  const ul = el("ul", null, "popup-species");
+  for (const { sp, value } of items) {
+    const li = el("li");
+    li.append(el("span", shortName(sp.name), "ps-name"));
+    const bar = el("span", null, "ps-bar");
+    const fill = el("i");
+    fill.style.width = `${Math.max(0, Math.min(100, value ?? 0))}%`;
+    if (value != null) fill.style.background = COLORS.classes[scoreClass(value)];
+    bar.append(fill);
+    li.append(bar, el("span", value == null ? "–" : pogoda ? String(value) : pct(value / 100), "ps-val"));
+    ul.append(li);
+  }
+  return ul;
+}
+
 export function renderPopup(props, ctx) {
-  const { pogoda = null, species, dayIdx, todayIso, onDaySelect, nazwy = null, lngLat = null, onShare = null } = ctx;
+  const { pogoda = null, dayIdx, todayIso, onDaySelect, nazwy = null, lngLat = null, onShare = null, speciesList = SPECIES } = ctx;
+  const isAll = ctx.species === ALL;
+  const hAll = {};
+  for (const sp of speciesList) hAll[sp.key] = props["h_" + sp.key] == null ? null : Number(props["h_" + sp.key]);
+  const best = isAll && pogoda ? bestFor(pogoda, props.cell, hAll, dayIdx) : null;
+  let species = ctx.species;
+  if (isAll) {
+    species = best?.species ?? Object.keys(hAll).reduce((a, k) => ((hAll[k] ?? -1) > (hAll[a] ?? -1) ? k : a), speciesList[0].key);
+  }
+  const scoreAtAll = (idx) => (idx < 0 ? null : bestFor(pogoda, props.cell, hAll, idx)?.score ?? null);
   const root = el("div", null, "popup");
   if (props.id) {
     root.append(el("div", formatPlace(props.id, nazwy), "popup-place"));
@@ -120,7 +163,7 @@ export function renderPopup(props, ctx) {
       const badge = el("div", null, "popup-score");
       badge.append(`Wynik: ${s}/100 (${CLASS_LABELS[scoreClass(s)]})`);
       badge.style.borderLeftColor = COLORS.classes[scoreClass(s)];
-      const tr = trend(pogoda, props.cell, species, h, dayIdx);
+      const tr = isAll ? trendBy(pogoda, scoreAtAll, dayIdx) : trend(pogoda, props.cell, species, h, dayIdx);
       if (tr.dir) {
         const arrow = el("span", " " + trendArrow(tr.dir), "popup-trend");
         arrow.title = `${tr.delta > 0 ? "+" : ""}${tr.delta} względem poprzedniego dnia`;
@@ -135,8 +178,9 @@ export function renderPopup(props, ctx) {
     } else {
       root.append(el("div", "Brak danych pogodowych dla tego miejsca", "popup-score popup-nodata"));
     }
+    if (isAll) root.append(speciesBars(props, speciesList, pogoda, dayIdx));
     if (pogoda && todayIso) {
-      const data = chartData(pogoda, props.cell, species, h, todayIso);
+      const data = isAll ? chartDataBy(pogoda, scoreAtAll, todayIso) : chartData(pogoda, props.cell, species, h, todayIso);
       if (data.length) {
         const box = el("div", null, "popup-chart");
         box.append(renderChart(data, dayIdx, onDaySelect || (() => {})));

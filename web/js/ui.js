@@ -1,10 +1,11 @@
-import { SPECIES, loadData, availableDays, bannerText } from "./data.js";
-import { trend } from "./chart.js";
+import { ALL, bestFor, loadData, loadSpecies, availableDays, bannerText } from "./data.js";
+import { trend, trendBy } from "./chart.js";
 import { topN, haversineKm } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
 import { renderPopup, renderReserve, trendArrow, trendLabel, rankLabel } from "./popup.js";
 import { shareUrl } from "./share.js";
+import { speciesCardModel, renderSpeciesCard, aboutForecastText } from "./dialogs.js";
 
 const OPOLSKIE_CENTER = [17.9, 50.65];
 const DEFAULT_ZOOM = 9;
@@ -22,7 +23,8 @@ function formatDay(iso) {
 }
 
 export async function init() {
-  const hash = parseHash(location.hash);
+  const { list: speciesList, info: speciesInfo } = await loadSpecies();
+  const hash = parseHash(location.hash, [...speciesList.map((x) => x.key), ALL]);
   const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
   let data = { pogoda: null, centroids: null, nazwy: null };
   let nazwy = null;
@@ -36,9 +38,26 @@ export async function init() {
   let placeTried = false; // jednorazowe otwarcie popupu z parametru w=
 
   const sel = $("species");
-  for (const s of SPECIES) sel.append(new Option(s.name, s.key));
+  sel.append(new Option("Wszystkie gatunki", ALL));
+  for (const s of speciesList) sel.append(new Option(s.name, s.key));
   sel.value = state.species;
   buildLegend();
+  const infoBtn = $("species-info");
+  const syncInfoBtn = () => { infoBtn.disabled = state.species === ALL; };
+  syncInfoBtn();
+  infoBtn.addEventListener("click", () => {
+    $("species-card-body").replaceChildren(renderSpeciesCard(speciesCardModel(speciesInfo, state.species)));
+    openDialog($("species-card"), infoBtn);
+  });
+  document.querySelectorAll(".about-link").forEach((a) => a.addEventListener("click", (e) => {
+    e.preventDefault();
+    $("about-forecast").textContent = aboutForecastText(data.pogoda?.generated_at);
+    openDialog($("about"), a);
+  }));
+  document.querySelectorAll("dialog").forEach((d) => {
+    d.querySelector(".dlg-close").addEventListener("click", () => d.close());
+    d.addEventListener("close", () => d._opener?.focus?.());
+  });
   updateAttribution(state.basemap);
 
   // Mapa powstaje od razu (styl samego h); pogoda i centroidy dołączają po załadowaniu.
@@ -106,6 +125,7 @@ export async function init() {
     const content = renderPopup(props, {
       pogoda: effective,
       species: state.species,
+      speciesList,
       dayIdx: dayIdx(),
       todayIso,
       onDaySelect,
@@ -219,7 +239,9 @@ export async function init() {
       sc.textContent = r.best.score;
       const tr = document.createElement("span");
       tr.className = "rank-trend";
-      const t = trend(effective, r.best.cell, state.species, r.best.h, dayIdx());
+      const t = state.species === ALL
+        ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, hBySpecies(r.best.id), i)?.score ?? null), dayIdx())
+        : trend(effective, r.best.cell, state.species, r.best.h, dayIdx());
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
@@ -228,7 +250,7 @@ export async function init() {
         sr.textContent = trendLabel(t);
         tr.append(sr);
       }
-      const { line1, line2 } = rankLabel(r, nazwy);
+      const { line1, line2 } = rankLabel(r, nazwy, speciesList);
       const text = document.createElement("span");
       text.className = "rank-text";
       const name = document.createElement("span");
@@ -243,6 +265,13 @@ export async function init() {
       item.append(btn);
       list.append(item);
     });
+  }
+
+  function hBySpecies(id) {
+    const row = centroids.rows.find((x) => x[0] === id);
+    const out = {};
+    centroids.species.forEach((k, i) => { out[k] = row ? row[4 + i] : null; });
+    return out;
   }
 
   function li(text, cls) {
@@ -277,7 +306,7 @@ export async function init() {
     $("day-next").disabled = none || state.day >= days.length - 1;
   }
 
-  sel.addEventListener("change", () => { state.species = sel.value; refresh(); });
+  sel.addEventListener("change", () => { state.species = sel.value; syncInfoBtn(); refresh(); });
   $("day-prev").addEventListener("click", () => { state.day--; refresh(); });
   $("day-next").addEventListener("click", () => { state.day++; refresh(); });
 
@@ -365,6 +394,12 @@ export async function init() {
   return map;
 }
 
+function openDialog(dlg, opener) {
+  dlg._opener = opener;
+  if (typeof dlg.showModal === "function") dlg.showModal();
+  else dlg.setAttribute("open", "");
+}
+
 function buildLegend() {
   const box = $("legend");
   const add = (color, text, opacity, cls) => {
@@ -379,6 +414,13 @@ function buildLegend() {
   COLORS.classes.forEach((c, i) => add(c, CLASS_LABELS[i], i === 0 ? FILL_OPACITY.weak : FILL_OPACITY.normal));
   add(COLORS.noData, "brak danych", FILL_OPACITY.noData);
   add("#757575", "rezerwat — zbiór zabroniony", null, "hatch");
+  const link = document.createElement("a");
+  link.href = "#";
+  link.className = "about-link";
+  link.textContent = "Jak to działa?";
+  const s = document.createElement("span");
+  s.append(link);
+  box.append(s);
 }
 
 const BASEMAP_LABELS = [["osm", "Mapa"], ["orto", "Satelita"], ["topo", "Topo"]];

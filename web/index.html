@@ -10,6 +10,7 @@
 <body>
   <header class="topbar">
     <select id="species" aria-label="Gatunek"></select>
+    <button id="species-info" type="button" aria-label="Opis gatunku" title="Opis gatunku">ⓘ</button>
     <div class="day">
       <button id="day-prev" type="button" aria-label="Poprzedni dzień">◀</button>
       <span id="day-label" aria-live="polite">—</span>
@@ -44,8 +45,25 @@
     Rezerwaty: GDOŚ ·
     Źródło: Bank Danych o Lasach (BDL), PGL Lasy Państwowe, stan 2026 ·
     Pogoda: <a href="https://open-meteo.com/">Open-Meteo</a> ·
-    <a href="https://zakazywstepu.bdl.lasy.gov.pl/zakazy/" target="_blank" rel="noopener">Sprawdź aktualne zakazy wstępu (BDL)</a>
+    <a href="https://zakazywstepu.bdl.lasy.gov.pl/zakazy/" target="_blank" rel="noopener">Sprawdź aktualne zakazy wstępu (BDL)</a> ·
+    <a href="#" class="about-link">Jak to działa?</a>
   </footer>
+  <dialog id="species-card" aria-label="Opis gatunku">
+    <div id="species-card-body"></div>
+    <button type="button" class="dlg-close">Zamknij</button>
+  </dialog>
+  <dialog id="about" aria-labelledby="about-title">
+    <h2 id="about-title">Jak to działa?</h2>
+    <ol class="about-list">
+      <li><b>Wynik</b> to siedlisko × pogoda, w skali 0–100. Kolory mapy dzielą wynik na klasy od „słabo” do „bardzo dobrze” (zob. legenda).</li>
+      <li><b>Siedlisko</b> to gatunek panujący, wiek drzewostanu i typ siedliskowy z Banku Danych o Lasach (BDL). Liczone raz na sezon.</li>
+      <li><b>Pogoda</b> to deszcz sprzed 5–21 dni (najważniejsze 7–14 dni wcześniej), temperatura gleby z ostatnich 5 dni, wilgotność gleby i sezon gatunku. Prognoza odświeża się o 5:00 i 14:00.</li>
+      <li><b>Ograniczenia:</b> model jest heurystyczny i bez kalibracji; obejmuje tylko lasy Lasów Państwowych; BDL nie zna gatunków domieszkowych; prognoza pogody bywa błędna.</li>
+      <li><b>Źródła i licencje:</b> © OpenStreetMap; rezerwaty: GDOŚ; Bank Danych o Lasach (BDL), PGL Lasy Państwowe, stan 2026; pogoda: Open-Meteo.</li>
+    </ol>
+    <p id="about-forecast" class="about-forecast"></p>
+    <button type="button" class="dlg-close">Zamknij</button>
+  </dialog>
   <script src="vendor/maplibre-gl.js"></script>
   <script src="vendor/pmtiles.js"></script>
   <script type="module">

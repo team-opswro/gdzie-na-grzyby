@@ -62,3 +62,10 @@ test("trendLabel", () => {
   assert.equal(trendLabel({ dir: "flat", delta: 2 }), "bez zmian, +2");
   assert.equal(trendLabel({ dir: null, delta: 0 }), "");
 });
+
+test("rankLabel w trybie all dopisuje krótką nazwę gatunku", () => {
+  const g = { key: "k", best: { id: "02-04-1-07-368-a-00" }, count: 1, distanceKm: 1, bearing: "płn.", species: "kozlarz" };
+  const l = popup.rankLabel(g, null, [{ key: "kozlarz", name: "Koźlarz babka" }]);
+  assert.ok(l.line1.endsWith(" · koźlarz"));
+  assert.equal(popup.shortName("Borowik szlachetny"), "borowik");
+});
