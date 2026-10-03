@@ -2,6 +2,13 @@
 
 Data rozpoznania: 2026-10-03. Status: dane dostepne, bramka ryzyka PRZECHODZI z zastrzezeniem (brak domieszek, patrz nizej).
 
+> **Stan po planie E (2026-10-03):** źródłem danych są paczki SHP + opisy taksacyjne z wniosku
+> (`Nadlesnictwa/`, 72 nadleśnictwa RDLP Katowice i Wrocław; `python -m pipeline.ingest`), które
+> **zawierają domieszki** (`f_storey_species`: piętra `DRZEW`, `IP`, `IIP`, udział `part_cd_act`, wiek).
+> OGC API zostaje tylko dla `api_districts` w `pipeline/bdl_fields.yaml` (obecnie pusta lista).
+> Opisy poniżej dotyczące `whole: true`, listy `districts` i przycinania do woj. opolskiego są
+> historyczne. Opublikowane pliki i ich formaty: `docs/data/api.md`.
+
 ## Skad i na jakich warunkach
 - Portal: https://www.bdl.lasy.gov.pl/portal/ ; strona uslug: https://www.bdl.lasy.gov.pl/portal/uslugi-ogc
 - **OGC API Features** (bez logowania, bez wniosku): https://ogcapi.bdl.lasy.gov.pl (kolekcje `nadlesnictwa`, `lesnictwa`, `rdlp`, `RDLP_<nazwa>_wydzielenia`). Zapytania CQL dzialaja (`filter=adr_for LIKE '02-40%'&filter-lang=cql-text`), stronicowanie `limit`<=1000 + `offset`, `f=json` (GeoJSON, EPSG:4326).

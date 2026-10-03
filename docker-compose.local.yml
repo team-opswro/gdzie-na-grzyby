@@ -1,0 +1,34 @@
+# Przykład do pracy lokalnej, bez bucketu (samodzielny plik, nie nakładka na docker-compose.yml):
+#
+#   docker compose -f docker-compose.local.yml up --build -d     # http://localhost:8080
+#   docker compose -f docker-compose.local.yml --profile forecast run --rm forecast   # opcjonalnie prognoza
+#   docker compose -f docker-compose.local.yml down
+#
+# `web` bez DATA_BASE_URL generuje config.json z "data/" i czyta wynik builda wprost z
+# pipeline/data/out/ (bez manifest.json → pliki w katalogu głównym data/).
+# Prognoza (opcjonalna): `forecast` liczy pogoda.json z lokalnego grid.json (prawdziwe Open-Meteo)
+# do pipeline/data/live/, które `web` serwuje jako data/live/pogoda.json. Bez niej strona pokazuje
+# baner „Brak danych pogodowych” i samą ocenę siedliska.
+# Podgląd danych z bucketu: ustaw DATA_BASE_URL (np. w .env) — wtedy montowane katalogi są ignorowane.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "8080:80"
+    environment:
+      DATA_BASE_URL: ${DATA_BASE_URL:-}
+    volumes:
+      - ./pipeline/data/out:/usr/share/nginx/html/data:ro,z
+      - ./pipeline/data/live:/usr/share/nginx/html/data/live:ro,z
+
+  forecast:
+    profiles: ["forecast"]
+    build:
+      context: .
+      dockerfile: forecast/Dockerfile
+    entrypoint: ["python", "-m", "forecast.run", "--grid", "/data/grid.json", "--out", "/live/pogoda.json"]
+    volumes:
+      - ./pipeline/data/out:/data:ro,z
+      - ./pipeline/data/live:/live:z

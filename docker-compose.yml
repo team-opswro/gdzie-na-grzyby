@@ -15,14 +15,11 @@ services:
       dockerfile: forecast/Dockerfile
     restart: unless-stopped
     environment:
-      DATA_BASE_URL: ${DATA_BASE_URL:?ustaw DATA_BASE_URL}
+      DATA_BASE_URL: ${DATA_BASE_URL:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
       S3_BUCKET: ${S3_BUCKET:-}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_REGION: ${S3_REGION:-auto}
-    volumes:
-      - forecast-state:/state
-
-volumes:
-  forecast-state:
+    # /state (znacznik ostatniego wysłania dla healthchecku) celowo bez wolumenu:
+    # po restarcie kontener jest niezdrowy, dopóki nie wyśle prognozy (przebieg przy starcie).

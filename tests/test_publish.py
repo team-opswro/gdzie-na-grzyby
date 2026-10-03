@@ -193,3 +193,14 @@ def test_client_checksum_config(monkeypatch):
     c = publish._client()
     assert c.meta.config.request_checksum_calculation == "when_required"
     assert c.meta.config.response_checksum_validation == "when_required"
+
+
+def test_cli_cors_wildcard(out, monkeypatch):
+    for k in ("S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
+        monkeypatch.setenv(k, "x")
+    c = Stub()
+    monkeypatch.setattr(publish, "_client", lambda: c)
+    assert publish.main(["--out", str(out), "--keep", "0", "--cors", "*"]) == 0
+    cors = [kw for name, kw in c.calls if name == "cors"]
+    rule = cors[0]["CORSConfiguration"]["CORSRules"][0]
+    assert rule["AllowedOrigins"] == ["*"]

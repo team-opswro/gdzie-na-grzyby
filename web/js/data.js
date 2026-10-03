@@ -73,7 +73,7 @@ export function bannerText(pogoda, availableDaysCount, now = new Date()) {
 
 // config.json → manifest.json → pliki wersji; pogoda z live/. Każdy plik ładuje się niezależnie:
 // awaria jednego nie wyrzuca pozostałych. Centroidy: tylko indeks kafelków (kafelki — tiles.js).
-export const DATA_TIMEOUT_MS = 15000;
+export const DATA_TIMEOUT_MS = 30000; // słaby zasięg w lesie; pogoda.json ~150 kB (gzip)
 
 export async function loadData({ dataBase, manifest, timeoutMs = DATA_TIMEOUT_MS } = {}) {
   dataBase ??= (await loadConfig()).dataBase;

@@ -21,3 +21,4 @@ web/data/nazwy.json
 web/data/gatunki.json
 web/data/manifest.json
 web/data/build.json
+pipeline/data/live/

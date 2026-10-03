@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { LOCAL_MANIFEST } from "../js/config.js";
-import { SPECIES, weatherFor, score, scoreClass, isStale, availableDays, loadData, bannerText } from "../js/data.js";
+import { SPECIES, weatherFor, score, scoreClass, isStale, availableDays, loadData, bannerText, DATA_TIMEOUT_MS } from "../js/data.js";
+import { FETCH_TIMEOUT_MS } from "../js/config.js";
 
 const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
 
@@ -205,4 +206,9 @@ test("loadData: hanging files → nulls after timeout (page not blocked)", async
   assert.equal(d.pogoda, null);
   assert.equal(d.centroidIndex, null);
   assert.deepEqual(d.nazwy, NZ);
+});
+
+test("limity czasu: pliki danych 30 s, config/manifest 4 s", () => {
+  assert.equal(DATA_TIMEOUT_MS, 30000);
+  assert.equal(FETCH_TIMEOUT_MS, 4000);
 });
