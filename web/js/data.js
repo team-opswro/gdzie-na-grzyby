@@ -7,6 +7,8 @@ export const SPECIES = [
   { key: "rydz", name: "Rydz" },
 ];
 
+export const ALL = "all";
+
 const STALE_HOURS = 36;
 
 export function weatherFor(pogoda, cell, species, dayIdx) {
@@ -69,4 +71,17 @@ export async function loadData(base = "data/") {
     centroids: c.status === "fulfilled" ? c.value : null,
     nazwy: n.status === "fulfilled" ? n.value : null,
   };
+}
+
+// Lista gatunków z gatunki.json; przy błędzie — wbudowane SPECIES (info: null).
+export async function loadSpecies(base = "data/") {
+  try {
+    const r = await fetch(base + "gatunki.json");
+    if (!r.ok) throw new Error(`gatunki.json: HTTP ${r.status}`);
+    const info = await r.json();
+    if (!Array.isArray(info?.species) || info.species.length === 0) throw new Error("gatunki.json: brak listy");
+    return { list: info.species, info };
+  } catch {
+    return { list: SPECIES, info: null };
+  }
 }

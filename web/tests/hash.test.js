@@ -53,3 +53,9 @@ test("c precision by zoom band and coarse flag", () => {
   assert.ok(f({ zoom: 15 }).endsWith("c=50.76543,17.12346"));
   assert.ok(f({ zoom: 17, coarse: true }).endsWith("c=50.765,17.123"));
 });
+
+test("s=all is a valid species; keys param overrides", () => {
+  assert.equal(parseHash("#s=all").species, "all");
+  assert.equal(parseHash("#s=all", ["borowik"]).species, "borowik");
+  assert.equal(parseHash("#s=kurka", ["borowik", "kurka"]).species, "kurka");
+});

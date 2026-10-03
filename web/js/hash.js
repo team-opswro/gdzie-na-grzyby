@@ -1,4 +1,4 @@
-import { SPECIES } from "./data.js";
+import { SPECIES, ALL } from "./data.js";
 
 export const BASEMAP_KEYS = ["osm", "orto", "topo"];
 export const RADII = [5, 10, 20, 40];
@@ -8,10 +8,10 @@ const DEFAULT_SPECIES = "borowik";
 const DEFAULT_BASEMAP = "osm";
 const round = (x, d) => Number(x.toFixed(d));
 
-export function parseHash(hash) {
+export function parseHash(hash, keys = [...SPECIES.map((x) => x.key), ALL]) {
   const p = new URLSearchParams((hash || "").replace(/^#/, ""));
   const s = p.get("s");
-  const species = SPECIES.some((x) => x.key === s) ? s : DEFAULT_SPECIES;
+  const species = keys.includes(s) ? s : DEFAULT_SPECIES;
   const d = Number(p.get("d"));
   const day = Number.isInteger(d) && d >= 0 && p.get("d") !== "" ? d : 0;
   const z = p.get("z");

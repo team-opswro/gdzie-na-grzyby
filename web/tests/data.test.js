@@ -102,3 +102,30 @@ test("loadData nazwy failure → nazwy null, rest unchanged", async () => {
   globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": P, "data/nazwy.json": 500 });
   assert.deepEqual(await loadData(), { pogoda: P, centroids: c, nazwy: null });
 });
+
+import { ALL, loadSpecies } from "../js/data.js";
+
+test("ALL key", () => assert.equal(ALL, "all"));
+test("loadSpecies reads list from gatunki.json", async () => {
+  const doc = { reviewed: false, species: [{ key: "borowik", name: "Borowik szlachetny", latin: "Boletus edulis" }] };
+  const orig = globalThis.fetch;
+  let url;
+  globalThis.fetch = async (u) => { url = u; return { ok: true, json: async () => doc }; };
+  try {
+    const r = await loadSpecies("data/");
+    assert.equal(url, "data/gatunki.json");
+    assert.deepEqual(r.list, doc.species);
+    assert.deepEqual(r.info, doc);
+  } finally { globalThis.fetch = orig; }
+});
+test("loadSpecies falls back to SPECIES on 404 / exception / bad shape", async () => {
+  const orig = globalThis.fetch;
+  try {
+    for (const f of [async () => ({ ok: false, status: 404 }), async () => { throw new Error("net"); }, async () => ({ ok: true, json: async () => ({ species: [] }) })]) {
+      globalThis.fetch = f;
+      const r = await loadSpecies();
+      assert.deepEqual(r.list, SPECIES);
+      assert.equal(r.info, null);
+    }
+  } finally { globalThis.fetch = orig; }
+});
