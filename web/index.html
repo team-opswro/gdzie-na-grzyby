@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grzyby w opolskiem</title>
+  <link rel="stylesheet" href="vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <select id="species" aria-label="Gatunek"></select>
+    <div class="day">
+      <button id="day-prev" type="button" aria-label="Poprzedni dzień">◀</button>
+      <span id="day-label" aria-live="polite">—</span>
+      <button id="day-next" type="button" aria-label="Następny dzień">▶</button>
+    </div>
+    <button id="locate" type="button" aria-label="Moja lokalizacja" title="Moja lokalizacja">◎</button>
+  </header>
+  <div id="stale" class="stale" role="alert" hidden></div>
+  <main class="mapwrap">
+    <div id="map"></div>
+    <div id="legend" class="legend" aria-label="Legenda"></div>
+    <section id="panel" class="panel">
+      <button id="panel-toggle" type="button" aria-expanded="false" aria-controls="ranking-list">Top 10 w promieniu 20 km</button>
+      <ol id="ranking-list"></ol>
+    </section>
+  </main>
+  <footer class="foot">
+    Model heurystyczny, bez kalibracji.
+    © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> ·
+    Źródło: Bank Danych o Lasach (BDL), PGL Lasy Państwowe, stan 2026 ·
+    Pogoda: <a href="https://open-meteo.com/">Open-Meteo</a>
+  </footer>
+  <script src="vendor/maplibre-gl.js"></script>
+  <script src="vendor/pmtiles.js"></script>
+  <script type="module">
+    import { init } from "./js/ui.js";
+    init();
+  </script>
+</body>
+</html>
