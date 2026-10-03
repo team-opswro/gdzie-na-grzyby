@@ -2,3 +2,5 @@
 geopandas
 shapely
 pyogrio
+duckdb
+pyarrow

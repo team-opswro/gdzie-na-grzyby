@@ -1,0 +1,7 @@
+Kod rdlp: 02
+Nazwa rdlp: Katowice                      
+Kod nadleśnictwa:  99
+Nazwa nadleśnictwa:  Testowo                       
+Rok stanu danych: 2026
+Pochodzenie danych: BDL
+Data wytworzenia danych: 2026-06-23

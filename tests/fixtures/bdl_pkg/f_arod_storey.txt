@@ -1,0 +1,4 @@
+arodes_int_num	a_year	density_cd	mixture_cd	standdensity_index	tree_stock_cd	st_rank_order_act	storey_cd
+299000001	2026	0.6 	GRP 	0.9		1	DRZEW   
+299000004	2026					1	IP      
+299000004	2026					2	IIP     

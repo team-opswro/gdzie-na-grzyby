@@ -5,3 +5,10 @@ pipeline/data/build/
 node_modules/
 .superpowers/
 web/data/live/
+Nadlesnictwa/
+pipeline/data/*.duckdb
+pipeline/data/*.duckdb.wal
+pipeline/data/*.duckdb.tmp
+pipeline/data/*.parquet
+pipeline/data/out/
+pipeline/data/nadlesnictwa.geojson

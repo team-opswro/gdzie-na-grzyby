@@ -1,0 +1,10 @@
+arodes_int_num	a_year	storey_cd	sp_rank_order_act	species_cd	species_age	part_cd_act	site_class_cd	height	bhd	volume
+299000001	2026	DRZEW   	2	BRZ      	60	3  	I  	20	22	10.5
+299000001	2026	DRZEW   	1	SO       	80	7  	I  	26	32	107.4
+299000001	2026	DRZEW   	3	DB       		MJS				
+299000001	2026	IIP     	1	ŚW       	30	2  				
+299000001	2026	PODSZ   	1	LESZCZ   						
+299000004	2026	PRZES   	1	SO       	120					
+299000004	2026	IP      	1	BK       	100	8  				
+299000004	2026	IIP     	1	JD       	40	4  				
+299000004	2026	IIP     	2	GB       	35	PJD				
