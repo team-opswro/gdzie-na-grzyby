@@ -24,7 +24,7 @@ Jeden rekord (MultiPolygon, EPSG:4326) = jedno wydzielenie; **atrybuty drzewosta
 | stand_stru | str | struktura: `DRZEW`, `KO`, `KDO`, `2 PIĘT` |
 | silvicult | str | `P-Z` (przebudowa/zagospodarowanie), `S`, `Z`, `N` |
 | sub_area | float | powierzchnia ha |
-| rotat_age, forest_fun, prot_categ, nazwa, a_year | | wiek rebnosci, funkcja (`GOSP`,`REZ`), kategoria ochronnosci (`OCH USZK`,`OCH MIAST`,`OCH WOD`), nazwa pakietu, rok stanu (2026) |
+| rotat_age, forest_fun, prot_categ, nazwa, a_year | | wiek rebnosci, funkcja (`GOSP`,`REZ`,`REZ CZ`; używana do oznaczania rezerwatów, razem z obrysami z GDOŚ), kategoria ochronnosci (`OCH USZK`,`OCH MIAST`,`OCH WOD`), nazwa pakietu, rok stanu (2026) |
 
 ### Przykladowe wartosci (nadl. Opole, 6687 wydzielen, pobrane do pipeline/data/raw/opole_wydzielenia.gpkg — nie commitowane)
 - species_cd (D-STAN): SO 4758, DB 421, BRZ 331, OL 271, BK 48, MD 34, DB.S 15, GB 15, DB.C 15, LP 8, DB.B 5, OS 5, TP 5, JW 5, ŚW 5, JS 4, AK 3, DG 2, SO.C 1, OL.S 1, WZ 1. Kody z kropka = odmiany/podgatunki (DB.S szypulkowy, DB.B bezszypulkowy, DB.C czerwony) — do sprowadzenia do rdzenia przed mapowaniem.

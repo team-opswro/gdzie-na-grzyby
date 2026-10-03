@@ -17,10 +17,12 @@ Wykonywana lokalnie; wynik (`web/data/lasy.pmtiles`, `centroidy.json`, `grid.jso
 
 ```sh
 python -m pipeline.area                            # obrys obszaru: opolskie + nadleśnictwa `whole: true` -> pipeline/data/obszar.geojson
+python -m pipeline.fetch_reserves                  # rezerwaty przyrody z GDOŚ (WFS) -> pipeline/data/rezerwaty.geojson
 python -m pipeline.fetch_bdl                       # pobranie danych BDL do pipeline/data/raw
 podman build -f pipeline/Dockerfile -t grzyby-pipeline .      # (docker: to samo polecenie)
 podman run --rm -v $PWD:/w -w /w grzyby-pipeline \
-  python -m pipeline.build_tiles --bdl pipeline/data/raw --boundary pipeline/data/obszar.geojson --out web/data
+  python -m pipeline.build_tiles --bdl pipeline/data/raw --boundary pipeline/data/obszar.geojson \
+  --reserves pipeline/data/rezerwaty.geojson --out web/data
 ```
 
 ## Uruchomienie lokalne (Docker Compose)
@@ -64,4 +66,6 @@ Wymaga zdalnego repozytorium git i dostępu do panelu Coolify (nic nie jest push
 - Siedliska: Bank Danych o Lasach (BDL), PGL Lasy Państwowe, stan 2026. Dane poglądowe, udostępniane w oparciu
   o regulamin BDL i ustawę o dostępie do informacji publicznej (szczegóły: `docs/data/bdl.md`).
 - Pogoda: [Open-Meteo](https://open-meteo.com/) (darmowe API, użycie niekomercyjne).
+- Rezerwaty: Generalna Dyrekcja Ochrony Środowiska (GDOŚ), WFS sdi.gdos.gov.pl.
+- Podkłady: ortofotomapa i mapa topograficzna GUGiK (geoportal.gov.pl).
 - Mapa podkładowa: © OpenStreetMap.
