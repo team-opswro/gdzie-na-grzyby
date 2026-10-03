@@ -176,3 +176,49 @@ def test_fetch_tile_falls_back_to_second_endpoint(tmp_path):
         rsps.add(responses.POST, fp.OVERPASS_URLS[1], json=payload)
         els = fp.fetch_tile((50.0, 17.0, 50.5, 17.5), tmp_path, sleep=sleeps.append)
     assert [e["id"] for e in els] == [9] and sleeps == [30, 5]
+
+
+def test_failed_tile_split_into_quadrants(tmp_path, monkeypatch):
+    calls = []
+
+    def flaky(bbox, cache_dir, refresh=False, session=None, sleep=None):
+        calls.append(bbox)
+        if bbox[2] - bbox[0] > 0.3:  # kafel 0,5° — serwer nie wyrabia
+            raise fp.OverpassError("504")
+        return [{"type": "node", "id": len(calls), "lat": bbox[0], "lon": bbox[1], "tags": {}}]
+
+    monkeypatch.setattr(fp, "fetch_tile", flaky)
+    els = fp.fetch_area((50.0, 17.0, 50.5, 17.5), tmp_path)
+    assert len(els) == 4
+    assert calls[0] == (50.0, 17.0, 50.5, 17.5)
+    assert sorted(calls[1:]) == [(50.0, 17.0, 50.25, 17.25), (50.0, 17.25, 50.25, 17.5),
+                                 (50.25, 17.0, 50.5, 17.25), (50.25, 17.25, 50.5, 17.5)]
+
+
+def test_split_gives_up_after_max_depth(tmp_path, monkeypatch):
+    def always_fail(bbox, *a, **k):
+        raise fp.OverpassError("504")
+    monkeypatch.setattr(fp, "fetch_tile", always_fail)
+    with pytest.raises(fp.OverpassError):
+        fp.fetch_area((50.0, 17.0, 50.5, 17.5), tmp_path)
+
+
+def test_main_skips_failed_tile_and_continues(tmp_path, monkeypatch, capsys):
+    area_file = tmp_path / "obszar.geojson"
+    gpd.GeoDataFrame({"name": ["o"]}, geometry=[box(16.9, 49.9, 17.6, 50.1)], crs=4326).to_file(
+        area_file, driver="GeoJSON")
+    stands_file = tmp_path / "stands.parquet"
+    gpd.GeoDataFrame({"id": ["s1"]}, geometry=[box(17.0, 50.0, 17.001, 50.001)], crs=4326).to_parquet(
+        stands_file)
+    ok = [{"type": "node", "id": 1, "lat": 50.0005, "lon": 17.0005, "tags": {}}]
+
+    def area(bbox, *a, **k):
+        if bbox[1] >= 17.5:
+            raise fp.OverpassError("504")
+        return ok
+    monkeypatch.setattr(fp, "fetch_area", area)
+    monkeypatch.setattr(fp, "tiles_for_bounds", lambda b: [(50.0, 17.0, 50.5, 17.5), (50.0, 17.5, 50.5, 18.0)])
+    out = tmp_path / "p.geojson"
+    assert fp.main(["--area", str(area_file), "--parquet", str(stands_file), "--out", str(out),
+                    "--cache", str(tmp_path / "c")]) == 0
+    assert out.exists() and "pominięto 1" in capsys.readouterr().err

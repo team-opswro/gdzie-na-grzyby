@@ -25,6 +25,13 @@ _RETRIES = 3
 _BACKOFF_SECONDS = 30
 _PAUSE_SECONDS = 5
 
+MAX_SPLIT_DEPTH = 2  # kafel, którego serwer nie wyrabia, dzielimy na 4 (0,5° -> 0,25° -> 0,125°)
+
+
+class OverpassError(RuntimeError):
+    """Overpass nie odpowiedział poprawnie po wszystkich próbach."""
+
+
 _ACCESS_REJECT = {"private", "no", "customers", "permit"}
 _PARKING_REJECT = {"underground", "multi-storey", "rooftop"}
 
@@ -64,7 +71,8 @@ def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     south, west, *_ = bbox
-    cache_path = cache_dir / f"parking_{south:.1f}_{west:.1f}.json"
+    north, east = bbox[2], bbox[3]
+    cache_path = cache_dir / f"parking_{south:g}_{west:g}_{north - south:g}.json"
 
     if not refresh and cache_path.exists():
         return json.loads(cache_path.read_text(encoding="utf-8")).get("elements", [])
@@ -81,8 +89,6 @@ def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep
             r = None
         if r is None or r.status_code in (429, 504):
             if attempt == _RETRIES - 1:
-                if r is not None:
-                    r.raise_for_status()
                 break
             sleep(_BACKOFF_SECONDS)
             continue
@@ -92,7 +98,23 @@ def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep
         sleep(_PAUSE_SECONDS)
         return data.get("elements", [])
 
-    raise RuntimeError(f"Overpass nie odpowiedział po {_RETRIES} próbach")
+    raise OverpassError(f"Overpass nie odpowiedział po {_RETRIES} próbach dla {bbox}")
+
+
+def fetch_area(bbox, cache_dir, *, refresh=False, session=None, depth: int = 0) -> list[dict]:
+    """fetch_tile, a gdy serwer nie wyrabia — rekurencyjnie cztery ćwiartki (do MAX_SPLIT_DEPTH)."""
+    try:
+        return fetch_tile(bbox, cache_dir, refresh=refresh, session=session)
+    except OverpassError:
+        if depth >= MAX_SPLIT_DEPTH:
+            raise
+    south, west, north, east = bbox
+    mid_lat, mid_lon = (south + north) / 2, (west + east) / 2
+    out: list[dict] = []
+    for q in ((south, west, mid_lat, mid_lon), (south, mid_lon, mid_lat, east),
+              (mid_lat, west, north, mid_lon), (mid_lat, mid_lon, north, east)):
+        out.extend(fetch_area(q, cache_dir, refresh=refresh, session=session, depth=depth + 1))
+    return out
 
 
 def elements_to_gdf(elements: list[dict]) -> gpd.GeoDataFrame:
@@ -172,8 +194,16 @@ def main(argv=None) -> int:
 
         session = requests.Session()
         elements = []
+        failed = 0
         for tile in tiles:
-            elements.extend(fetch_tile(tile, args.cache, refresh=args.refresh, session=session))
+            try:
+                elements.extend(fetch_area(tile, args.cache, refresh=args.refresh, session=session))
+            except OverpassError as exc:  # częściowe dane są lepsze niż żadne; ponowny przebieg dociągnie
+                failed += 1
+                print(f"Uwaga: {exc}", file=sys.stderr)
+        if failed:
+            print(f"pominięto {failed} z {len(tiles)} kafli (Overpass); uruchom ponownie, by je dociągnąć",
+                  file=sys.stderr)
 
         raw = elements_to_gdf(elements)
         print(f"parkingi: {len(raw)}")
