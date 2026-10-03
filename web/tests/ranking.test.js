@@ -16,19 +16,19 @@ const origin = { lat: 50.675, lon: 17.921 };
 const C = {
   species: SP,
   rows: [
-    row(5, 50.68, 17.92, "506_178", 50),
-    row(2, 50.68, 17.93, "506_178", 50), // tie with 5 → id asc
-    row(9, 50.67, 17.91, "506_178", 90),
-    row(7, 50.68, 17.92, "507_178", 90), // dry → score 0, skipped
-    row(8, 50.68, 17.92, "999_999", 90), // missing cell
-    row(1, 51.11, 17.03, "506_178", 100), // too far
-    row(3, 50.67, 17.92, "506_178", 0), // h 0
+    row("02-40-1-12-363-i-00", 50.68, 17.92, "506_178", 50),
+    row("02-04-1-07-368-a-00", 50.68, 17.93, "506_178", 50), // tie with 5 → id asc
+    row("09", 50.67, 17.91, "506_178", 90),
+    row("07", 50.68, 17.92, "507_178", 90), // dry → score 0, skipped
+    row("08", 50.68, 17.92, "999_999", 90), // missing cell
+    row("01", 51.11, 17.03, "506_178", 100), // too far
+    row("03", 50.67, 17.92, "506_178", 0), // h 0
   ],
 };
 
 test("topN radius, order, ties, skips missing/zero", () => {
   const r = topN(C, P, "borowik", 0, origin);
-  assert.deepEqual(r.map((x) => x.id), [9, 2, 5]);
+  assert.deepEqual(r.map((x) => x.id), ["09", "02-04-1-07-368-a-00", "02-40-1-12-363-i-00"]);
   assert.equal(r[0].score, score(90, wWet));
   assert.equal(r[1].score, score(50, wWet));
   assert.deepEqual(Object.keys(r[0]).sort(), ["distanceKm", "id", "lat", "lon", "score"]);
@@ -36,7 +36,7 @@ test("topN radius, order, ties, skips missing/zero", () => {
 });
 test("topN limits n, larger radius includes far", () => {
   assert.equal(topN(C, P, "borowik", 0, origin, 20, 2).length, 2);
-  assert.ok(topN(C, P, "borowik", 0, origin, 100).some((x) => x.id === 1));
+  assert.ok(topN(C, P, "borowik", 0, origin, 100).some((x) => x.id === "01"));
 });
 test("topN uses species column; null pogoda → []", () => {
   assert.deepEqual(topN(C, P, "kurka", 0, origin), []);

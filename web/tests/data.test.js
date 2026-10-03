@@ -54,3 +54,4 @@ test("loadData centroids failure throws", async () => {
   globalThis.fetch = mockFetch({ "data/centroidy.json": "throw", "data/live/pogoda.json": P });
   await assert.rejects(loadData());
 });
+test("isStale unparseable date → true", () => assert.equal(isStale("garbage", new Date()), true));

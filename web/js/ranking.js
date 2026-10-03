@@ -25,6 +25,6 @@ export function topN(centroids, pogoda, species, dayIdx, origin, radiusKm = 20, 
     if (!s) continue;
     out.push({ id, lat, lon, score: s, distanceKm: Math.round(dist * 10) / 10 });
   }
-  out.sort((a, b) => b.score - a.score || a.id - b.id);
+  out.sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   return out.slice(0, n);
 }

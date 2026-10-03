@@ -29,7 +29,8 @@ export function scoreClass(s) {
 }
 
 export function isStale(generatedAtIso, now = new Date()) {
-  return now.getTime() - new Date(generatedAtIso).getTime() > STALE_HOURS * 3600 * 1000;
+  const age = now.getTime() - new Date(generatedAtIso).getTime();
+  return Number.isNaN(age) || age > STALE_HOURS * 3600 * 1000;
 }
 
 export function availableDays(days, todayIso) {
