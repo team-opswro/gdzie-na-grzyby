@@ -186,6 +186,13 @@ schemat: `schema/pogoda.schema.json`.
   są utrzymywane, dopóki wspierani klienci z nich korzystają.
 - `live/pogoda.json` podlega tej samej zasadzie (nowe pola dopuszczalne, zmiana znaczenia → `live/v2/`).
 
+### Wydanie modelu v2 (18 gatunków, grupy, pomijane zerowe `h_*`)
+
+Kolejność: **najpierw wdrożenie `web` i `forecast` z tej wersji kodu, potem `pipeline.publish` nowych
+danych**. Stary klient działa z nowymi danymi bez błędów, ale w trybie „Wszystkie gatunki” mapa liczy
+tylko 6 dawnych gatunków (zaszyta lista), a popup i ranking już 18 — wyniki się rozjeżdżają; stary
+kontener `forecast` nie liczy pogody dla 12 nowych gatunków.
+
 ## Źródła i licencje
 
 - Bank Danych o Lasach (BDL), PGL Lasy Państwowe — wydzielenia i opisy taksacyjne.

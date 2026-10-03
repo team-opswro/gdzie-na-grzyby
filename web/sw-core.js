@@ -82,6 +82,12 @@ function relativeToScope(url, scope) {
 
 // Klucz wpisu dla żądania z nagłówkiem Range. Cache API pomija fragment (#) przy dopasowaniu,
 // więc zakres idzie do zapytania (klucz nigdy nie trafia do sieci).
+// Identyfikator buildu z adresu pliku wersjonowanego (…/v/<build>/…) albo null.
+function buildOf(url) {
+  const m = /\/v\/([^/?#]+)\//.exec(url);
+  return m ? m[1] : null;
+}
+
 function cacheKey(url, range) {
   if (!range) return url;
   return url + (url.includes("?") ? "&" : "?") + "__range=" + encodeURIComponent(range);
@@ -106,6 +112,7 @@ self.SWCore = {
   SHELL_FILES,
   strategyFor,
   cacheKey,
+  buildOf,
   trimPlan,
   staleShellCaches,
 };

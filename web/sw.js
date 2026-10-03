@@ -77,17 +77,30 @@ async function cacheFirst(request) {
 
   const resp = await fetch(request.clone());
   if (!resp.ok) return resp;
+  if (range && resp.status !== 206) return resp; // serwer zignorował Range — nie zapisujemy całości pod kluczem zakresu
 
-  if (range && resp.status === 206) {
-    const contentRange = resp.headers.get("Content-Range");
-    if (!contentRange) return resp; // nie zapisujemy uszkodzonego wpisu
-    const stored = await storeRange(cache, key, resp.clone(), contentRange);
-    return rebuildRange(stored, range);
-  }
-
+  // Kopia powstaje od razu (Cache API zużywa body zapisywanej odpowiedzi); oryginał wraca do strony.
+  const copy = resp.clone();
+  if (isVersioned) await pruneOtherBuilds(cache, request.url);
   await trimCache(cache, isVersioned ? core.LIMITS.data : core.SHELL_FILES.length + 100);
-  await cache.put(key, resp.clone()).catch(() => {});
+  if (range) {
+    const contentRange = resp.headers.get("Content-Range");
+    if (contentRange) await storeRange(cache, key, copy, contentRange).catch(() => {});
+  } else {
+    await cache.put(key, copy).catch(() => {});
+  }
   return resp;
+}
+
+// Pliki /v/<build>/ są niezmienne, ale po publikacji nowego buildu stare wpisy są bezużyteczne.
+async function pruneOtherBuilds(cache, url) {
+  const build = core.buildOf(url);
+  if (!build) return;
+  const keys = await cache.keys();
+  await Promise.all(keys.filter((k) => {
+    const b = core.buildOf(k.url);
+    return b && b !== build;
+  }).map((k) => cache.delete(k)));
 }
 
 async function staleWhileRevalidate(request) {
@@ -96,11 +109,12 @@ async function staleWhileRevalidate(request) {
   const networkPromise = fetch(request.clone())
     .then((resp) => {
       if (resp.ok) {
-        trimCache(cache, core.LIMITS.base).then(() => cache.put(request, resp.clone())).catch(() => {});
+        const copy = resp.clone(); // przed oddaniem odpowiedzi stronie, która od razu czyta body
+        trimCache(cache, core.LIMITS.base).then(() => cache.put(request, copy)).catch(() => {});
       }
       return resp;
     })
-    .catch(() => {});
+    .catch(() => Response.error());
   if (cached) return cached;
   return await networkPromise;
 }
@@ -109,9 +123,7 @@ async function storeRange(cache, key, response, contentRange) {
   const headers = new Headers(response.headers);
   headers.set("X-Content-Range", contentRange);
   // Cache API nie akceptuje odpowiedzi 206 — zapisujemy jako 200 z oryginalnym nagłówkiem w X-Content-Range.
-  const stored = new Response(response.body, { status: 200, headers });
-  await cache.put(key, stored);
-  return stored;
+  await cache.put(key, new Response(response.body, { status: 200, headers }));
 }
 
 function rebuildRange(stored, range) {
