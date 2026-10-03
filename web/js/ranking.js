@@ -1,4 +1,4 @@
-import { weatherFor, score } from "./data.js";
+import { weatherFor, score, bestFor, ALL } from "./data.js";
 import { oddzKey } from "./names.js";
 
 const R_KM = 6371;
@@ -24,8 +24,10 @@ export function bearing(origin, point) {
 
 // centroids.rows: [id, lat, lon, cell, h_<species>...] with h columns in centroids.species order
 // Wynik: grupy po oddziale [{ key, best, count, distanceKm, bearing }].
-export function topN(centroids, pogoda, species, dayIdx, origin, radiusKm = 20, n = 10) {
-  const col = 4 + centroids.species.indexOf(species);
+// species === "all": wynik wiersza = bestFor; grupa ma dodatkowo `species` (klucz najlepszego).
+export function topN(centroids, pogoda, species = ALL, dayIdx, origin, radiusKm = 20, n = 10) {
+  const isAll = species === ALL;
+  const col = isAll ? 4 : 4 + centroids.species.indexOf(species);
   if (col < 4) return [];
   const groups = new Map();
   const dLat = radiusKm / 111;
@@ -34,12 +36,22 @@ export function topN(centroids, pogoda, species, dayIdx, origin, radiusKm = 20, 
     const [id, lat, lon, cell] = row;
     if (Math.abs(lat - origin.lat) > dLat || Math.abs(lon - origin.lon) > dLon) continue;
     if (haversineKm(origin, { lat, lon }) > radiusKm) continue;
-    const wx = weatherFor(pogoda, cell, species, dayIdx);
-    if (!wx) continue;
-    const s = score(row[col], wx.w);
+    let s, h, sp;
+    if (isAll) {
+      const hBy = {};
+      centroids.species.forEach((k, i) => { hBy[k] = row[4 + i]; });
+      const b = bestFor(pogoda, cell, hBy, dayIdx);
+      if (!b) continue;
+      s = b.score; sp = b.species; h = hBy[sp];
+    } else {
+      const wx = weatherFor(pogoda, cell, species, dayIdx);
+      if (!wx) continue;
+      s = score(row[col], wx.w); h = row[col];
+    }
     if (!s) continue;
     const key = oddzKey(id) ?? id;
-    const cand = { id, lat, lon, cell, h: row[col], score: s };
+    const cand = { id, lat, lon, cell, h, score: s };
+    if (isAll) cand.species = sp;
     const g = groups.get(key);
     if (!g) groups.set(key, { key, best: cand, count: 1 });
     else {
@@ -49,6 +61,7 @@ export function topN(centroids, pogoda, species, dayIdx, origin, radiusKm = 20, 
   }
   const out = [...groups.values()].map((g) => ({
     ...g,
+    ...(isAll ? { species: g.best.species } : {}),
     distanceKm: Math.round(haversineKm(origin, g.best) * 10) / 10,
     bearing: bearing(origin, g.best),
   }));

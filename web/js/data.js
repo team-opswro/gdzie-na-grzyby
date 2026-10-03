@@ -27,6 +27,19 @@ export function score(hInt, w) {
   return w == null ? null : Math.round(hInt * w);
 }
 
+// Najlepszy gatunek w komórce: max round(h_k * w_k); gatunki bez pogody lub bez h są pomijane.
+export function bestFor(pogoda, cell, hBySpecies, dayIdx) {
+  let best = null;
+  for (const [species, h] of Object.entries(hBySpecies ?? {})) {
+    if (h == null) continue;
+    const wx = weatherFor(pogoda, cell, species, dayIdx);
+    if (!wx) continue;
+    const s = score(h, wx.w);
+    if (best == null || s > best.score) best = { species, score: s, wx };
+  }
+  return best;
+}
+
 export function scoreClass(s) {
   if (s == null) return null;
   if (s < 10) return 0;

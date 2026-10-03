@@ -129,3 +129,20 @@ test("loadSpecies falls back to SPECIES on 404 / exception / bad shape", async (
     }
   } finally { globalThis.fetch = orig; }
 });
+
+import { bestFor } from "../js/data.js";
+
+test("bestFor: max over species, skips species without data, null when none", () => {
+  const h = { borowik: 100, podgrzybek: 100, kurka: 100, kozlarz: 100, maslak: 100, rydz: 100 };
+  const b = bestFor(P, "506_178", h, 0);
+  const expect = Math.max(...Object.keys(h).map((k) => score(100, P.cells["506_178"][k].w[0])));
+  assert.equal(b.score, expect);
+  assert.equal(b.species, "podgrzybek");
+  assert.deepEqual(b.wx, weatherFor(P, "506_178", b.species, 0));
+  // tylko gatunek bez danych w komórce
+  const P2 = { days: ["d"], cells: { c: { borowik: { w: [0.5], rain: [0], temp: [0], season: [0] } } } };
+  assert.deepEqual(bestFor(P2, "c", { borowik: 40, rydz: 90 }, 0).species, "borowik");
+  assert.equal(bestFor(P2, "c", { rydz: 90 }, 0), null);
+  assert.equal(bestFor(P2, "zzz", { borowik: 40 }, 0), null);
+  assert.equal(bestFor(null, "c", { borowik: 40 }, 0), null);
+});

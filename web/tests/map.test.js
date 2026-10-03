@@ -54,3 +54,26 @@ test("basemaps", () => {
   assert.deepEqual(lineColor("orto"), { color: "#ffffff", opacity: 0.7 });
   assert.deepEqual(lineColor("osm"), { color: "#3e2723", opacity: 0.6 });
 });
+
+import { SPECIES } from "../js/data.js";
+import fs2 from "node:fs";
+const V1 = JSON.parse(fs2.readFileSync(new URL("../../tests/fixtures/pogoda_v1.json", import.meta.url), "utf8"));
+
+test("all: reserve outermost, max of per-species expressions with h_ and match", () => {
+  const e = fillColorExpression(P, "all", 0);
+  assert.deepEqual(e.slice(0, 2), ["case", ["has", "rez"]]);
+  const s = JSON.stringify(e);
+  assert.ok(s.includes('"max"') && s.includes('"match"'));
+  for (const k of SPECIES) assert.ok(s.includes("h_" + k.key));
+  assert.equal(fillOpacityExpression(P, "all", 0)[1][0], "has");
+});
+test("all without pogoda: max of h_*, no match", () => {
+  for (const e of [fillColorExpression(null, "all", 0), fillOpacityExpression(null, "all", 0)]) {
+    const s = JSON.stringify(e);
+    assert.ok(s.includes('"max"') && !s.includes('"match"'));
+    for (const k of SPECIES) assert.ok(s.includes("h_" + k.key));
+  }
+});
+test("all with old pogoda_v1 does not throw", () => {
+  assert.doesNotThrow(() => { fillColorExpression(V1, "all", 0); fillOpacityExpression(V1, "all", 3); });
+});

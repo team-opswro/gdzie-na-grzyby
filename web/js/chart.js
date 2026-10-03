@@ -7,24 +7,27 @@ const MAX_DAYS = 7;
 const TREND_THRESHOLD = 5;
 const PEAK_MARGIN = 5;
 
-function scoreAt(pogoda, cell, species, h, idx) {
-  if (idx < 0) return null;
-  const wf = weatherFor(pogoda, cell, species, idx);
-  return wf ? score(h, wf.w) : null;
+function scoreAtFor(pogoda, cell, species, h) {
+  return (idx) => {
+    if (idx < 0) return null;
+    const wf = weatherFor(pogoda, cell, species, idx);
+    return wf ? score(h, wf.w) : null;
+  };
 }
 
-export function chartData(pogoda, cell, species, h, todayIso) {
+// scoreAt(idx) -> wynik (0–100) lub null; idx < 0 musi dawać null.
+export function chartDataBy(pogoda, scoreAt, todayIso) {
   return availableDays(pogoda.days, todayIso)
     .slice(0, MAX_DAYS)
     .map(({ date, idx }) => {
-      const s = scoreAt(pogoda, cell, species, h, idx);
+      const s = scoreAt(idx);
       return { date, idx, score: s, cls: scoreClass(s) };
     });
 }
 
-export function trend(pogoda, cell, species, h, dayIdx) {
-  const cur = scoreAt(pogoda, cell, species, h, dayIdx);
-  const prev = scoreAt(pogoda, cell, species, h, dayIdx - 1);
+export function trendBy(pogoda, scoreAt, dayIdx) {
+  const cur = scoreAt(dayIdx);
+  const prev = scoreAt(dayIdx - 1);
   let dir = null;
   let delta = null;
   if (cur != null && prev != null) {
@@ -35,12 +38,18 @@ export function trend(pogoda, cell, species, h, dayIdx) {
   if (cur != null) {
     pogoda.days.forEach((date, idx) => {
       if (idx <= dayIdx) return;
-      const s = scoreAt(pogoda, cell, species, h, idx);
+      const s = scoreAt(idx);
       if (s != null && s >= cur + PEAK_MARGIN && (peak == null || s > peak.score)) peak = { idx, date, score: s };
     });
   }
   return { dir, delta, peak };
 }
+
+export const chartData = (pogoda, cell, species, h, todayIso) =>
+  chartDataBy(pogoda, scoreAtFor(pogoda, cell, species, h), todayIso);
+
+export const trend = (pogoda, cell, species, h, dayIdx) =>
+  trendBy(pogoda, scoreAtFor(pogoda, cell, species, h), dayIdx);
 
 function dayParts(iso) {
   const d = new Date(`${iso}T00:00:00Z`);

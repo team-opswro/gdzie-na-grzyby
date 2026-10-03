@@ -77,3 +77,19 @@ test("topN uses species column; null pogoda → []", () => {
   assert.deepEqual(topN(C, P, "kurka", 0, origin), []);
   assert.deepEqual(topN(C, null, "borowik", 0, origin), []);
 });
+
+test("topN all: row score = best species, group has species and its h", () => {
+  const rowA = (id, cell, hs) => [id, 50.68, 17.92, cell, ...hs];
+  const C2 = { species: SP, rows: [rowA("02-40-1-12-363-i-00", "506_178", [10, 100, 10, 10, 10, 10])] };
+  const r = topN(C2, P, "all", 0, origin, 20, 10);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].species, "podgrzybek");
+  assert.equal(r[0].best.h, 100);
+  assert.equal(r[0].best.score, score(100, P.cells["506_178"].podgrzybek.w[0]));
+  assert.equal(topN(C2, null, "all", 0, origin).length, 0);
+});
+test("topN all with pogoda_v1 does not throw", () => {
+  const V1 = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda_v1.json", import.meta.url), "utf8"));
+  const C2 = { species: SP, rows: [["02-40-1-12-363-i-00", 50.68, 17.92, "506_178", 50, 50, 50, 50, 50, 50]] };
+  assert.doesNotThrow(() => topN(C2, V1, "all", 0, origin));
+});

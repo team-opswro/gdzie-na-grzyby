@@ -142,3 +142,12 @@ test("renderChart: each bar has a transparent full-slot hit rect (>= 24 units)",
     delete globalThis.document;
   }
 });
+
+import { chartDataBy, trendBy } from "../js/chart.js";
+
+test("chartDataBy/trendBy match chartData/trend for a simple scoreAt", () => {
+  const p = synth([0.1, 0.2, 0.3, 0.5, 0.2, 0.9, 0.1]);
+  const at = (idx) => (idx < 0 ? null : Math.round(100 * p.cells.c.borowik.w[idx]));
+  assert.deepEqual(chartDataBy(p, at, "2026-10-03"), chartData(p, "c", "borowik", 100, "2026-10-03"));
+  for (const d of [0, 1, 3, 5]) assert.deepEqual(trendBy(p, at, d), trend(p, "c", "borowik", 100, d));
+});

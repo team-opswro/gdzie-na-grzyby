@@ -1,4 +1,5 @@
 import { BASEMAP_KEYS } from "./hash.js";
+import { SPECIES } from "./data.js";
 
 // MapLibre + PMTiles. Globalne `maplibregl` i `pmtiles` są używane wyłącznie w createMap,
 // dzięki czemu fillColorExpression da się testować w Node.
@@ -40,7 +41,20 @@ const stepOn = (input, values) => {
 
 const reserveFirst = (reserveValue, base) => ["case", ["has", "rez"], reserveValue, base];
 
+// Tryb „all”: max po gatunkach; gatunek bez pogody w komórce daje -1 (nie wygrywa).
+const ALL_KEYS = SPECIES.map((s) => s.key);
+const allHExpr = () => ["max", ...ALL_KEYS.map(hExpr)];
+const allSpeciesExpr = (pogoda, dayIdx) => ["max", ...ALL_KEYS.map((k) => ["let", "wv", weatherMatch(pogoda, k, dayIdx),
+  ["case", ["<", ["var", "wv"], 0], -1, scoreExpr(k, ["var", "wv"])]])];
+
+function allExpression(pogoda, dayIdx, noData, values) {
+  if (pogoda == null) return reserveFirst(values.reserve, stepOn(allHExpr(), values.steps));
+  return reserveFirst(values.reserve, ["let", "sc", allSpeciesExpr(pogoda, dayIdx),
+    ["case", ["<", ["var", "sc"], 0], noData, stepOn(["var", "sc"], values.steps)]]);
+}
+
 export function fillColorExpression(pogoda, species, dayIdx) {
+  if (species === "all") return allExpression(pogoda, dayIdx, COLORS.noData, { reserve: COLORS.reserve, steps: COLORS.classes });
   if (pogoda == null) return reserveFirst(COLORS.reserve, stepOn(scoreExpr(species, null), COLORS.classes));
   return reserveFirst(COLORS.reserve, [
     "let", "wv", weatherMatch(pogoda, species, dayIdx),
@@ -52,6 +66,7 @@ export function fillColorExpression(pogoda, species, dayIdx) {
 
 export function fillOpacityExpression(pogoda, species, dayIdx) {
   const opacities = [FILL_OPACITY.weak, ...Array(4).fill(FILL_OPACITY.normal)];
+  if (species === "all") return allExpression(pogoda, dayIdx, FILL_OPACITY.noData, { reserve: FILL_OPACITY.reserve, steps: opacities });
   if (pogoda == null) return reserveFirst(FILL_OPACITY.reserve, stepOn(scoreExpr(species, null), opacities));
   return reserveFirst(FILL_OPACITY.reserve, [
     "let", "wv", weatherMatch(pogoda, species, dayIdx),
