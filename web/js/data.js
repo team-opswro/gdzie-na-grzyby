@@ -37,15 +37,28 @@ export function availableDays(days, todayIso) {
   return days.map((date, idx) => ({ date, idx })).filter((d) => d.date >= todayIso);
 }
 
+// Tekst banera nad mapą (null = wszystko w porządku).
+export function bannerText(pogoda, availableDaysCount, now = new Date()) {
+  const habitatOnly = "mapa pokazuje tylko ocenę siedliska";
+  if (!pogoda) return `Brak danych pogodowych — ${habitatOnly}`;
+  if (isStale(pogoda.generated_at, now)) {
+    const text = `Prognoza nieaktualna (z dnia ${String(pogoda.generated_at).slice(0, 10)})`;
+    return availableDaysCount > 0 ? text : `${text}, ${habitatOnly}`;
+  }
+  return availableDaysCount > 0 ? null : `Brak aktualnych dni w prognozie — ${habitatOnly}`;
+}
+
+// Pogoda i centroidy ładują się niezależnie: awaria jednego nie wyrzuca drugiego.
 export async function loadData(base = "data/") {
-  const [centroids, pogoda] = await Promise.all([
+  const [c, p] = await Promise.allSettled([
     fetch(base + "centroidy.json").then((r) => {
       if (!r.ok) throw new Error(`centroidy.json: HTTP ${r.status}`);
       return r.json();
     }),
-    fetch(base + "live/pogoda.json")
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null),
+    fetch(base + "live/pogoda.json").then((r) => (r.ok ? r.json() : null)),
   ]);
-  return { pogoda, centroids };
+  return {
+    pogoda: p.status === "fulfilled" ? p.value : null,
+    centroids: c.status === "fulfilled" ? c.value : null,
+  };
 }

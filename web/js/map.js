@@ -1,12 +1,12 @@
 // MapLibre + PMTiles. Globalne `maplibregl` i `pmtiles` są używane wyłącznie w createMap,
 // dzięki czemu fillColorExpression da się testować w Node.
 export const COLORS = {
-  noData: "#9e9e9e",
+  noData: "#b0bec5",
   // klasy wg scoreClass: <10, 10–25, 25–45, 45–65, >65
   classes: ["#9e9e9e", "#fff59d", "#fdd835", "#fb8c00", "#d32f2f"],
 };
 export const CLASS_LABELS = ["brak", "słabo", "średnio", "dobrze", "bardzo dobrze"];
-export const FILL_OPACITY = { weak: 0.3, normal: 0.65 };
+export const FILL_OPACITY = { weak: 0.3, normal: 0.65, noData: 0.5 };
 
 // Progi dla całkowitego wyniku; scoreClass: s <= 65 → "dobrze", więc klasa 4 zaczyna się od 66.
 const STEPS = [10, 25, 45, 66];
@@ -51,7 +51,7 @@ export function fillOpacityExpression(pogoda, species, dayIdx) {
   return [
     "let", "wv", weatherMatch(pogoda, species, dayIdx),
     ["case",
-      ["<", ["var", "wv"], 0], FILL_OPACITY.weak,
+      ["<", ["var", "wv"], 0], FILL_OPACITY.noData,
       stepOn(scoreExpr(species, ["var", "wv"]), opacities)],
   ];
 }

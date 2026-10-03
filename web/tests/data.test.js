@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { SPECIES, weatherFor, score, scoreClass, isStale, availableDays, loadData } from "../js/data.js";
+import { SPECIES, weatherFor, score, scoreClass, isStale, availableDays, loadData, bannerText } from "../js/data.js";
 
 const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
 
@@ -50,8 +50,24 @@ test("loadData pogoda failure → null; non-OK → null", async () => {
   globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": 500 });
   assert.equal((await loadData()).pogoda, null);
 });
-test("loadData centroids failure throws", async () => {
+test("loadData centroids failure → centroids null, pogoda kept", async () => {
   globalThis.fetch = mockFetch({ "data/centroidy.json": "throw", "data/live/pogoda.json": P });
-  await assert.rejects(loadData());
+  assert.deepEqual(await loadData(), { pogoda: P, centroids: null });
+  globalThis.fetch = mockFetch({ "data/centroidy.json": 500, "data/live/pogoda.json": P });
+  assert.deepEqual(await loadData(), { pogoda: P, centroids: null });
+});
+test("loadData both fail → both null", async () => {
+  globalThis.fetch = mockFetch({ "data/centroidy.json": "throw", "data/live/pogoda.json": "throw" });
+  assert.deepEqual(await loadData(), { pogoda: null, centroids: null });
+});
+test("bannerText states", () => {
+  const now = new Date("2026-10-03T12:00:00+02:00");
+  const fresh = { generated_at: "2026-10-03T05:00:00+02:00" };
+  const old = { generated_at: "2026-10-01T05:00:00+02:00" };
+  assert.equal(bannerText(fresh, 3, now), null);
+  assert.equal(bannerText(null, 0, now), "Brak danych pogodowych — mapa pokazuje tylko ocenę siedliska");
+  assert.equal(bannerText(old, 2, now), "Prognoza nieaktualna (z dnia 2026-10-01)");
+  assert.equal(bannerText(old, 0, now), "Prognoza nieaktualna (z dnia 2026-10-01), mapa pokazuje tylko ocenę siedliska");
+  assert.match(bannerText(fresh, 0, now), /tylko ocenę siedliska/);
 });
 test("isStale unparseable date → true", () => assert.equal(isStale("garbage", new Date()), true));
