@@ -122,3 +122,23 @@ test("renderChart: no data → outline only, label 'brak danych'", () => {
     delete globalThis.document;
   }
 });
+
+test("renderChart: each bar has a transparent full-slot hit rect (>= 24 units)", () => {
+  stubDom();
+  try {
+    const data = chartData(P, CELL, "borowik", 80, P.days[1]);
+    const svg = renderChart(data, data[0].idx, () => {});
+    const bars = [];
+    walk(svg, (n) => n.attrs.role === "button" && bars.push(n));
+    for (const b of bars) {
+      const hit = b.children[0];
+      assert.equal(hit.tag, "rect");
+      assert.equal(hit.attrs.fill, "transparent");
+      assert.equal(Number(hit.attrs.width), 36);
+      assert.ok(Number(hit.attrs.width) >= 24);
+    }
+    assert.equal(bars[0].attrs["aria-pressed"], "true");
+  } finally {
+    delete globalThis.document;
+  }
+});

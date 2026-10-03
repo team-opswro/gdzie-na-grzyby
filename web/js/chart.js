@@ -71,9 +71,11 @@ export function renderChart(data, selectedIdx, onSelect) {
     const g = el("g", {
       role: "button",
       tabindex: "0",
+      "aria-pressed": String(selected),
       "aria-label": `${dow}. ${day} ${month}: ${d.score == null ? "brak danych" : d.score}`,
-      style: "cursor:pointer;outline:none",
+      style: "cursor:pointer",
     });
+    g.appendChild(el("rect", { x: i * slot, y: 0, width: slot, height: H, fill: "transparent", "pointer-events": "all" }));
     const hasData = d.score != null;
     const bh = hasData ? Math.max(2, Math.round((Math.min(d.score, MAX_SCORE) / MAX_SCORE) * BAR_AREA)) : BAR_AREA / 3;
     const rect = el("rect", {

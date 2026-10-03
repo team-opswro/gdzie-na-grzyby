@@ -88,3 +88,9 @@ test("bannerText states", () => {
   assert.match(bannerText(fresh, 0, now), /tylko ocenę siedliska/);
 });
 test("isStale unparseable date → true", () => assert.equal(isStale("garbage", new Date()), true));
+
+test("weatherFor: partially missing wx values -> wx null", () => {
+  const p = { days: ["d"], cells: { c: { borowik: { w: [0.5], rain: [1], temp: [1], season: [1], lim: [null] } } },
+    wx: { c: { rain_mm: [3], soil_t: [null], soil_m: [0.2] } } };
+  assert.equal(weatherFor(p, "c", "borowik", 0).wx, null);
+});

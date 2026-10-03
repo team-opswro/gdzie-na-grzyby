@@ -55,3 +55,5 @@ body { display: flex; flex-direction: column; font: 15px/1.35 system-ui, sans-se
 .popup-chart svg { display: block; max-width: 100%; height: auto; }
 .popup-details { margin-top: 6px; font-size: 12px; }
 .popup-details summary { cursor: pointer; color: #555; padding: 2px 0; }
+.popup-chart [role="button"]:focus-visible rect:not([fill="transparent"]) { stroke: #111; stroke-width: 2px; }
+.popup-chart [role="button"]:focus-visible { outline: 2px solid #1a73e8; }

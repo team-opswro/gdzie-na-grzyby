@@ -53,6 +53,7 @@ export async function init() {
     onFeatureClick: (props, lngLat) => showPopup(props, lngLat),
     onReserveClick: (name, lngLat) => {
       popup?.remove();
+      lastPopup = null;
       const content = document.createElement("div");
       content.className = "popup";
       content.append(renderReserve(name));
@@ -79,7 +80,10 @@ export async function init() {
       todayIso: todayLocalIso(),
       onDaySelect,
     });
-    popup = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    const pp = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    popup = pp;
+    pp.on("close", () => { if (popup === pp) lastPopup = null; });
+    return content;
   }
 
   function onDaySelect(idx) {
@@ -88,7 +92,10 @@ export async function init() {
     const keep = lastPopup;
     state.day = p;
     refresh();
-    if (keep) showPopup(keep.props, keep.lngLat);
+    if (keep) {
+      const content = showPopup(keep.props, keep.lngLat);
+      content.querySelector('[aria-pressed="true"]')?.focus?.();
+    }
   }
 
   function writeHash() {

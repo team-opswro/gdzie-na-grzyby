@@ -17,7 +17,7 @@ export function weatherFor(pogoda, cell, species, dayIdx) {
   return {
     w: sp.w[dayIdx], rain: sp.rain[dayIdx], temp: sp.temp[dayIdx], season: sp.season[dayIdx],
     lim: sp.lim?.[dayIdx] ?? null,
-    wx: wx && wx.rain_mm != null ? wx : null,
+    wx: wx && wx.rain_mm != null && wx.soil_t != null && wx.soil_m != null ? wx : null,
   };
 }
 

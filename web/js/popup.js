@@ -96,7 +96,7 @@ export function renderPopup(props, ctx) {
         badge.append(el("div", `Szczyt: ${DOW[new Date(`${tr.peak.date}T00:00:00Z`).getUTCDay()]}. (${tr.peak.score})`, "popup-peak"));
       }
       root.append(badge);
-      if (weather.lim) root.append(el("div", LIM_TEXT[weather.lim], "popup-lim"));
+      if (weather.lim && LIM_TEXT[weather.lim]) root.append(el("div", LIM_TEXT[weather.lim], "popup-lim"));
     } else {
       root.append(el("div", "Brak danych pogodowych dla tego miejsca", "popup-score popup-nodata"));
     }
