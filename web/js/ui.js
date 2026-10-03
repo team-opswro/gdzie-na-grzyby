@@ -28,6 +28,11 @@ function formatDay(iso) {
 const MAP_DATA_ERROR = "Nie udało się wczytać danych mapy";
 
 export async function init() {
+  // Rejestracja service workera (PWA) — tylko przez HTTP(S), nie z file://.
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW:", e));
+  }
+
   // Podkład powstaje od razu (zawieszony bucket ≠ pusta strona); warstwy lasów dochodzą po manifeście.
   // Wstępny hash: środek, zoom i podkład nie zależą od listy gatunków.
   const pre = parseHash(location.hash, selectionValues(SPECIES));
@@ -428,9 +433,14 @@ export async function init() {
   if (mapReady) map.once("idle", openInitialPlace);
   return map;
 
-  // Baner nad mapą: błąd danych mapy (manifest) + stan prognozy.
+  // Baner nad mapą: błąd danych mapy (manifest) + stan prognozy + tryb offline.
   function showBanner(weather = null) {
-    const text = [mapDataError ? MAP_DATA_ERROR : null, weather].filter(Boolean).join(". ");
+    const parts = [mapDataError ? MAP_DATA_ERROR : null, weather].filter(Boolean);
+    if (navigator.onLine === false && data.pogoda?.generated_at) {
+      const when = aboutForecastText(data.pogoda.generated_at).replace("Prognoza z: ", "");
+      parts.push(`Tryb offline — dane z ${when}`);
+    }
+    const text = parts.join(". ");
     $("stale").textContent = text;
     $("stale").hidden = !text;
   }
