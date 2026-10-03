@@ -228,3 +228,11 @@ def test_main_no_weather(tmp_path, monkeypatch):
 
 def test_default_out_not_in_publish_dir():
     assert DEFAULT_OUT.name == "walidacja" and "out" not in DEFAULT_OUT.parts[-2:]
+
+
+def test_habitat_eval_uses_bdl_modifier_columns():
+    # obecności na mszystym runie, tło na zadarnieniu -> czynnik veg rozróżnia (spec F w walidacji)
+    st = stands_gdf([GOOD] * 60)
+    st["veg"] = ["MSZ"] * 30 + ["ZAD"] * 30
+    r = habitat_eval("borowik", S["borowik"], st, set(range(30)), set(range(30, 60)))
+    assert r["habitat"]["factors"]["veg"]["auc"] == 1.0

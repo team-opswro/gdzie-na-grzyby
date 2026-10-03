@@ -18,6 +18,7 @@ import yaml
 
 from forecast.model import DailySeries, WeatherComponents, weather_multiplier
 from forecast.species import ROOT, Species, load_species
+from pipeline.build_tiles import STAND_EXTRA
 from pipeline.gbif import load_observations
 from pipeline.grid import cell_id
 from pipeline.habitat import HABITAT_FACTORS, habitat_components, habitat_score, stand_from_row
@@ -75,7 +76,8 @@ def join_stands(obs: pd.DataFrame, stands: gpd.GeoDataFrame) -> tuple[pd.DataFra
 
 def _stand(stands: gpd.GeoDataFrame, i: int):
     r = stands.iloc[i]
-    return stand_from_row(r["sp_main"], r["sp_admix"], r["age"], r["hab"], r["partners"])
+    extra = {c: r[c] for c in STAND_EXTRA if c in stands.columns}
+    return stand_from_row(r["sp_main"], r["sp_admix"], r["age"], r["hab"], r["partners"], **extra)
 
 
 def habitat_eval(key: str, sp: Species, stands: gpd.GeoDataFrame, presence: set[int],
