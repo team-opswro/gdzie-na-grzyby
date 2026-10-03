@@ -90,9 +90,9 @@ def test_repo_species_yaml_loads():
 
 def test_yaml_factor_values():
     s = load_species()
-    assert s["kozlarz"].factors["moist"]["BO"] == 0.8
+    assert all(sp.factors["moist"] == {} for sp in s.values())  # zneutralizowany po walidacji
     assert s["rydz"].factors["degr"] == {} and s["maslak"].factors["degr"] == {}
-    assert s["kurka"].factors["moist"]["WW"] == 0.85
+    assert s["kozlarz"].factors["soil"] == {"B": 0.9, "RD": 0.9}
     assert s["borowik"].factors["veg"] == {"ZAD": 0.7, "ZIEL": 0.8, "SZAD": 0.9}
     assert s["borowik"].factors["damage"] == Ramp(40, 100, 0.6)
 

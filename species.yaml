@@ -5,7 +5,7 @@
 # Iloczyn modyfikatorów ma dolne ograniczenie 0.4 (pipeline/habitat.py: MOD_FLOOR).
 factors_default:
   veg: {ZAD: 0.7, ZIEL: 0.8, SZAD: 0.9}
-  moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6}
+  moist: {}  # zneutralizowany po walidacji (spec F §1): ablacja nie obniżała AUC
   degr: {N1: 1.0, N2: 1.0, Z1: 0.9, D1: 0.9, Z2: 0.8, Z3: 0.8, D2: 0.8, D3: 0.8, P: 0.8}
   soil: {}
   damage: {full: 40, zero_at: 100, min: 0.6}
@@ -62,7 +62,6 @@ species:
     rain_full: 30
     soil_moisture_min: 0.15
     factors:
-      moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6, WW: 0.85, WSW: 0.85}
       soil: {BR: 0.85, G: 0.85, OG: 0.85, MD: 0.85}
   kozlarz:
     group: kozlarze
@@ -76,7 +75,6 @@ species:
     rain_full: 40
     soil_moisture_min: 0.15
     factors:
-      moist: {BO: 0.8, BM: 0.8, BBM: 0.8, BSO: 0.9}
       soil: {B: 0.9, RD: 0.9}
   maslak:
     group: maslaki
@@ -90,7 +88,6 @@ species:
     rain_full: 40
     soil_moisture_min: 0.15
     factors:
-      moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6, WW: 0.85, WSW: 0.85}
       degr: {}
   rydz:
     group: rydze
@@ -123,7 +120,6 @@ species:
     season: {start: "07-01", end: "10-31"}
     temp: [6, 12, 20, 26]
     factors:
-      moist: {BO: 0.8, BM: 0.8, BBM: 0.8, BSO: 0.9}
       soil: {B: 0.9, RD: 0.9}
   kozlarz_grabowy:
     group: kozlarze
@@ -198,7 +194,6 @@ species:
     season: {start: "08-01", end: "10-31"}
     temp: [4, 10, 18, 24]
     factors:
-      moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6, WW: 0.85, WSW: 0.85}
       degr: {}
   rydz_swierkowy:
     group: rydze
