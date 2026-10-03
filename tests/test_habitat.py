@@ -1,18 +1,23 @@
+import dataclasses
+
 import pandas as pd
 import pytest
 
-from forecast.species import load_species
+from forecast.species import Ramp, load_species
 from pipeline.habitat import (
     HABITAT_FACTORS,
+    MOD_FLOOR,
     SHARE_WEIGHT,
     Stand,
     age_factor,
     habitat_components,
     habitat_factor,
+    factor_value,
     habitat_score,
     normalize_habitat,
     normalize_species_code,
     partner_score,
+    soil_group,
     stand_from_row,
 )
 
@@ -148,7 +153,7 @@ def test_codes_without_equivalent_are_other_habitat(code):
 def test_components_keys_and_values():
     st = Stand("SO", (), 25, "BMW")
     c = habitat_components(st, S["borowik"])
-    assert set(c) == set(HABITAT_FACTORS) == {"partner", "habitat", "age"}
+    assert set(c) == set(HABITAT_FACTORS) and {"partner", "habitat", "age"} <= set(c)
     assert c["habitat"] == pytest.approx(0.6)  # BMW = adjacent dla borowika
     assert c["age"] == 0.0  # 25 < age_min 30
 
@@ -179,3 +184,72 @@ def test_neutral_partner():
 def test_stand_from_row_normalizes_nan_ages():
     st = stand_from_row("SO", ["BRZ"], float("nan"), "BSW", [("BRZ", "2", pd.NA)])
     assert st == Stand("SO", ("BRZ",), None, "BSW", (("BRZ", "2", None),))
+
+
+# --- modyfikatory siedliska (spec F) ---
+
+FACT = {
+    "veg": {"ZAD": 0.7, "ZIEL": 0.8},
+    "moist": {"BO": 0.4},
+    "degr": {"Z1": 0.9},
+    "soil": {"BR": 0.85},
+    "damage": Ramp(40, 100, 0.6),
+    "density": ((0.4, 0.8), (0.9, 1.0), (1.0, 0.9)),
+}
+KURKA = dataclasses.replace(S["kurka"], factors=FACT)
+BASE = dict(sp_main="SO", sp_admix=(), age=60, hab="BSW")
+
+
+def st(**kw):
+    return Stand(**{**BASE, **kw})
+
+
+def test_old_stand_unchanged():
+    for sp in S.values():
+        assert habitat_score(Stand("SO", (), 80, "BSW"), sp) == \
+            partner_score(Stand("SO", (), 80, "BSW"), sp) * habitat_factor("BSW", sp)
+    assert habitat_score(st(), KURKA) == 1.0
+
+
+def test_veg_factor_from_table():
+    assert factor_value("veg", st(veg="ZAD"), KURKA) == 0.7
+    assert factor_value("veg", st(veg="XYZ"), KURKA) == 1.0
+    assert factor_value("veg", st(), KURKA) == 1.0
+
+
+def test_soil_group():
+    assert [soil_group(c) for c in ("BRk", "RDb", "Bgw", "OGw", "MDbr", "Gms", "Pw", None, "")] == \
+        ["BR", "RD", "B", "OG", "MD", "G", "P", None, None]
+    assert factor_value("soil", st(soil="BRk"), KURKA) == 0.85
+
+
+def test_damage_ramp():
+    vals = [factor_value("damage", st(damage=d), KURKA) for d in (40, 70, 100, 120)]
+    assert vals == pytest.approx([1.0, 0.8, 0.6, 0.6])
+
+
+def test_density_bands():
+    vals = [factor_value("density", st(density=d), KURKA) for d in (0.4, 0.6, 1.0, 1.2)]
+    assert vals == [0.8, 1.0, 0.9, 0.9]
+
+
+def test_mod_floor():
+    s = st(veg="ZAD", moist="BO", density=0.4)  # 0.7 × 0.4 × 0.8 = 0.224 -> 0.4
+    assert MOD_FLOOR == 0.4
+    assert habitat_score(s, KURKA) == pytest.approx(0.4)
+
+
+def test_neutral_factor_only_affects_that_factor():
+    s = st(veg="ZAD", moist="BO")
+    assert habitat_score(s, KURKA, neutral=frozenset({"veg"})) == pytest.approx(0.4)
+    assert habitat_score(s, KURKA, neutral=frozenset({"moist"})) == pytest.approx(0.7)
+
+
+def test_components_include_all_factors():
+    c = habitat_components(st(veg="ZAD"), KURKA)
+    assert set(c) == set(HABITAT_FACTORS) and c["veg"] == 0.7
+
+
+def test_stand_from_row_rounds_damage_and_density():
+    s = stand_from_row("SO", [], 60, "BSW", [], damage=23, density=0.94, veg=float("nan"))
+    assert (s.damage, s.density, s.veg) == (20, 0.9, None)

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from forecast.species import Species
+from forecast.species import BAND_FACTORS, FACTOR_NAMES, RAMP_FACTORS, Species
 
 # Waga udziału domieszki (kod udziału z BDL); nieznany/pusty kod -> SHARE_UNKNOWN.
 SHARE_WEIGHT = {"PJD": 0.2, "MJS": 0.3, "1": 0.5, "2": 0.7, "3": 0.7,
@@ -15,6 +15,7 @@ OTHER_HABITAT_FACTOR = 0.2
 AGE_MIN_FACTOR = 0.3
 AGE_UNKNOWN_FACTOR = 0.5
 AGE_DECLINE_YEARS = 20
+MOD_FLOOR = 0.4  # modyfikatory (spec F) nie obniżają h poniżej 40% wartości bez nich
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,13 @@ class Stand:
     hab: str | None
     # (gatunek, kod udziału, wiek|None) domieszek bez gatunku panującego
     partners: tuple = ()
+    # pola BDL dla modyfikatorów (spec F); None = brak danych -> czynnik 1.0
+    moist: str | None = None
+    degr: str | None = None
+    soil: str | None = None  # oryginalna wielkość liter (grupa gleby z wielkich liter)
+    veg: str | None = None
+    damage: int | None = None
+    density: float | None = None
 
 
 def _ascii_upper(raw: str) -> str:
@@ -86,8 +94,40 @@ def partner_score(st: Stand, sp: Species, use_age: bool = True) -> float:
     return best
 
 
-# Nazwy czynników raportowane przez walidację (pipeline.validate); kolejne specy dopisują swoje.
-HABITAT_FACTORS: tuple[str, ...] = ("partner", "habitat", "age")
+def soil_group(code: str | None) -> str | None:
+    """Grupa gleby = wiodące wielkie litery kodu BDL ("BRk" -> "BR", "Bgw" -> "B")."""
+    if not code:
+        return None
+    lead = ""
+    for c in code.strip():
+        if not c.isupper():
+            break
+        lead += c
+    return lead or None
+
+
+def factor_value(name: str, st: Stand, sp: Species) -> float:
+    """Mnożnik czynnika (spec F §4.3); brak danych lub czynnika w species.yaml -> 1.0."""
+    cfg = sp.factors.get(name)
+    value = soil_group(st.soil) if name == "soil" else getattr(st, name)
+    if cfg is None or value is None:
+        return 1.0
+    if name in RAMP_FACTORS:
+        if value <= cfg.full:
+            return 1.0
+        if value >= cfg.zero_at:
+            return cfg.min
+        return 1.0 - (1.0 - cfg.min) * (value - cfg.full) / (cfg.zero_at - cfg.full)
+    if name in BAND_FACTORS:
+        for upper, mult in cfg:
+            if value <= upper:
+                return mult
+        return cfg[-1][1] if cfg else 1.0
+    return cfg.get(value, 1.0)
+
+
+# Nazwy czynników raportowane przez walidację (pipeline.validate).
+HABITAT_FACTORS: tuple[str, ...] = ("partner", "habitat", "age", *FACTOR_NAMES)
 
 
 def habitat_components(st: Stand, sp: Species) -> dict[str, float]:
@@ -96,6 +136,7 @@ def habitat_components(st: Stand, sp: Species) -> dict[str, float]:
         "partner": partner_score(st, sp),
         "habitat": habitat_factor(st.hab, sp),
         "age": age_factor(st.age, sp),
+        **{name: factor_value(name, st, sp) for name in FACTOR_NAMES},
     }
 
 
@@ -103,15 +144,33 @@ def habitat_score(st: Stand, sp: Species, neutral: frozenset[str] = frozenset())
     """Ocena siedliska 0-1; czynniki z `neutral` liczone jako 1.0 (ablacja)."""
     partner = 1.0 if "partner" in neutral else partner_score(st, sp, use_age="age" not in neutral)
     habitat = 1.0 if "habitat" in neutral else habitat_factor(st.hab, sp)
-    return partner * habitat
+    mod = 1.0
+    for name in FACTOR_NAMES:
+        if name not in neutral:
+            mod *= factor_value(name, st, sp)
+    return partner * habitat * max(MOD_FLOOR, mod)
+
+
+def _missing(v) -> bool:
+    return v is None or (not isinstance(v, str) and pd.isna(v))
 
 
 def _int_or_none(v) -> int | None:
-    return None if v is None or pd.isna(v) else int(v)
+    return None if _missing(v) else int(v)
 
 
-def stand_from_row(sp_main, sp_admix, age, hab, partners) -> Stand:
+def _str_or_none(v) -> str | None:
+    return None if _missing(v) or not str(v).strip() else str(v).strip()
+
+
+def stand_from_row(sp_main, sp_admix, age, hab, partners, *, moist=None, degr=None, soil=None,
+                   veg=None, damage=None, density=None) -> Stand:
     """Stand z wiersza GeoDataFrame (load_stands): NaN/NA -> None, listy -> krotki.
-    Wynik jest hashowalny — build_tiles używa go jako klucza cache."""
+    Wynik jest hashowalny — build_tiles używa go jako klucza cache (stąd zaokrąglenia
+    uszkodzenia do dziesiątek i zadrzewienia do 0,1 — dane BDL i tak mają taką rozdzielczość)."""
     return Stand(sp_main, tuple(sp_admix), _int_or_none(age), hab,
-                 tuple((c, s, _int_or_none(a)) for c, s, a in partners))
+                 tuple((c, s, _int_or_none(a)) for c, s, a in partners),
+                 moist=_str_or_none(moist), degr=_str_or_none(degr), soil=_str_or_none(soil),
+                 veg=_str_or_none(veg),
+                 damage=None if _missing(damage) else int(round(float(damage), -1)),
+                 density=None if _missing(density) else round(float(density), 1))
