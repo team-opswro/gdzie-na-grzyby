@@ -8,4 +8,4 @@ test("reserveText with and without name", () => {
   assert.equal(reserveText("rezerwat"),
     "Rezerwat przyrody — zbieranie grzybów jest co do zasady zabronione.");
 });
-test("zakazy URL", () => assert.equal(ZAKAZY_URL, "https://www.bdl.lasy.gov.pl/portal/zakazy-wstepu"));
+test("zakazy URL", () => assert.equal(ZAKAZY_URL, "https://zakazywstepu.bdl.lasy.gov.pl/zakazy/"));

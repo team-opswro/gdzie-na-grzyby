@@ -16,14 +16,14 @@ function row(table, label, value) {
   table.append(tr);
 }
 
-export const ZAKAZY_URL = "https://www.bdl.lasy.gov.pl/portal/zakazy-wstepu";
+export const ZAKAZY_URL = "https://zakazywstepu.bdl.lasy.gov.pl/zakazy/";
 
 export function reserveText(rez) {
   const name = rez && rez !== "rezerwat" ? ` „${rez}”` : "";
   return `Rezerwat przyrody${name} — zbieranie grzybów jest co do zasady zabronione.`;
 }
 
-function zakazyLink() {
+export function zakazyLink() {
   const a = el("a", "Sprawdź aktualne zakazy wstępu (BDL)", "popup-zakazy");
   a.href = ZAKAZY_URL;
   a.target = "_blank";
@@ -33,11 +33,14 @@ function zakazyLink() {
   return p;
 }
 
-export function renderReserve(name) {
+export function renderReserve(name, withLink = true) {
   const n = typeof name === "string" ? name.trim() : "";
   const box = el("div", reserveText(n || "rezerwat"), "popup-score popup-reserve");
   box.style.borderLeftColor = COLORS.reserve;
-  return box;
+  if (!withLink) return box;
+  const wrap = el("div", null, "popup-reserve-wrap");
+  wrap.append(box, zakazyLink());
+  return wrap;
 }
 
 export function renderPopup(props, weather, speciesKey) {
@@ -46,18 +49,16 @@ export function renderPopup(props, weather, speciesKey) {
 
   const h = Number(props["h_" + speciesKey] ?? 0);
   if (props.rez) {
-    weather = null;
-    root.append(renderReserve(props.rez));
-  }
-  const s = weather ? score(h, weather.w) : null;
-  if (props.rez) {
-    // ramka rezerwatu pokazana wyżej, zamiast wyniku
-  } else if (s != null) {
-    const badge = el("div", `Wynik: ${s}/100 (${CLASS_LABELS[scoreClass(s)]})`, "popup-score");
-    badge.style.borderLeftColor = COLORS.classes[scoreClass(s)];
-    root.append(badge);
+    root.append(renderReserve(props.rez, false)); // link dodaje koniec popupu
   } else {
-    root.append(el("div", "Brak danych pogodowych dla tego miejsca", "popup-score popup-nodata"));
+    const s = weather ? score(h, weather.w) : null;
+    if (s != null) {
+      const badge = el("div", `Wynik: ${s}/100 (${CLASS_LABELS[scoreClass(s)]})`, "popup-score");
+      badge.style.borderLeftColor = COLORS.classes[scoreClass(s)];
+      root.append(badge);
+    } else {
+      root.append(el("div", "Brak danych pogodowych dla tego miejsca", "popup-score popup-nodata"));
+    }
   }
 
   const t = document.createElement("table");
@@ -65,7 +66,7 @@ export function renderPopup(props, weather, speciesKey) {
   row(t, "Wiek", props.age != null && props.age !== "" ? props.age + " lat" : "—");
   row(t, "Typ siedliskowy", props.hab || "—");
   row(t, "Siedlisko", pct(h / 100));
-  if (weather) {
+  if (weather && !props.rez) {
     row(t, "Opad", pct(weather.rain));
     row(t, "Temperatura", pct(weather.temp));
     row(t, "Sezon", pct(weather.season));

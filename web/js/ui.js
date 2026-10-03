@@ -61,7 +61,11 @@ export async function init() {
       if (!gps) updateRanking();
     },
   });
-  map.on("load", () => { mapReady = true; setView(map, effective, state.species, dayIdx()); });
+  map.on("load", () => {
+    mapReady = true;
+    setBasemap(map, state.basemap); // przełączenie podkładu kliknięte przed końcem ładowania stylu
+    setView(map, effective, state.species, dayIdx());
+  });
 
   function showPopup(props, lngLat) {
     popup?.remove();
@@ -169,7 +173,7 @@ export async function init() {
 
   buildSwitcher(state.basemap, (key) => {
     state.basemap = key;
-    setBasemap(map, key);
+    if (mapReady) setBasemap(map, key);
     updateAttribution(key);
     writeHash();
   });
@@ -239,7 +243,7 @@ function buildSwitcher(current, onChange) {
     b.setAttribute("role", "radio");
     b.dataset.key = key;
     b.textContent = label;
-    b.addEventListener("click", () => { select(key); onChange(key); });
+    b.addEventListener("click", () => { onChange(key); select(key); });
     return b;
   });
   const select = (key) => buttons.forEach((b) => b.setAttribute("aria-checked", String(b.dataset.key === key)));

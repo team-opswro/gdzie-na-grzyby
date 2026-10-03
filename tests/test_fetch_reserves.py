@@ -29,6 +29,20 @@ def test_clip_reserves_names_and_clipping():
     assert all(AREA.buffer(1e-9).contains(geom) for geom in g.geometry)
 
 
+def test_clip_reserves_drops_otulina():
+    fc = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    assert any("otulina" in f["properties"]["nazwa"].lower() for f in fc["features"])
+    g = clip_reserves(fc, AREA)
+    assert not any("otulin" in n.lower() for n in g["name"])
+
+
+def test_clip_reserves_only_otulina_raises():
+    fc = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    fc["features"] = [f for f in fc["features"] if "otulina" in f["properties"]["nazwa"].lower()]
+    with pytest.raises(ValueError):
+        clip_reserves(fc, AREA)
+
+
 def test_clip_reserves_empty_raises():
     with pytest.raises(ValueError):
         clip_reserves({"type": "FeatureCollection", "features": []}, AREA)

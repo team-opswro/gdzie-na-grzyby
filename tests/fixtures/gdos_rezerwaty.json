@@ -4,5 +4,7 @@
  {"type": "Feature", "id": "Rezerwaty.2", "properties": {"gid": 2, "nazwa": "Rezerwat Przykladowy Wewnatrz", "kodinspire": "PL.ZIPOP.1393.RP.2"},
   "geometry": {"type": "Polygon", "coordinates": [[[17.1, 50.2], [17.2, 50.2], [17.2, 50.3], [17.1, 50.3], [17.1, 50.2]]]}},
  {"type": "Feature", "id": "Rezerwaty.3", "properties": {"gid": 3, "nazwa": "Rezerwat Przykladowy Poza", "kodinspire": "PL.ZIPOP.1393.RP.3"},
-  "geometry": {"type": "Polygon", "coordinates": [[[18.5, 51.0], [18.6, 51.0], [18.6, 51.1], [18.5, 51.1], [18.5, 51.0]]]}}
+  "geometry": {"type": "Polygon", "coordinates": [[[18.5, 51.0], [18.6, 51.0], [18.6, 51.1], [18.5, 51.1], [18.5, 51.0]]]}},
+ {"type": "Feature", "id": "Rezerwaty.4", "properties": {"gid": 4, "nazwa": "Przykladowy Wewnatrz - Otulina", "kodinspire": "PL.ZIPOP.1393.RP.4"},
+  "geometry": {"type": "Polygon", "coordinates": [[[17.05, 50.15], [17.25, 50.15], [17.25, 50.35], [17.05, 50.35], [17.05, 50.15]]]}}
 ]}

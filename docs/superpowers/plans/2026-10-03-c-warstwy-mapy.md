@@ -17,7 +17,7 @@
 - Kolor rezerwatu `COLORS.reserve = "#757575"`, krycie `FILL_OPACITY.reserve = 0.5`; obrys rezerwatu `#6a1b9a`, 1,5 px; kreskowanie: wzór 8×8 px generowany w kodzie (bez plików graficznych).
 - **Bez etykiet tekstowych** na mapie (wymagałyby zewnętrznego serwera fontów `glyphs`); nazwa rezerwatu tylko w popupie.
 - Tekst popupu (dokładnie): `Rezerwat przyrody „<nazwa>” — zbieranie grzybów jest co do zasady zabronione.`; dla `rez == "rezerwat"`: `Rezerwat przyrody — zbieranie grzybów jest co do zasady zabronione.`
-- Link zakazów (stopka i każdy popup wydzielenia): tekst `Sprawdź aktualne zakazy wstępu (BDL)`, URL `https://www.bdl.lasy.gov.pl/portal/zakazy-wstepu`.
+- Link zakazów (stopka i każdy popup wydzielenia): tekst `Sprawdź aktualne zakazy wstępu (BDL)`, URL `https://zakazywstepu.bdl.lasy.gov.pl/zakazy/`.
 - Legenda: wpis `rezerwat — zbiór zabroniony`.
 - Podkłady, parametr hasha `b ∈ {osm, orto, topo}`, domyślny `osm` (nie zapisywany w hashu):
   - `osm`: `https://tile.openstreetmap.org/{z}/{x}/{y}.png` (bez zmian),
@@ -44,7 +44,7 @@
 
 Ograniczone czasowo rozpoznanie (maks. ~1 h), bez kodu produkcyjnego.
 
-- [ ] **Step 1:** Otwórz `https://www.bdl.lasy.gov.pl/portal/zakazy-wstepu` w przeglądarce (DevTools → Network albo skill `claude-in-chrome`), wybierz nadleśnictwo z obszaru (np. Opole), zapisz wszystkie zapytania XHR/fetch: URL, metoda, parametry, format odpowiedzi.
+- [ ] **Step 1:** Otwórz `https://zakazywstepu.bdl.lasy.gov.pl/zakazy/` w przeglądarce (DevTools → Network albo skill `claude-in-chrome`), wybierz nadleśnictwo z obszaru (np. Opole), zapisz wszystkie zapytania XHR/fetch: URL, metoda, parametry, format odpowiedzi.
 - [ ] **Step 2:** Ustal i zapisz w `docs/data/zakazy.md`: (a) czy endpoint działa bez sesji/ciasteczek (`curl`), (b) czy odpowiedź ma geometrię albo klucz (adres leśny / leśnictwo / nadleśnictwo), (c) daty obowiązywania zakazu, (d) czy regulamin BDL (`/portal/regulamin`) dopuszcza automatyczne pobieranie, (e) werdykt: **pozytywny** (opis kontraktu danych dla osobnego planu „7b”) albo **negatywny** (zostaje tylko link).
 - [ ] **Step 3: Commit**
 
@@ -292,7 +292,7 @@ test("reserveText with and without name", () => {
   assert.equal(reserveText("rezerwat"),
     "Rezerwat przyrody — zbieranie grzybów jest co do zasady zabronione.");
 });
-test("zakazy URL", () => assert.equal(ZAKAZY_URL, "https://www.bdl.lasy.gov.pl/portal/zakazy-wstepu"));
+test("zakazy URL", () => assert.equal(ZAKAZY_URL, "https://zakazywstepu.bdl.lasy.gov.pl/zakazy/"));
 ```
 
 - [ ] **Step 2: Run** `node --test web/tests/popup.test.js` — Expected: FAIL.

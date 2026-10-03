@@ -39,6 +39,8 @@ def clip_reserves(fc: dict, area) -> gpd.GeoDataFrame:
     if "nazwa" not in g.columns:
         raise ValueError("odpowiedź WFS GDOŚ nie zawiera pola 'nazwa'")
     g = g.rename(columns={"nazwa": "name"})[["name", "geometry"]]
+    # Warstwa zawiera też otuliny (strefy buforowe) — tam zbieranie jest legalne.
+    g = g[~g["name"].fillna("").str.contains("otulina", case=False)].reset_index(drop=True)
     g["geometry"] = shapely.make_valid(g.geometry.values)
     g = gpd.clip(g, area, keep_geom_type=True)
     g = g[~g.geometry.is_empty & g.geometry.notna()].reset_index(drop=True)

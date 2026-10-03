@@ -63,7 +63,7 @@ Tabela siedliska bez zmian, bez wykresu/trendu (A) i bez „Prowadź” (B).
    klucz nadleśnictwa/leśnictwa/oddziału i czy regulamin BDL pozwala na automatyczne pobieranie.
    Wynik zapisany w `docs/data/zakazy.md`.
 2. **Zawsze:** w stopce i w popupie link „Sprawdź aktualne zakazy wstępu (BDL)” →
-   `https://www.bdl.lasy.gov.pl/portal/zakazy-wstepu`.
+   `https://zakazywstepu.bdl.lasy.gov.pl/zakazy/`.
 3. **Jeśli spike pozytywny (osobny etap planu):** `forecast/run.py` pobiera zakazy przy każdym
    przebiegu do `data/live/zakazy.json` (awaria pobrania nie blokuje `pogoda.json`);
    frontend nakłada je jako warstwę GeoJSON (czerwone kreskowanie), popup pokazuje
