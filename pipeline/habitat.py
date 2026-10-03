@@ -35,11 +35,16 @@ class Stand:
     density: float | None = None
 
 
-def _ascii_upper(raw: str) -> str:
+def ascii_code(raw: str) -> str:
+    """Kod bez polskich znaków, z zachowaniem wielkości liter ("AUsł" -> "AUsl")."""
     # NFKD nie rozkłada Ł/ł, więc zamieniamy je jawnie.
-    text = raw.strip().upper().replace("Ł", "L")
+    text = raw.strip().replace("Ł", "L").replace("ł", "l")
     decomposed = unicodedata.normalize("NFKD", text)
     return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+def _ascii_upper(raw: str) -> str:
+    return ascii_code(raw.upper())
 
 
 def normalize_species_code(raw: str) -> str:

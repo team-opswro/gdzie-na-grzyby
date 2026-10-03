@@ -219,3 +219,13 @@ def test_centroid_tiles_empty(tmp_path):
     f = compute_features(gdf_from([sq(50.2, 17.2)], [Stand("OL", (), 60, "OL")]), S)
     idx = write_centroid_tiles(f, KEYS, tmp_path)
     assert idx["tiles"] == [] and sorted(p.name for p in tmp_path.iterdir()) == ["index.json"]
+
+
+def test_compute_features_passes_new_fields():
+    import dataclasses
+    from forecast.species import Ramp
+    sp = {"kurka": dataclasses.replace(S["kurka"], factors={"veg": {"ZAD": 0.7}})}
+    g = gdf_from([sq(50.2, 17.2), sq(50.3, 17.3)], [Stand("SO", (), 60, "BSW")] * 2)
+    g["veg"] = ["ZAD", None]
+    f = compute_features(g, sp)
+    assert list(f["h_kurka"]) == [70, 100]

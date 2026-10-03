@@ -113,7 +113,7 @@ def test_ingest_tables_and_stats(tmp_path):
         == [("02-99", "Testowo", "package", "2026-06-23")]
     assert con.execute("select count(*) from subarea where prefix = '02-99'").fetchone()[0] == 5
     assert con.execute("select count(*) from storey_species").fetchone()[0] == 12
-    assert con.execute("select count(*) from arod_storey").fetchone()[0] == 3
+    assert con.execute("select count(*) from arod_storey").fetchone()[0] == 4
     con.close()
     g = gpd.read_parquet(pq)
     assert list(g.columns) == ["a_i_num", "id", "prefix", "geometry"]
@@ -137,6 +137,7 @@ def test_load_stands_columns_filter_and_partners(tmp_path):
     _, db, pq, _ = run_ingest(tmp_path, tmp_path)
     g = load_stands(db, pq)
     assert list(g.columns) == ["id", "sp_main", "sp_admix", "partners", "age", "hab", "fun",
+                               "moist", "degr", "soil", "veg", "damage", "density",
                                "prefix", "geometry"]
     assert g.crs.to_epsg() == 4326
     by = g.set_index("id")
@@ -322,3 +323,29 @@ def test_api_district_without_raw_file_is_skipped(tmp_path, capsys):
                           tmp_path / "o.geojson", [{"name": "Y", "prefix": "06-20"}],
                           tmp_path / "brak")
     assert "06-20" not in stats and "06-20" in capsys.readouterr().err
+
+
+def test_load_stands_new_columns(tmp_path):
+    make_pkg(tmp_path)
+    _, db, pq, _ = run_ingest(tmp_path, tmp_path)
+    by = load_stands(db, pq).set_index("id")
+    s1 = by.loc["02-99-1-01-1-a-00"]
+    assert (s1["moist"], s1["degr"], s1["soil"], s1["veg"]) == ("WW", "Z1", "Bgw", "SZAD")
+    assert s1["damage"] == 20 and s1["density"] == pytest.approx(0.6)
+    s2 = by.loc["02-99-1-01-2-b-00"]
+    assert (s2["moist"], s2["veg"], s2["soil"]) == ("SS", "SCIO", "MRm")
+
+
+def test_density_from_drzew_before_ip(tmp_path):
+    make_pkg(tmp_path)
+    _, db, pq, _ = run_ingest(tmp_path, tmp_path)
+    assert load_stands(db, pq).set_index("id").loc["02-99-1-01-4-d-00", "density"] == pytest.approx(0.6)
+
+
+def test_blank_numbers_become_none(tmp_path):
+    make_pkg(tmp_path)
+    _, db, pq, _ = run_ingest(tmp_path, tmp_path)
+    s2 = load_stands(db, pq).set_index("id").loc["02-99-1-01-2-b-00"]
+    assert pd.isna(s2["damage"]) and pd.isna(s2["density"])
+    s5 = load_stands(db, pq).set_index("id").loc["02-99-1-01-5-f-00"]
+    assert pd.isna(s5["moist"]) and pd.isna(s5["veg"])  # brak kodu; stand_from_row -> None

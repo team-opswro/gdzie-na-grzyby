@@ -18,6 +18,8 @@ CENTROID_THRESHOLD = 40
 CENTROID_TILE = 0.5
 MINZOOM, MAXZOOM = 8, 14
 ATTRS = ["id", "cell", "sp", "age", "hab"]
+# kolumny load_stands przekazywane do Stand (modyfikatory siedliska, spec F)
+STAND_EXTRA = ("moist", "degr", "soil", "veg", "damage", "density")
 
 
 def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundary=None):
@@ -38,9 +40,12 @@ def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundar
     cache: dict = {}
     keys = list(species)
     rows = []
-    parts = gdf["partners"] if "partners" in gdf.columns else [()] * len(gdf)
-    for sp, adm, age, hab, pt in zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"], parts):
-        st = stand_from_row(sp, adm, age, hab, pt)
+    n = len(gdf)
+    parts = gdf["partners"] if "partners" in gdf.columns else [()] * n
+    extra = {c: (list(gdf[c]) if c in gdf.columns else [None] * n) for c in STAND_EXTRA}
+    for i, (sp, adm, age, hab, pt) in enumerate(
+            zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"], parts)):
+        st = stand_from_row(sp, adm, age, hab, pt, **{c: extra[c][i] for c in STAND_EXTRA})
         if st not in cache:
             cache[st] = {k: int(round(100 * habitat_score(st, species[k]))) for k in keys}
         rows.append(cache[st])
