@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+pipeline/data/raw/
+pipeline/data/build/
+node_modules/
+.superpowers/

@@ -1,0 +1,4 @@
+-r ../forecast/requirements.txt
+geopandas
+shapely
+pyogrio
