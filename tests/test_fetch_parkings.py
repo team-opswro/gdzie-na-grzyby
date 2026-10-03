@@ -80,19 +80,19 @@ def test_fetch_tile_cache_and_retry(tmp_path):
         ]
     }
     with responses.RequestsMock() as rsps:
-        rsps.add(responses.POST, fp.OVERPASS_URL, status=429)
-        rsps.add(responses.POST, fp.OVERPASS_URL, json=payload)
+        rsps.add(responses.POST, fp.OVERPASS_URLS[0], status=429)
+        rsps.add(responses.POST, fp.OVERPASS_URLS[1], json=payload)  # druga próba: serwer zapasowy
         els = fp.fetch_tile(bbox, cache_dir, sleep=fake_sleep)
         assert len(rsps.calls) == 2
         assert len(els) == 1
         assert els[0]["id"] == 10
-        assert sleeps == [30]
+        assert sleeps == [30, 5]  # backoff po 429 + pauza po pobraniu z sieci
 
         # drugi przebieg: cache hit, brak żądań
         els2 = fp.fetch_tile(bbox, cache_dir, sleep=fake_sleep)
         assert len(rsps.calls) == 2
         assert els2 == els
-        assert sleeps == [30]  # bez dodatkowych uśpień
+        assert sleeps == [30, 5]  # z cache: bez dodatkowych uśpień
 
 
 def test_main_writes_geojson(tmp_path, monkeypatch, capsys):
@@ -120,7 +120,7 @@ def test_main_writes_geojson(tmp_path, monkeypatch, capsys):
         return elements
 
     monkeypatch.setattr(fp, "fetch_tile", fake_fetch_tile)
-    tile = (49.0, 17.0, 49.5, 17.5)
+    tile = (50.0, 17.0, 50.5, 17.5)
     monkeypatch.setattr(fp, "tiles_for_bounds", lambda b: [tile])
 
     rc = fp.main([
@@ -151,3 +151,28 @@ def test_main_missing_parquet(tmp_path, capsys):
     ])
     assert rc != 0
     assert "brak" in capsys.readouterr().err.lower() or "nie" in capsys.readouterr().err.lower()
+
+
+def test_main_skips_tiles_outside_area(tmp_path, monkeypatch):
+    area_file = tmp_path / "obszar.geojson"
+    gpd.GeoDataFrame({"name": ["o"]}, geometry=[box(16.9, 49.9, 17.1, 50.1)], crs=4326).to_file(
+        area_file, driver="GeoJSON")
+    stands_file = tmp_path / "stands.parquet"
+    gpd.GeoDataFrame({"id": ["s1"]}, geometry=[box(17.0, 50.0, 17.001, 50.001)], crs=4326).to_parquet(
+        stands_file)
+    called = []
+    monkeypatch.setattr(fp, "fetch_tile", lambda bbox, *a, **k: called.append(bbox) or [])
+    monkeypatch.setattr(fp, "tiles_for_bounds", lambda b: [(50.0, 17.0, 50.5, 17.5), (52.0, 20.0, 52.5, 20.5)])
+    fp.main(["--area", str(area_file), "--parquet", str(stands_file), "--out", str(tmp_path / "p.geojson"),
+             "--cache", str(tmp_path / "c")])
+    assert called == [(50.0, 17.0, 50.5, 17.5)]
+
+
+def test_fetch_tile_falls_back_to_second_endpoint(tmp_path):
+    payload = {"elements": [{"type": "node", "id": 9, "lat": 50.0, "lon": 17.0, "tags": {}}]}
+    sleeps = []
+    with responses.RequestsMock() as rsps:
+        rsps.add(responses.POST, fp.OVERPASS_URLS[0], status=504)
+        rsps.add(responses.POST, fp.OVERPASS_URLS[1], json=payload)
+        els = fp.fetch_tile((50.0, 17.0, 50.5, 17.5), tmp_path, sleep=sleeps.append)
+    assert [e["id"] for e in els] == [9] and sleeps == [30, 5]

@@ -8,10 +8,13 @@ from pathlib import Path
 
 import geopandas as gpd
 import requests
-from shapely.geometry import Point
+from shapely.geometry import Point, box
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Główny serwer i zapasowy (przy 429/504 kolejna próba idzie do następnego).
+OVERPASS_URLS = ("https://overpass-api.de/api/interpreter",
+                 "https://overpass.kumi.systems/api/interpreter")
+OVERPASS_URL = OVERPASS_URLS[0]
 TILE_DEG = 0.5
 MAX_DIST_M = 300
 DEFAULT_OUT = DATA_DIR / "parkingi.geojson"
@@ -55,7 +58,8 @@ def query(bbox: tuple[float, float, float, float]) -> str:
 def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep) -> list[dict]:
     """Pobiera jeden kafel z Overpass lub wczytuje go z cache.
 
-    Przy 429/504 czeka 30 s i próbuje ponownie, maksymalnie 3 razy.
+    Przy 429/504/timeoucie czeka 30 s i próbuje ponownie na kolejnym serwerze (maks. 3 próby);
+    po pobraniu z sieci pauza 5 s (uprzejmość wobec Overpass), z cache bez pauzy.
     """
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -70,15 +74,22 @@ def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep
     headers = {"User-Agent": _USER_AGENT}
 
     for attempt in range(_RETRIES):
-        r = sess.post(OVERPASS_URL, data=payload, headers=headers, timeout=120)
-        if r.status_code in (429, 504):
+        url = OVERPASS_URLS[attempt % len(OVERPASS_URLS)]
+        try:
+            r = sess.post(url, data=payload, headers=headers, timeout=120)
+        except requests.Timeout:
+            r = None
+        if r is None or r.status_code in (429, 504):
             if attempt == _RETRIES - 1:
-                r.raise_for_status()
+                if r is not None:
+                    r.raise_for_status()
+                break
             sleep(_BACKOFF_SECONDS)
             continue
         r.raise_for_status()
         data = r.json()
         cache_path.write_text(json.dumps(data), encoding="utf-8")
+        sleep(_PAUSE_SECONDS)
         return data.get("elements", [])
 
     raise RuntimeError(f"Overpass nie odpowiedział po {_RETRIES} próbach")
@@ -154,14 +165,14 @@ def main(argv=None) -> int:
 
     try:
         area = gpd.read_file(args.area).to_crs(4326)
-        tiles = tiles_for_bounds(tuple(area.total_bounds))
+        shape = area.union_all()
+        tiles = [t for t in tiles_for_bounds(tuple(area.total_bounds))
+                 if box(t[1], t[0], t[3], t[2]).intersects(shape)]
         stands = gpd.read_parquet(args.parquet)
 
         session = requests.Session()
         elements = []
-        for i, tile in enumerate(tiles):
-            if i > 0:
-                time.sleep(_PAUSE_SECONDS)
+        for tile in tiles:
             elements.extend(fetch_tile(tile, args.cache, refresh=args.refresh, session=session))
 
         raw = elements_to_gdf(elements)
