@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import geopandas as gpd
 import pandas as pd
@@ -7,7 +7,9 @@ from shapely.geometry import box
 
 from forecast.species import load_species
 from pipeline.habitat import HABITAT_FACTORS
-from pipeline.validate import BG_RATIO, auc, habitat_eval, join_stands
+from forecast.model import DailySeries
+from pipeline.grid import cell_id
+from pipeline.validate import BG_RATIO, TOO_FEW, auc, habitat_eval, join_stands, weather_eval
 
 S = load_species()
 GOOD = ("SO", (), 80, "BSW", ())   # borowik/podgrzybek: h = 1
@@ -81,3 +83,66 @@ def test_factor_ablation_keys():
     f = r["habitat"]["factors"]
     assert set(f) == set(HABITAT_FACTORS)
     assert all(set(v) == {"auc", "ablation_auc"} for v in f.values())
+
+
+# --- pogoda ---
+
+PRES_DAY = date(2023, 9, 15)
+
+
+def wet_series():
+    """2023-04-10..2023-11-30; 5 mm/dzień tylko 1–8 września -> pełny opad (8×5 = 40) wyłącznie
+    w dniu PRES_DAY (dni 7–14 wstecz); temperatura i wilgotność gleby optymalne."""
+    start, end = date(2023, 4, 10), date(2023, 11, 30)
+    dates = [start + timedelta(days=k) for k in range((end - start).days + 1)]
+    precip = [5.0 if date(2023, 9, 1) <= d <= date(2023, 9, 8) else 0.0 for d in dates]
+    return DailySeries(dates=dates, precip=precip, soil_temp=[15.0] * len(dates),
+                       soil_moisture=[0.3] * len(dates))
+
+
+def obs_df(n, day=PRES_DAY, lat0=50.05):
+    return pd.DataFrame({"species": ["borowik"] * n, "gbif_id": range(n),
+                         "lat": [lat0 + 0.1 * i for i in range(n)], "lon": [18.05] * n,
+                         "date": [day] * n})
+
+
+def series_for(s):
+    return lambda cell, year: s if year == 2023 else None
+
+
+def test_weather_auc_one_when_presence_days_wet():
+    r = weather_eval("borowik", S["borowik"], obs_df(30), series_for(wet_series()))
+    assert r["n"] == 30 and r["n_skipped"] == 0
+    assert r["auc"] == 1.0
+    assert {"rain", "temp", "season"} <= set(r["components"]) and "w" not in r["components"]
+
+
+def test_weather_skips_out_of_range_dates():
+    extra = pd.DataFrame({"species": ["borowik"] * 2, "gbif_id": [100, 101], "lat": [52.05, 52.15],
+                          "lon": [18.05, 18.05], "date": [date(2021, 9, 1), date(2023, 12, 15)]})
+    r = weather_eval("borowik", S["borowik"], pd.concat([obs_df(30), extra]), series_for(wet_series()))
+    assert r["n"] == 30 and r["n_skipped"] == 2
+
+
+def test_weather_series_none_skipped():
+    s = wet_series()
+    skip_cell = cell_id(50.05, 18.05)
+    r = weather_eval("borowik", S["borowik"], obs_df(31),
+                     lambda cell, year: None if cell == skip_cell else s)
+    assert r["n"] == 30 and r["n_skipped"] == 1
+
+
+def test_weather_background_excludes_presence_days_and_is_deterministic():
+    # jedna komórka, obserwacje we wszystkie dni okna sezonu poza jednym -> tło tylko z tego dnia
+    s = wet_series()
+    days = [d for d in s.dates if date(2023, 6, 17) <= d <= date(2023, 11, 14) and d != date(2023, 8, 1)]
+    obs = pd.DataFrame({"species": "borowik", "gbif_id": range(len(days)), "lat": 50.05, "lon": 18.05,
+                        "date": days})
+    r1 = weather_eval("borowik", S["borowik"], obs, series_for(s))
+    r2 = weather_eval("borowik", S["borowik"], obs, series_for(s))
+    assert r1 == r2 and r1["n_background"] == len(days)  # każda obecność losuje jedyny wolny dzień
+
+
+def test_weather_too_few():
+    r = weather_eval("borowik", S["borowik"], obs_df(10), series_for(wet_series()))
+    assert r["status"] == TOO_FEW and r["n"] == 10
