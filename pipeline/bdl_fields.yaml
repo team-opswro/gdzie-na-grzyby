@@ -1,3 +1,4 @@
+base_url: "https://ogcapi.bdl.lasy.gov.pl"
 source: "https://ogcapi.bdl.lasy.gov.pl/collections/RDLP_Katowice_wydzielenia/items?f=json&limit=1000&offset=N&filter=adr_for LIKE '02-40%'&filter-lang=cql-text (OGC API Features BDL; pozostale RDLP: RDLP_Wroclaw_wydzielenia, RDLP_Lodz_wydzielenia, RDLP_Poznan_wydzielenia; adr_for zaczyna sie od region_cd-inspectorate_cd)"
 layer: "RDLP_Katowice_wydzielenia (pole nazwa = BDL_<region>_<nadl>_<NAZWA>_2026, np. BDL_02_40_OPOLE_2026)"
 join: null            # atrybuty drzewostanu sa w tej samej warstwie; jedno wydzielenie = jeden rekord
