@@ -133,23 +133,23 @@ export async function init() {
       btn.type = "button";
       const sc = document.createElement("span");
       sc.className = "rank-score";
-      sc.textContent = r.score;
+      sc.textContent = r.best.score;
       const name = document.createElement("span");
       name.className = "rank-name";
-      name.textContent = `${i + 1}. ${r.id}`;
+      name.textContent = `${i + 1}. ${r.best.id}`;
       const dist = document.createElement("span");
       dist.className = "rank-dist";
       dist.textContent = `${r.distanceKm.toString().replace(".", ",")} km`;
       const tr = document.createElement("span");
       tr.className = "rank-trend";
-      const t = trend(effective, r.cell, state.species, r.h, dayIdx());
+      const t = trend(effective, r.best.cell, state.species, r.best.h, dayIdx());
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
         tr.setAttribute("aria-label", trendLabel(t));
       }
       btn.append(sc, tr, name, dist);
-      btn.addEventListener("click", () => flyToRow(r));
+      btn.addEventListener("click", () => flyToRow(r.best));
       item.append(btn);
       list.append(item);
     });
