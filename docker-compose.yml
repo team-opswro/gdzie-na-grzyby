@@ -1,0 +1,21 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    expose:
+      - "80"
+    volumes:
+      - weather:/usr/share/nginx/html/data/live:ro
+
+  forecast:
+    build:
+      context: .
+      dockerfile: forecast/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - weather:/out
+
+volumes:
+  weather:

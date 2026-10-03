@@ -1,0 +1,10 @@
+.venv/
+.git/
+.superpowers/
+pipeline/data/raw/
+pipeline/data/build/
+node_modules/
+web/data/live/
+web/tests/
+**/__pycache__/
+tests/
