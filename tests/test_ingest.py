@@ -138,7 +138,7 @@ def test_load_stands_columns_filter_and_partners(tmp_path):
     g = load_stands(db, pq)
     assert list(g.columns) == ["id", "sp_main", "sp_admix", "partners", "age", "hab", "fun",
                                "moist", "degr", "soil", "veg", "damage", "density",
-                               "prefix", "geometry"]
+                               "twi_class", "exposure", "prefix", "geometry"]
     assert g.crs.to_epsg() == 4326
     by = g.set_index("id")
     assert set(by.index) == {"02-99-1-01-1-a-00", "02-99-1-01-2-b-00", "02-99-1-01-4-d-00",
@@ -349,3 +349,22 @@ def test_blank_numbers_become_none(tmp_path):
     assert pd.isna(s2["damage"]) and pd.isna(s2["density"])
     s5 = load_stands(db, pq).set_index("id").loc["02-99-1-01-5-f-00"]
     assert pd.isna(s5["moist"]) and pd.isna(s5["veg"])  # brak kodu; stand_from_row -> None
+
+
+def test_load_stands_without_terrain(tmp_path):
+    make_pkg(tmp_path)
+    _, db, pq_, _ = run_ingest(tmp_path, tmp_path)
+    g = load_stands(db, pq_, terrain_path=tmp_path / "brak.parquet")
+    assert g["twi_class"].isna().all() and g["exposure"].isna().all()
+
+
+def test_load_stands_with_terrain(tmp_path):
+    make_pkg(tmp_path)
+    _, db, pq_, _ = run_ingest(tmp_path, tmp_path)
+    t = tmp_path / "terrain.parquet"
+    pd.DataFrame({"prefix": ["02-99"], "a_i_num": [299000001], "twi": [9.1], "slope": [12.0],
+                  "aspect": [180.0], "twi_class": ["WET"], "exposure": ["S_STEEP"]}).to_parquet(t)
+    by = load_stands(db, pq_, terrain_path=t).set_index("id")
+    assert by.loc["02-99-1-01-1-a-00", "twi_class"] == "WET"
+    assert by.loc["02-99-1-01-1-a-00", "exposure"] == "S_STEEP"
+    assert pd.isna(by.loc["02-99-1-01-2-b-00", "twi_class"])

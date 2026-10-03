@@ -17,7 +17,8 @@ v/<build>/grid.json                   siatka pogodowa 0,1° (immutable)
 v/<build>/nazwy.json                  nazwy nadleśnictw i leśnictw (immutable)
 v/<build>/gatunki.json                treści i parametry gatunków (immutable)
 v/<build>/build.json                  metadane builda (informacyjnie, immutable): liczniki, `h_hist`
-                                      (liczba wydzieleń w przedziałach h 0–9 … 90–100 per gatunek)
+                                      (liczba wydzieleń w przedziałach h 0–9 … 90–100 per gatunek),
+                                      `terrain` (progi tercyli TWI, źródło NMT) gdy liczono teren
 ```
 
 `<build>` = `YYYYMMDD-HHMM` (UTC, czas publikacji) + `-` + 7 znaków hasha gita, np.
@@ -79,7 +80,8 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
   - `h_<gatunek>` — ocena siedliska 0–100 dla każdego gatunku z `gatunki.json`
     (np. `h_borowik`, `h_kurka`); wynik dnia = `round(h × w)`, gdzie `w` z `pogoda.json`;
     `h` uwzględnia partnera drzewnego i jego wiek, typ siedliskowy oraz (jako modyfikatory)
-    pokrywę runa, wilgotność, degradację, glebę, uszkodzenia i zadrzewienie z BDL;
+    pokrywę runa, wilgotność, degradację, glebę, uszkodzenia i zadrzewienie z BDL oraz położenie
+    w terenie (wilgotność topograficzna TWI, strome stoki południowe) z Copernicus DEM GLO-30;
     **brak atrybutu `h_<gatunek>` = 0** (zera nie są zapisywane, żeby zmniejszyć kafelki),
   - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione).
 - `rezerwaty` — obrysy rezerwatów przyrody (GDOŚ), atrybut `name` (opcjonalny).
@@ -180,3 +182,11 @@ schemat: `schema/pogoda.schema.json`.
   = nowy prefiks `v2/` i osobny `manifest.v2.json` (lub `v2/manifest.json`); stare `v/` i `manifest.json`
   są utrzymywane, dopóki wspierani klienci z nich korzystają.
 - `live/pogoda.json` podlega tej samej zasadzie (nowe pola dopuszczalne, zmiana znaczenia → `live/v2/`).
+
+## Źródła i licencje
+
+- Bank Danych o Lasach (BDL), PGL Lasy Państwowe — wydzielenia i opisy taksacyjne.
+- Rezerwaty przyrody: GDOŚ. Parkingi: © OpenStreetMap (ODbL).
+- Pogoda: Open-Meteo (CC BY 4.0).
+- Model terenu: Copernicus DEM GLO-30 © DLR e.V. 2010–2014 i © Airbus Defence and Space GmbH
+  2014–2018, dostarczone w ramach programu Copernicus.

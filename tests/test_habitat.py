@@ -289,3 +289,19 @@ def test_existing_species_scores_unchanged():
         got = [round(habitat_score(st, S[k]), 4)
                for k in ("borowik", "podgrzybek", "kurka", "kozlarz", "maslak")]
         assert got == want
+
+
+# --- teren (spec I) ---
+
+def test_twi_factor_kozlarz_dry():
+    st_dry = Stand("BRZ", (), 30, "BMW", twi_class="DRY")
+    assert factor_value("twi", st_dry, S["kozlarz"]) == 0.85
+    assert factor_value("twi", st_dry, S["borowik"]) == 1.0
+    assert factor_value("twi", Stand("SO", (), 60, "BSW", twi_class="WET"), S["kurka"]) == 0.85
+
+
+def test_exposure_factor_all_species():
+    st_s = Stand("SO", (), 60, "BSW", exposure="S_STEEP")
+    assert all(factor_value("exposure", st_s, sp) == 0.85 for sp in S.values())
+    assert factor_value("exposure", Stand("SO", (), 60, "BSW", exposure="OTHER"), S["kurka"]) == 1.0
+    assert factor_value("exposure", Stand("SO", (), 60, "BSW"), S["kurka"]) == 1.0

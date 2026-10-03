@@ -10,6 +10,9 @@ factors_default:
   soil: {}
   damage: {full: 40, zero_at: 100, min: 0.6}
   density: [[0.4, 0.8], [0.9, 1.0], [1.0, 0.9]]
+  # teren (spec I): klasa TWI wg tercyli obszaru i strome stoki południowe
+  twi: {}
+  exposure: {S_STEEP: 0.85, OTHER: 1.0}
 
 # Zestawy siedlisk (spec K): element listy preferred/adjacent "@nazwa" rozwija się do kodów zestawu.
 habitat_sets:
@@ -62,6 +65,7 @@ species:
     rain_full: 30
     soil_moisture_min: 0.15
     factors:
+      twi: {WET: 0.85}
       soil: {BR: 0.85, G: 0.85, OG: 0.85, MD: 0.85}
   kozlarz:
     group: kozlarze
@@ -75,6 +79,7 @@ species:
     rain_full: 40
     soil_moisture_min: 0.15
     factors:
+      twi: {DRY: 0.85}
       soil: {B: 0.9, RD: 0.9}
   maslak:
     group: maslaki
@@ -88,6 +93,7 @@ species:
     rain_full: 40
     soil_moisture_min: 0.15
     factors:
+      twi: {WET: 0.85}
       degr: {}
   rydz:
     group: rydze

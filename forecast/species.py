@@ -13,7 +13,7 @@ DEFAULT_SOIL_MOISTURE_MIN = 0.15
 DEFAULT_FROST_MIN = -2.0
 
 # Czynniki siedliska (spec F): tabele kod -> mnożnik, rampa liczbowa, przedziały liczbowe.
-TABLE_FACTORS = ("veg", "moist", "degr", "soil")
+TABLE_FACTORS = ("veg", "moist", "degr", "soil", "twi", "exposure")  # twi/exposure: spec I
 RAMP_FACTORS = ("damage",)
 BAND_FACTORS = ("density",)
 FACTOR_NAMES = TABLE_FACTORS + RAMP_FACTORS + BAND_FACTORS

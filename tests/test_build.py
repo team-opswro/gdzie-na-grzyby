@@ -155,3 +155,19 @@ def test_parkings_layer_only_when_file_exists(tmp_path):
                       now="2026-10-03T12:00:00Z", parkings_path=tmp_path / "brak.geojson")
     assert not any("parkingi:" in arg for arg in tip2.cmds[0])
     assert meta2["counts"]["parkings"] == 0
+
+
+def test_build_json_terrain_meta(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    names = tmp_path / "n.json"
+    names.write_text('{"nadl": {}, "lesn": {}}', encoding="utf-8")
+    t = tmp_path / "terrain.parquet"
+    tab = pa.table({"prefix": ["x"], "a_i_num": [1]})
+    pq.write_table(tab.replace_schema_metadata({b"twi_terciles": b"[7.5, 9.25]", b"dem": b"GLO-30"}), t)
+    meta = build.run(stands(), S, RES, tmp_path / "out", tmp_path / "b", names,
+                     tippecanoe=FakeTippecanoe(), now="x", terrain_path=t)
+    assert meta["terrain"] == {"twi_terciles": [7.5, 9.25], "dem": "GLO-30"}
+    meta2 = build.run(stands(), S, RES, tmp_path / "out2", tmp_path / "b2", names,
+                      tippecanoe=FakeTippecanoe(), now="x", terrain_path=tmp_path / "brak.parquet")
+    assert "terrain" not in meta2

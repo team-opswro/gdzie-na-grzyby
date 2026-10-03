@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import geopandas as gpd
+import pyarrow.parquet as pq
 import yaml
 
 from forecast.species import load_species
@@ -48,7 +49,8 @@ def h_histogram(feats, keys: list[str]) -> dict[str, list[int]]:
 def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
         names_path: Path, tippecanoe=subprocess.run, now: str | None = None,
         build: str | None = None,
-        parkings_path: Path | None = DATA_DIR / "parkingi.geojson") -> dict:
+        parkings_path: Path | None = DATA_DIR / "parkingi.geojson",
+        terrain_path: Path | None = DATA_DIR / "terrain.parquet") -> dict:
     """Buduje wszystkie pliki w `out`; zwraca zawartość build.json."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -99,6 +101,10 @@ def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
                    "grid_cells": len(grid["cells"]), "parkings": n_parkings},
     }
     meta["h_hist"] = h_histogram(feats, keys)
+    if terrain_path is not None and Path(terrain_path).exists():
+        tm = pq.read_schema(terrain_path).metadata or {}
+        meta["terrain"] = {"twi_terciles": json.loads(tm.get(b"twi_terciles", b"null")),
+                           "dem": tm.get(b"dem", b"").decode() or None}
     _write_json(out / "build.json", meta, indent=1)
     print(f"centroidy: {n_centroids} w {len(index['tiles'])} kafelkach, "
           f"komorki siatki: {len(grid['cells'])}")

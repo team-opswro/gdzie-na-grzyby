@@ -33,6 +33,9 @@ class Stand:
     veg: str | None = None
     damage: int | None = None
     density: float | None = None
+    # teren z NMT (spec I): klasa TWI (DRY/MID/WET) i ekspozycja (S_STEEP/OTHER)
+    twi_class: str | None = None
+    exposure: str | None = None
 
 
 def ascii_code(raw: str) -> str:
@@ -99,6 +102,10 @@ def partner_score(st: Stand, sp: Species, use_age: bool = True) -> float:
     return best
 
 
+# czynnik -> pole Stand, gdy nazwy się różnią
+FACTOR_FIELD = {"twi": "twi_class"}
+
+
 def soil_group(code: str | None) -> str | None:
     """Grupa gleby = wiodące wielkie litery kodu BDL ("BRk" -> "BR", "Bgw" -> "B")."""
     if not code:
@@ -114,7 +121,7 @@ def soil_group(code: str | None) -> str | None:
 def factor_value(name: str, st: Stand, sp: Species) -> float:
     """Mnożnik czynnika (spec F §4.3); brak danych lub czynnika w species.yaml -> 1.0."""
     cfg = sp.factors.get(name)
-    value = soil_group(st.soil) if name == "soil" else getattr(st, name)
+    value = soil_group(st.soil) if name == "soil" else getattr(st, FACTOR_FIELD.get(name, name))
     if cfg is None or value is None:
         return 1.0
     if name in RAMP_FACTORS:
@@ -169,7 +176,7 @@ def _str_or_none(v) -> str | None:
 
 
 def stand_from_row(sp_main, sp_admix, age, hab, partners, *, moist=None, degr=None, soil=None,
-                   veg=None, damage=None, density=None) -> Stand:
+                   veg=None, damage=None, density=None, twi_class=None, exposure=None) -> Stand:
     """Stand z wiersza GeoDataFrame (load_stands): NaN/NA -> None, listy -> krotki.
     Wynik jest hashowalny — build_tiles używa go jako klucza cache (stąd zaokrąglenia
     uszkodzenia do dziesiątek i zadrzewienia do 0,1 — dane BDL i tak mają taką rozdzielczość)."""
@@ -178,4 +185,5 @@ def stand_from_row(sp_main, sp_admix, age, hab, partners, *, moist=None, degr=No
                  moist=_str_or_none(moist), degr=_str_or_none(degr), soil=_str_or_none(soil),
                  veg=_str_or_none(veg),
                  damage=None if _missing(damage) else int(round(float(damage), -1)),
-                 density=None if _missing(density) else round(float(density), 1))
+                 density=None if _missing(density) else round(float(density), 1),
+                 twi_class=_str_or_none(twi_class), exposure=_str_or_none(exposure))

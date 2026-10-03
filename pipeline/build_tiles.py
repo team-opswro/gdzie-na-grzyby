@@ -19,7 +19,7 @@ CENTROID_TILE = 0.5
 MINZOOM, MAXZOOM = 8, 14
 ATTRS = ["id", "cell", "sp", "age", "hab"]
 # kolumny load_stands przekazywane do Stand (modyfikatory siedliska, spec F)
-STAND_EXTRA = ("moist", "degr", "soil", "veg", "damage", "density")
+STAND_EXTRA = ("moist", "degr", "soil", "veg", "damage", "density", "twi_class", "exposure")
 
 
 def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundary=None):
