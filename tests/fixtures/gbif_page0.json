@@ -1,0 +1,4 @@
+{"offset": 0, "limit": 300, "endOfRecords": false, "count": 4, "results": [
+ {"key": 1, "decimalLatitude": 50.2, "decimalLongitude": 18.2, "coordinateUncertaintyInMeters": 50, "year": 2023, "month": 9, "day": 14, "eventDate": "2023-09-14"},
+ {"key": 2, "decimalLatitude": 50.3, "decimalLongitude": 18.3, "coordinateUncertaintyInMeters": 150, "year": 2023, "month": 9, "day": 15, "eventDate": "2023-09-15"}
+]}
