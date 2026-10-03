@@ -9,7 +9,12 @@ from forecast.species import load_species
 from pipeline.habitat import HABITAT_FACTORS
 from forecast.model import DailySeries
 from pipeline.grid import cell_id
-from pipeline.validate import BG_RATIO, TOO_FEW, auc, habitat_eval, join_stands, weather_eval
+import json
+
+from pipeline import validate
+from pipeline.validate import (
+    BG_RATIO, DEFAULT_OUT, TOO_FEW, auc, build_report, habitat_eval, join_stands, main, render_md, weather_eval,
+)
 
 S = load_species()
 GOOD = ("SO", (), 80, "BSW", ())   # borowik/podgrzybek: h = 1
@@ -146,3 +151,80 @@ def test_weather_background_excludes_presence_days_and_is_deterministic():
 def test_weather_too_few():
     r = weather_eval("borowik", S["borowik"], obs_df(10), series_for(wet_series()))
     assert r["status"] == TOO_FEW and r["n"] == 10
+
+
+# --- raport i CLI ---
+
+def _rep(auc_val, status="ok", lift=1.5, n=40):
+    hab = {"auc": auc_val, "lift60": lift, "factors": {"habitat": {"auc": 0.6, "ablation_auc": 0.55}}}
+    return {"n_presence": n, "n_background": 800, "status": status,
+            "habitat": hab if status == "ok" else None, "weather": None}
+
+
+def test_render_md_with_baseline_delta():
+    rep = build_report({"borowik": _rep(0.65), "kurka": _rep(0.7)}, build="b1",
+                       generated_at="2026-10-03T22:00:00Z", outside=3, warnings=[])
+    base = build_report({"borowik": _rep(0.60)}, build="b0", generated_at="x", outside=0, warnings=[])
+    md = render_md(rep, base)
+    line_b = next(l for l in md.splitlines() if l.startswith("| borowik"))
+    line_k = next(l for l in md.splitlines() if l.startswith("| kurka"))
+    assert "+0.05" in line_b and "—" in line_k
+
+
+def test_render_md_too_few_and_none():
+    rep = build_report({"rydz": _rep(None, status=TOO_FEW, n=12), "kurka": _rep(0.7, lift=None)},
+                       build=None, generated_at="x", outside=0, warnings=["xyz: brak"])
+    md = render_md(rep)
+    assert "za mało danych (n=12)" in md
+    line_k = next(l for l in md.splitlines() if l.startswith("| kurka"))
+    assert "—" in line_k and "xyz: brak" in md
+
+
+def _fake_env(monkeypatch, calls):
+    st = stands_gdf([GOOD] * 40 + [BAD] * 40)
+    pts = [(50.005, 17.005 + 0.01 * i) for i in range(80)]  # środki kwadratów
+    pres = pd.DataFrame({"species": "borowik", "gbif_id": range(40), "lat": [p[0] for p in pts[:40]],
+                         "lon": [p[1] for p in pts[:40]], "date": [PRES_DAY] * 40})
+    bg = pd.DataFrame({"species": "*", "gbif_id": range(1000, 1080), "lat": [p[0] for p in pts],
+                       "lon": [p[1] for p in pts], "date": [PRES_DAY] * 80})
+    monkeypatch.setattr(validate, "load_stands", lambda db, parquet: st)
+    monkeypatch.setattr(validate, "load_observations", lambda *a, **k: (pres, bg, []))
+    monkeypatch.setattr(validate, "load_area", lambda path: box(16, 49, 20, 52))
+
+    def fy(cell, year, cache, **k):
+        calls.append((cell, year))
+        return wet_series()
+    monkeypatch.setattr(validate, "fetch_year", fy)
+
+
+def test_main_end_to_end_offline(tmp_path, monkeypatch):
+    calls = []
+    _fake_env(monkeypatch, calls)
+    assert main(["--out", str(tmp_path), "--species", "borowik"]) == 0
+    rep = json.loads((tmp_path / "walidacja.json").read_text(encoding="utf-8"))
+    assert set(rep["species"]) == {"borowik"}
+    assert rep["species"]["borowik"]["habitat"]["auc"] == 1.0
+    assert rep["species"]["borowik"]["weather"]["n"] == 4  # 40 punktów w 4 komórkach 0,1°, ten sam dzień
+    assert (tmp_path / "walidacja.md").exists()
+    assert len(set(calls)) == len(calls)  # seria (komórka, rok) pobierana raz
+
+
+def test_main_deterministic(tmp_path, monkeypatch):
+    _fake_env(monkeypatch, [])
+    main(["--out", str(tmp_path / "a"), "--species", "borowik"])
+    main(["--out", str(tmp_path / "b"), "--species", "borowik"])
+    a, b = (json.loads((tmp_path / d / "walidacja.json").read_text()) for d in ("a", "b"))
+    a.pop("generated_at"), b.pop("generated_at")
+    assert a == b
+
+
+def test_main_no_weather(tmp_path, monkeypatch):
+    calls = []
+    _fake_env(monkeypatch, calls)
+    main(["--out", str(tmp_path), "--species", "borowik", "--no-weather"])
+    rep = json.loads((tmp_path / "walidacja.json").read_text())
+    assert calls == [] and rep["species"]["borowik"]["weather"] is None
+
+
+def test_default_out_not_in_publish_dir():
+    assert DEFAULT_OUT.name == "walidacja" and "out" not in DEFAULT_OUT.parts[-2:]
