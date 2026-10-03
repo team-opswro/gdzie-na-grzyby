@@ -47,6 +47,7 @@ test("availableDays drops past", () =>
 test("availableDays on fixture days keeps all when today is first day", () =>
   assert.equal(availableDays(P.days, P.days[0]).length, P.days.length));
 
+const NZ = { nadl: { "02-04": "Brzeg" }, lesn: {} };
 function mockFetch(map) {
   return async (url) => {
     const r = map[url];
@@ -56,9 +57,9 @@ function mockFetch(map) {
 }
 test("loadData ok", async () => {
   const c = { species: [], rows: [] };
-  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": P });
+  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": P, "data/nazwy.json": NZ });
   const d = await loadData();
-  assert.deepEqual(d, { pogoda: P, centroids: c });
+  assert.deepEqual(d, { pogoda: P, centroids: c, nazwy: NZ });
 });
 test("loadData pogoda failure → null; non-OK → null", async () => {
   const c = { species: [], rows: [] };
@@ -69,13 +70,13 @@ test("loadData pogoda failure → null; non-OK → null", async () => {
 });
 test("loadData centroids failure → centroids null, pogoda kept", async () => {
   globalThis.fetch = mockFetch({ "data/centroidy.json": "throw", "data/live/pogoda.json": P });
-  assert.deepEqual(await loadData(), { pogoda: P, centroids: null });
+  assert.deepEqual(await loadData(), { pogoda: P, centroids: null, nazwy: null });
   globalThis.fetch = mockFetch({ "data/centroidy.json": 500, "data/live/pogoda.json": P });
-  assert.deepEqual(await loadData(), { pogoda: P, centroids: null });
+  assert.deepEqual(await loadData(), { pogoda: P, centroids: null, nazwy: null });
 });
 test("loadData both fail → both null", async () => {
   globalThis.fetch = mockFetch({ "data/centroidy.json": "throw", "data/live/pogoda.json": "throw" });
-  assert.deepEqual(await loadData(), { pogoda: null, centroids: null });
+  assert.deepEqual(await loadData(), { pogoda: null, centroids: null, nazwy: null });
 });
 test("bannerText states", () => {
   const now = new Date("2026-10-03T12:00:00+02:00");
@@ -93,4 +94,11 @@ test("weatherFor: partially missing wx values -> wx null", () => {
   const p = { days: ["d"], cells: { c: { borowik: { w: [0.5], rain: [1], temp: [1], season: [1], lim: [null] } } },
     wx: { c: { rain_mm: [3], soil_t: [null], soil_m: [0.2] } } };
   assert.equal(weatherFor(p, "c", "borowik", 0).wx, null);
+});
+test("loadData nazwy failure → nazwy null, rest unchanged", async () => {
+  const c = { species: [], rows: [] };
+  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": P, "data/nazwy.json": "throw" });
+  assert.deepEqual(await loadData(), { pogoda: P, centroids: c, nazwy: null });
+  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": P, "data/nazwy.json": 500 });
+  assert.deepEqual(await loadData(), { pogoda: P, centroids: c, nazwy: null });
 });

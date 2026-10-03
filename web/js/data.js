@@ -56,15 +56,17 @@ export function bannerText(pogoda, availableDaysCount, now = new Date()) {
 
 // Pogoda i centroidy ładują się niezależnie: awaria jednego nie wyrzuca drugiego.
 export async function loadData(base = "data/") {
-  const [c, p] = await Promise.allSettled([
+  const [c, p, n] = await Promise.allSettled([
     fetch(base + "centroidy.json").then((r) => {
       if (!r.ok) throw new Error(`centroidy.json: HTTP ${r.status}`);
       return r.json();
     }),
     fetch(base + "live/pogoda.json").then((r) => (r.ok ? r.json() : null)),
+    fetch(base + "nazwy.json").then((r) => (r.ok ? r.json() : null)),
   ]);
   return {
     pogoda: p.status === "fulfilled" ? p.value : null,
     centroids: c.status === "fulfilled" ? c.value : null,
+    nazwy: n.status === "fulfilled" ? n.value : null,
   };
 }
