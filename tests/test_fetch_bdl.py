@@ -58,3 +58,18 @@ def test_load_bdl_geojson_reprojects_and_dedupes(tmp_path):
 def test_load_bdl_rejects_non_forest_type(tmp_path):
     _frame(ROWS[3:4]).to_file(tmp_path / "a.gpkg", driver="GPKG")
     assert len(load_bdl(tmp_path, CFG)) == 0
+
+
+def test_load_bdl_reads_forest_function(tmp_path):
+    rows = [dict(ROWS[0], forest_fun="REZ CZ"), dict(ROWS[2], forest_fun=None)]
+    _frame(rows).to_file(tmp_path / "a.gpkg", driver="GPKG")
+    cfg = {"fields": {**FIELDS, "fun": "forest_fun"}, "forest_filter": FILTER}
+    g = load_bdl(tmp_path, cfg).set_index("sp_main")
+    assert g.loc["SW", "fun"] == "REZ CZ"
+    assert g.loc["DB", "fun"] is None
+
+
+def test_load_bdl_without_fun_field(tmp_path):
+    _frame(ROWS[:1]).to_file(tmp_path / "a.gpkg", driver="GPKG")
+    g = load_bdl(tmp_path, CFG)
+    assert "fun" in g.columns and g["fun"].isna().all()

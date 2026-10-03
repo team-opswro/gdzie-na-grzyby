@@ -21,18 +21,25 @@ DEFAULT_BASE_URL = "https://ogcapi.bdl.lasy.gov.pl"
 PAGE_LIMIT = 1000
 TIMEOUT = 120
 RETRIES = 4
-OUT_COLUMNS = ["id", "sp_main", "sp_admix", "age", "hab"]
+OUT_COLUMNS = ["id", "sp_main", "sp_admix", "age", "hab", "fun"]
 
 
 def _none_if_na(value):
     return None if pd.isna(value) else value
 
 
+def _fun_value(value):
+    if pd.isna(value):
+        return None
+    value = str(value).strip()
+    return value or None
+
+
 def load_bdl(src: Path, fields: dict) -> gpd.GeoDataFrame:
     """Wczytuje wszystkie *.geojson i *.gpkg z `src`, zostawia same drzewostany.
 
     `fields` to konfiguracja z bdl_fields.yaml (klucze `fields` i `forest_filter`).
-    Wynik: id, sp_main, sp_admix (tuple), age (Int64), hab, geometry; EPSG:4326.
+    Wynik: id, sp_main, sp_admix (tuple), age (Int64), hab, fun (forest_fun lub None), geometry; EPSG:4326.
     """
     cols = fields["fields"]
     flt = fields.get("forest_filter") or {}
@@ -65,6 +72,11 @@ def load_bdl(src: Path, fields: dict) -> gpd.GeoDataFrame:
             "age": pd.array(pd.to_numeric(df[cols["age"]], errors="coerce"), dtype="Int64"),
             "hab": df[cols["hab"]].map(
                 lambda v: normalize_habitat(None if pd.isna(v) else str(v))
+            ),
+            "fun": pd.Series(
+                [_fun_value(v) for v in df[cols["fun"]]] if cols.get("fun")
+                else [None] * len(df),
+                index=df.index, dtype=object,
             ),
         },
         geometry=df.geometry.values,

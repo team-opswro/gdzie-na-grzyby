@@ -6,12 +6,14 @@ import sys
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 import shapely
 import yaml
 
 from forecast.species import Species, load_species
 from pipeline.fetch_bdl import FIELDS_YAML, load_bdl
 from pipeline.grid import build_grid, cell_id
+from pipeline.fetch_reserves import RESERVES_PATH
 from pipeline.habitat import Stand, habitat_score
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -49,9 +51,48 @@ def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundar
     return gdf
 
 
+def mark_reserves(feats: gpd.GeoDataFrame, reserves) -> gpd.GeoDataFrame:
+    """Kopia z kolumną `rez`: nazwa rezerwatu (punkt reprezentatywny w poligonie GDOŚ),
+    "rezerwat" (forest_fun zaczyna się od REZ) albo None."""
+    out = feats.copy()
+    rez = pd.Series([None] * len(out), index=out.index, dtype=object)
+    if reserves is not None and len(reserves) and len(out):
+        pts = gpd.GeoDataFrame({"_i": range(len(out))},
+                               geometry=gpd.points_from_xy(out["lon"], out["lat"]), crs=4326)
+        res = reserves[["name", "geometry"]].to_crs(4326).reset_index(drop=True)
+        res["_r"] = range(len(res))
+        j = gpd.sjoin(pts, res, predicate="within", how="inner")
+        j = j.sort_values(["_i", "_r"]).drop_duplicates("_i")
+        for i, name in zip(j["_i"], j["name"]):
+            rez.iloc[i] = name
+    if "fun" in out.columns:
+        flag = out["fun"].map(lambda v: isinstance(v, str) and v.startswith("REZ"))
+        rez = rez.where(rez.notna() | ~flag, "rezerwat")
+    out["rez"] = rez.astype(object)
+    return out
+
+
+def write_reserves_seq(reserves: gpd.GeoDataFrame, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        for name, geom in zip(reserves["name"], reserves.geometry):
+            fh.write(json.dumps({"type": "Feature", "properties": {"name": name},
+                                 "geometry": json.loads(shapely.to_geojson(geom))},
+                                ensure_ascii=False) + "\n")
+
+
+def tippecanoe_cmd(out: Path, layers: dict[str, Path]) -> list[str]:
+    cmd = ["tippecanoe", "-o", str(out / "lasy.pmtiles")]
+    for name, seq in layers.items():
+        cmd += ["-L", f"{name}:{seq}"]
+    return cmd + [f"-Z{MINZOOM}", f"-z{MAXZOOM}", "--drop-smallest-as-needed", "--force"]
+
+
 def write_centroids(gdf, keys: list[str], path: Path, threshold: int = CENTROID_THRESHOLD) -> int:
     cols = [f"h_{k}" for k in keys]
     sel = gdf[gdf[cols].max(axis=1) >= threshold]
+    if "rez" in sel.columns:
+        sel = sel[sel["rez"].isna()]
     rows = [
         [i, round(float(la), 5), round(float(lo), 5), c, *[int(v) for v in hs]]
         for i, la, lo, c, hs in zip(sel["id"], sel["lat"], sel["lon"], sel["cell"],
@@ -73,6 +114,9 @@ def write_geojsonseq(gdf, keys: list[str], path: Path) -> None:
                      "hab": rec.hab}
             for c in hcols:
                 props[c] = int(getattr(rec, c))
+            rez = getattr(rec, "rez", None)
+            if isinstance(rez, str) and rez:
+                props["rez"] = rez
             props = {k: v for k, v in props.items() if v is not None}
             fh.write(json.dumps({"type": "Feature", "properties": props,
                                  "geometry": json.loads(shapely.to_geojson(geom))},
@@ -85,7 +129,12 @@ def main(argv=None) -> int:
     ap.add_argument("--boundary", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--build-dir", type=Path, default=ROOT / "pipeline" / "data" / "build")
+    ap.add_argument("--reserves", type=Path, default=RESERVES_PATH)
     args = ap.parse_args(argv)
+    if not args.reserves.exists():
+        print(f"brak pliku rezerwatów {args.reserves}: uruchom python -m pipeline.fetch_reserves",
+              file=sys.stderr)
+        return 1
 
     cfg = yaml.safe_load(FIELDS_YAML.read_text(encoding="utf-8"))
     species = load_species()
@@ -96,13 +145,16 @@ def main(argv=None) -> int:
     boundary = gpd.read_file(args.boundary).to_crs(4326)
     feats = compute_features(gdf, species, boundary)
     print(f"po przycieciu: {len(feats)}")
+    reserves = gpd.read_file(args.reserves).to_crs(4326)
+    feats = mark_reserves(feats, reserves)
+    print(f"wydzielenia w rezerwatach: {int(feats['rez'].notna().sum())}")
 
     args.out.mkdir(parents=True, exist_ok=True)
     seq = args.build_dir / "lasy.geojsonseq"
     write_geojsonseq(feats, keys, seq)
-    subprocess.run(["tippecanoe", "-o", str(args.out / "lasy.pmtiles"), "-l", "lasy",
-                    f"-Z{MINZOOM}", f"-z{MAXZOOM}", "--drop-smallest-as-needed",
-                    "--force", str(seq)], check=True)
+    rseq = args.build_dir / "rezerwaty.geojsonseq"
+    write_reserves_seq(reserves, rseq)
+    subprocess.run(tippecanoe_cmd(args.out, {"lasy": seq, "rezerwaty": rseq}), check=True)
 
     n = write_centroids(feats, keys, args.out / "centroidy.json")
     grid = build_grid(zip(feats["lat"], feats["lon"]))
