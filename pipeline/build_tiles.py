@@ -12,7 +12,7 @@ import shapely
 
 from forecast.species import Species
 from pipeline.grid import cell_id
-from pipeline.habitat import Stand, habitat_score
+from pipeline.habitat import habitat_score, stand_from_row
 
 CENTROID_THRESHOLD = 40
 CENTROID_TILE = 0.5
@@ -35,19 +35,15 @@ def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundar
     gdf["lon"] = pts.x.values
     gdf["cell"] = [cell_id(la, lo) for la, lo in zip(gdf["lat"], gdf["lon"])]
 
-    def _age(a):
-        return None if a is None or pd.isna(a) else int(a)
-
-    cache: dict[tuple, dict[str, int]] = {}
+    cache: dict = {}
     keys = list(species)
     rows = []
     parts = gdf["partners"] if "partners" in gdf.columns else [()] * len(gdf)
     for sp, adm, age, hab, pt in zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"], parts):
-        key = (sp, tuple(adm), _age(age), hab, tuple((c, s_, _age(a)) for c, s_, a in pt))
-        if key not in cache:
-            st = Stand(*key)
-            cache[key] = {k: int(round(100 * habitat_score(st, species[k]))) for k in keys}
-        rows.append(cache[key])
+        st = stand_from_row(sp, adm, age, hab, pt)
+        if st not in cache:
+            cache[st] = {k: int(round(100 * habitat_score(st, species[k]))) for k in keys}
+        rows.append(cache[st])
     for k in keys:
         gdf[f"h_{k}"] = [r[k] for r in rows]
     return gdf

@@ -1,15 +1,19 @@
+import pandas as pd
 import pytest
 
 from forecast.species import load_species
 from pipeline.habitat import (
+    HABITAT_FACTORS,
     SHARE_WEIGHT,
     Stand,
     age_factor,
+    habitat_components,
     habitat_factor,
     habitat_score,
     normalize_habitat,
     normalize_species_code,
     partner_score,
+    stand_from_row,
 )
 
 S = load_species()
@@ -137,3 +141,41 @@ def test_beech_on_upland_site_scores_like_lowland_for_borowik():
 def test_codes_without_equivalent_are_other_habitat(code):
     for sp in S.values():
         assert habitat_factor(code, sp) == 0.2
+
+
+# --- rejestr czynników (walidacja, spec H §5) ---
+
+def test_components_keys_and_values():
+    st = Stand("SO", (), 25, "BMW")
+    c = habitat_components(st, S["borowik"])
+    assert set(c) == set(HABITAT_FACTORS) == {"partner", "habitat", "age"}
+    assert c["habitat"] == pytest.approx(0.6)  # BMW = adjacent dla borowika
+    assert c["age"] == 0.0  # 25 < age_min 30
+
+
+def test_score_unchanged_without_neutral():
+    st = Stand("SO", ("BRZ",), 60, "BSW", (("BRZ", "2", 40),))
+    for sp in S.values():
+        assert habitat_score(st, sp) == partner_score(st, sp) * habitat_factor(st.hab, sp)
+
+
+def test_neutral_habitat_and_age():
+    st = Stand("SO", (), 25, "BMW")
+    assert habitat_score(st, S["borowik"], neutral=frozenset({"habitat"})) == 0.0
+    assert habitat_score(st, S["borowik"], neutral=frozenset({"age"})) == pytest.approx(0.6)
+    assert habitat_score(st, S["borowik"], neutral=frozenset({"age", "habitat"})) == 1.0
+
+
+def test_neutral_age_admixture_uses_share_weight():
+    st = Stand("BRZ", ("SO",), 60, "BSW", (("SO", "2", 10),))
+    assert habitat_score(st, S["borowik"], neutral=frozenset({"age"})) == pytest.approx(0.7)
+
+
+def test_neutral_partner():
+    st = Stand("OL", (), 60, "BSW")
+    assert habitat_score(st, S["borowik"], neutral=frozenset({"partner"})) == 1.0
+
+
+def test_stand_from_row_normalizes_nan_ages():
+    st = stand_from_row("SO", ["BRZ"], float("nan"), "BSW", [("BRZ", "2", pd.NA)])
+    assert st == Stand("SO", ("BRZ",), None, "BSW", (("BRZ", "2", None),))

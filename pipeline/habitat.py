@@ -2,6 +2,8 @@
 import unicodedata
 from dataclasses import dataclass
 
+import pandas as pd
+
 from forecast.species import Species
 
 # Waga udziału domieszki (kod udziału z BDL); nieznany/pusty kod -> SHARE_UNKNOWN.
@@ -68,19 +70,48 @@ def habitat_factor(hab: str | None, sp: Species) -> float:
     return OTHER_HABITAT_FACTOR
 
 
-def partner_score(st: Stand, sp: Species) -> float:
-    """Ocena partnera: max po gatunku panującym i domieszkach (spec 4.1)."""
+def partner_score(st: Stand, sp: Species, use_age: bool = True) -> float:
+    """Ocena partnera: max po gatunku panującym i domieszkach (spec 4.1).
+    use_age=False: wiek nie gra roli (ablacja czynnika "age" w walidacji)."""
+    af = age_factor if use_age else (lambda _age, _sp: 1.0)
     best = 0.0
     if st.sp_main in sp.partners:
-        best = age_factor(st.age, sp)
+        best = af(st.age, sp)
     # Legacy: sp_admix bez partners -> kod udziału "" (nieznany, 0.3), wiek None.
     partners = st.partners or tuple((c, "", None) for c in st.sp_admix)
     for code, share, age in partners:
         if code in sp.partners:
             w = SHARE_WEIGHT.get((share or "").strip().upper(), SHARE_UNKNOWN)
-            best = max(best, w * age_factor(age, sp))
+            best = max(best, w * af(age, sp))
     return best
 
 
-def habitat_score(st: Stand, sp: Species) -> float:
-    return partner_score(st, sp) * habitat_factor(st.hab, sp)
+# Nazwy czynników raportowane przez walidację (pipeline.validate); kolejne specy dopisują swoje.
+HABITAT_FACTORS: tuple[str, ...] = ("partner", "habitat", "age")
+
+
+def habitat_components(st: Stand, sp: Species) -> dict[str, float]:
+    """Wartości czynników siedliska; "age" to wiek gatunku panującego (diagnostycznie)."""
+    return {
+        "partner": partner_score(st, sp),
+        "habitat": habitat_factor(st.hab, sp),
+        "age": age_factor(st.age, sp),
+    }
+
+
+def habitat_score(st: Stand, sp: Species, neutral: frozenset[str] = frozenset()) -> float:
+    """Ocena siedliska 0-1; czynniki z `neutral` liczone jako 1.0 (ablacja)."""
+    partner = 1.0 if "partner" in neutral else partner_score(st, sp, use_age="age" not in neutral)
+    habitat = 1.0 if "habitat" in neutral else habitat_factor(st.hab, sp)
+    return partner * habitat
+
+
+def _int_or_none(v) -> int | None:
+    return None if v is None or pd.isna(v) else int(v)
+
+
+def stand_from_row(sp_main, sp_admix, age, hab, partners) -> Stand:
+    """Stand z wiersza GeoDataFrame (load_stands): NaN/NA -> None, listy -> krotki.
+    Wynik jest hashowalny — build_tiles używa go jako klucza cache."""
+    return Stand(sp_main, tuple(sp_admix), _int_or_none(age), hab,
+                 tuple((c, s, _int_or_none(a)) for c, s, a in partners))
