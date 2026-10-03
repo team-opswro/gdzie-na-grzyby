@@ -174,7 +174,7 @@ def test_high_et0_lowers_rain():
     s.et0 = None
     without_et0 = rain_factor(s, i, B)
     assert with_et0 < without_et0
-    assert ET_ALPHA == 0.3
+    assert ET_ALPHA == 0.15
 
 
 def test_deep_moisture_lifts_penalty():
