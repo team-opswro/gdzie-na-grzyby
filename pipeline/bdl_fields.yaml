@@ -1,0 +1,9 @@
+source: "https://ogcapi.bdl.lasy.gov.pl/collections/RDLP_Katowice_wydzielenia/items?f=json&limit=1000&offset=N&filter=adr_for LIKE '02-40%'&filter-lang=cql-text (OGC API Features BDL; pozostale RDLP: RDLP_Wroclaw_wydzielenia, RDLP_Lodz_wydzielenia, RDLP_Poznan_wydzielenia; adr_for zaczyna sie od region_cd-inspectorate_cd)"
+layer: "RDLP_Katowice_wydzielenia (pole nazwa = BDL_<region>_<nadl>_<NAZWA>_2026, np. BDL_02_40_OPOLE_2026)"
+join: null            # atrybuty drzewostanu sa w tej samej warstwie; jedno wydzielenie = jeden rekord
+fields: {id: a_i_num, sp_main: species_cd, sp_admix: null, age: spec_age, hab: site_type}
+# dodatkowo przydatne: part_cd (udzial gatunku panujacego w dziesiatych, 10 = czysty), sub_area (ha), stand_stru, adr_for (adres lesny)
+forest_filter: {column: area_type, values: ["D-STAN"]}   # dodatkowo wymagac species_cd != null; stand_stru w DRZEW/KO/KDO/"2 PIĘT"
+districts: [Prudnik, Namysłów, Tułowice, Kluczbork, Opole, Strzelce Opolskie, Brzeg, Prószków, Rudy Raciborskie, Olesno, Kup, Kędzierzyn, Turawa, Zawadzkie, Wieluń, Lubliniec, Rudziniec, Kłobuck]
+# Wieluń = RDLP Łódź (region 06, nadl. 20); Kłobuck/Lubliniec/Rudziniec częściowo poza woj. Pozostałe = RDLP Katowice (region 02).
+# Pominiete slivery granicy (<1.1 km2 w woj.): Syców, Henryków, Oława, Bardo Śląskie, Przedborów, Herby, Oleśnica Śląska.
