@@ -76,7 +76,7 @@ async function cacheFirst(request) {
   }
 
   await trimCache(cache, isVersioned ? core.LIMITS.data : core.SHELL_FILES.length + 100);
-  cache.put(key, resp.clone()).catch(() => {});
+  await cache.put(key, resp.clone()).catch(() => {});
   return resp;
 }
 
