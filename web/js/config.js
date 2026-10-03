@@ -23,33 +23,53 @@ export function normalizeBase(s) {
   return t.endsWith("/") ? t : t + "/";
 }
 
-async function getJson(fetcher, url) {
-  const r = await fetcher(url, { cache: "no-cache" });
-  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-  return r.json();
+export const FETCH_TIMEOUT_MS = 4000;
+
+// fetch JSON z limitem czasu: zawieszony serwer (bucket) nie może zablokować strony.
+// cache: "no-cache" (domyślnie) dla plików zmiennych; pliki wersji (immutable) — "default".
+export async function getJson(fetcher, url, timeoutMs = FETCH_TIMEOUT_MS, cache = "no-cache") {
+  const ctl = new AbortController();
+  let timer;
+  const timeout = new Promise((_, rej) => {
+    timer = setTimeout(() => { ctl.abort(); rej(new Error(`${url}: timeout`)); }, timeoutMs);
+  });
+  const load = async () => {
+    const r = await fetcher(url, { cache, signal: ctl.signal });
+    if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+    return r.json();
+  };
+  try {
+    return await Promise.race([load(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-export async function loadConfig(fetcher = globalThis.fetch) {
+export async function loadConfig(fetcher = globalThis.fetch, timeoutMs = FETCH_TIMEOUT_MS) {
   try {
-    const c = await getJson(fetcher, "config.json");
+    const c = await getJson(fetcher, "config.json", timeoutMs);
     return { dataBase: normalizeBase(c?.dataBase) };
   } catch {
     return { dataBase: LOCAL_BASE };
   }
 }
 
-// Brak (lub zły) manifest → LOCAL_MANIFEST: pliki leżą wprost w dataBase (układ pipeline/data/out).
-export async function loadManifest(dataBase, fetcher = globalThis.fetch) {
+export const isLocalBase = (dataBase) => dataBase === LOCAL_BASE;
+
+// Brak (lub zły / zawieszony) manifest:
+// - dataBase "data/" → LOCAL_MANIFEST: pliki wprost w data/ (układ pipeline/data/out),
+// - inny dataBase → manifest bez plików z missing: true (UI pokazuje baner; prognoza z live/ nadal działa).
+export async function loadManifest(dataBase, fetcher = globalThis.fetch, timeoutMs = FETCH_TIMEOUT_MS) {
   try {
-    const m = await getJson(fetcher, dataBase + "manifest.json");
+    const m = await getJson(fetcher, dataBase + "manifest.json", timeoutMs);
     if (m && typeof m.files === "object" && m.files !== null && typeof m.base === "string") return m;
     throw new Error("manifest.json: zły format");
   } catch (e) {
-    if (!/^data\/?$/.test(dataBase)) console.warn("Brak manifest.json, pliki z katalogu głównego:", e?.message);
-    return LOCAL_MANIFEST;
+    if (isLocalBase(dataBase)) return LOCAL_MANIFEST;
+    console.warn("Nie udało się wczytać manifest.json:", e?.message);
+    return { build: null, base: "", generated_at: null, files: {}, missing: true };
   }
 }
-
 export function fileUrl(dataBase, manifest, key) {
   const f = manifest?.files?.[key];
   return f ? dataBase + (manifest.base ?? "") + f : null;

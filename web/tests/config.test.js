@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeBase, loadConfig, loadManifest, fileUrl, pogodaUrl, LOCAL_MANIFEST } from "../js/config.js";
+import { normalizeBase, loadConfig, loadManifest, fileUrl, pogodaUrl, getJson, LOCAL_MANIFEST } from "../js/config.js";
 
 const res = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
 function mockFetch(map) {
@@ -67,4 +67,39 @@ test("fileUrl joins dataBase + base + file; unknown key → null", () => {
 test("pogodaUrl is live/pogoda.json outside the version", () => {
   assert.equal(pogodaUrl("https://d.example.pl/"), "https://d.example.pl/live/pogoda.json");
   assert.equal(pogodaUrl("data/"), "data/live/pogoda.json");
+});
+
+const hang = () => new Promise(() => {});
+
+test("loadConfig: hanging config.json → data/ after timeout", async () => {
+  const t0 = Date.now();
+  assert.deepEqual(await loadConfig(hang, 30), { dataBase: "data/" });
+  assert.ok(Date.now() - t0 < 1000);
+});
+
+test("loadManifest: hanging manifest on bucket → missing after timeout, no files", async () => {
+  const m = await loadManifest("https://d.example.pl/", hang, 30);
+  assert.equal(m.missing, true);
+  assert.equal(fileUrl("https://d.example.pl/", m, "lasy"), null);
+  assert.equal(fileUrl("https://d.example.pl/", m, "centroidy"), null);
+});
+
+test("loadManifest: hanging manifest in data/ → LOCAL_MANIFEST", async () => {
+  assert.equal(await loadManifest("data/", hang, 30), LOCAL_MANIFEST);
+});
+
+test("loadManifest: bucket without manifest (404/net/bad shape) → missing, no root fallback", async () => {
+  for (const r of [404, "throw", { files: null }]) {
+    const m = await loadManifest("https://d.example.pl/", mockFetch({ "https://d.example.pl/manifest.json": r }));
+    assert.equal(m.missing, true);
+    assert.notEqual(m, LOCAL_MANIFEST);
+  }
+  assert.equal(LOCAL_MANIFEST.missing, undefined);
+});
+
+test("getJson aborts the request signal on timeout", async () => {
+  let signal;
+  const f = (url, opts) => { signal = opts.signal; return hang(); };
+  await assert.rejects(getJson(f, "x.json", 20), /timeout/);
+  assert.equal(signal.aborted, true);
 });

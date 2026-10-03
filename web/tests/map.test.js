@@ -77,3 +77,38 @@ test("all without pogoda: max of h_*, no match", () => {
 test("all with old pogoda_v1 does not throw", () => {
   assert.doesNotThrow(() => { fillColorExpression(V1, "all", 0); fillOpacityExpression(V1, "all", 3); });
 });
+
+import { addForestLayers, setView, setBasemap } from "../js/map.js";
+
+function fakeMap(layers = []) {
+  const calls = [];
+  const have = new Set(layers);
+  return {
+    calls,
+    getLayer: (id) => (have.has(id) ? { id } : undefined),
+    addSource: (id, src) => calls.push(["source", id, src]),
+    addImage: (id) => calls.push(["image", id]),
+    addLayer: (l) => { have.add(l.id); calls.push(["layer", l.id]); },
+    setPaintProperty: (id, k) => calls.push(["paint", id, k]),
+    setLayoutProperty: (id, k, v) => calls.push(["layout", id, v]),
+  };
+}
+
+test("addForestLayers: pmtiles source from absolute URL, layers in order", () => {
+  const m = fakeMap();
+  addForestLayers(m, "https://d.example.pl/v/b1/lasy.pmtiles", { pogoda: P, species: "borowik", dayIdx: 0, basemap: "orto" });
+  const src = m.calls.find((c) => c[0] === "source");
+  assert.equal(src[1], "lasy");
+  assert.equal(src[2].url, "pmtiles://https://d.example.pl/v/b1/lasy.pmtiles");
+  assert.deepEqual(m.calls.filter((c) => c[0] === "layer").map((c) => c[1]),
+    ["lasy-fill", "lasy-rez-hatch", "lasy-line", "rezerwaty-fill", "rezerwaty-line"]);
+  assert.ok(m.calls.some((c) => c[0] === "image" && c[1] === "hatch"));
+});
+
+test("setView/setBasemap before forest layers exist: only basemap visibility changes", () => {
+  const m = fakeMap();
+  setView(m, P, "borowik", 0);
+  setBasemap(m, "topo");
+  assert.ok(m.calls.every((c) => c[0] === "layout"));
+  assert.equal(m.calls.length, BASEMAP_KEYS.length);
+});

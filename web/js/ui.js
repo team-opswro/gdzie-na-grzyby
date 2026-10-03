@@ -1,10 +1,10 @@
-import { ALL, bestFor, loadData, loadSpecies, availableDays, bannerText } from "./data.js";
+import { SPECIES, ALL, bestFor, loadData, loadSpecies, availableDays, bannerText } from "./data.js";
 import { loadConfig, loadManifest, fileUrl } from "./config.js";
 import { createCentroidStore } from "./tiles.js";
 import { trend, trendBy } from "./chart.js";
 import { topN, haversineKm } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
-import { createMap, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
+import { createMap, addForestLayers, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
 import { renderPopup, renderReserve, trendArrow, trendLabel, rankLabel } from "./popup.js";
 import { shareUrl } from "./share.js";
 import { speciesCardModel, renderSpeciesCard, aboutForecastText } from "./dialogs.js";
@@ -24,9 +24,28 @@ function formatDay(iso) {
   return new Date(y, m - 1, d).toLocaleDateString("pl-PL", { weekday: "short", day: "numeric", month: "short" });
 }
 
+const MAP_DATA_ERROR = "Nie udało się wczytać danych mapy";
+
 export async function init() {
+  // Podkład powstaje od razu (zawieszony bucket ≠ pusta strona); warstwy lasów dochodzą po manifeście.
+  // Wstępny hash: środek, zoom i podkład nie zależą od listy gatunków.
+  const pre = parseHash(location.hash, [...SPECIES.map((x) => x.key), ALL]);
+  const handlers = {}; // uzupełniane niżej, gdy stan jest gotowy
+  const map = createMap($("map"), {
+    center: pre.center ?? OPOLSKIE_CENTER,
+    zoom: pre.zoom ?? DEFAULT_ZOOM,
+    basemap: pre.basemap,
+    onFeatureClick: (props, lngLat) => handlers.feature?.(props, lngLat),
+    onReserveClick: (name, lngLat) => handlers.reserve?.(name, lngLat),
+    onMove: () => handlers.move?.(),
+  });
+  const styleLoaded = new Promise((resolve) => map.once("load", resolve));
+
   const { dataBase } = await loadConfig();
   const manifest = await loadManifest(dataBase);
+  const pmtilesUrl = fileUrl(dataBase, manifest, "lasy");
+  const mapDataError = manifest.missing || !pmtilesUrl;
+  if (mapDataError) showBanner();
   const { list: speciesList, info: speciesInfo } = await loadSpecies(fileUrl(dataBase, manifest, "gatunki"));
   const hash = parseHash(location.hash, [...speciesList.map((x) => x.key), ALL]);
   const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
@@ -70,39 +89,34 @@ export async function init() {
   let effective = null;
   const dayIdx = () => (days.length ? days[state.day].idx : 0);
 
-  const map = createMap($("map"), {
-    center: hash.center ?? OPOLSKIE_CENTER,
-    zoom: hash.zoom ?? DEFAULT_ZOOM,
-    pogoda: null,
-    species: state.species,
-    dayIdx: 0,
-    basemap: state.basemap,
-    pmtilesUrl: fileUrl(dataBase, manifest, "lasy") ?? "data/lasy.pmtiles",
-    onFeatureClick: (props, lngLat) => showPopup(props, lngLat),
-    onReserveClick: (name, lngLat) => {
-      popup?.remove();
-      lastPopup = null;
-      const content = document.createElement("div");
-      content.className = "popup";
-      content.append(renderReserve(name));
-      popup = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
-    },
-    onMove: () => {
-      writeHash();
-      if (!gps) updateRanking();
-    },
-  });
-  map.on("load", () => {
+  handlers.feature = (props, lngLat) => showPopup(props, lngLat);
+  handlers.reserve = (name, lngLat) => {
+    popup?.remove();
+    lastPopup = null;
+    const content = document.createElement("div");
+    content.className = "popup";
+    content.append(renderReserve(name));
+    popup = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+  };
+  handlers.move = () => {
+    writeHash();
+    if (!gps) updateRanking();
+  };
+  styleLoaded.then(() => {
+    if (pmtilesUrl) {
+      addForestLayers(map, pmtilesUrl, { pogoda: effective, species: state.species, dayIdx: dayIdx(), basemap: state.basemap });
+    }
     mapReady = true;
     setBasemap(map, state.basemap); // przełączenie podkładu kliknięte przed końcem ładowania stylu
     setView(map, effective, state.species, dayIdx());
+    if (loaded) map.once("idle", openInitialPlace);
   });
   map.on("idle", openInitialPlace);
 
   // Jednorazowe otwarcie wydzielenia z parametru w= po załadowaniu danych.
   // Centroid szukany w kafelku środka z hasha i 8 sąsiednich.
   async function openInitialPlace() {
-    if (placeTried || !loaded || !mapReady || !state.place) return;
+    if (placeTried || !loaded || !mapReady || !state.place || !map.getLayer("lasy-fill")) return;
     placeTried = true;
     const byId = (x) => x.properties.id === state.place;
     const [hLon, hLat] = hash.center ?? [map.getCenter().lng, map.getCenter().lat];
@@ -230,9 +244,15 @@ export async function init() {
     if (!effective) return show(li("Brak danych pogodowych", "empty"));
     const o = origin();
     const radius = state.radius;
-    const rows = await centroids.rowsNear(o, radius);
-    if (seq !== rankingSeq) return;
-    const top = topN({ species: centroids.species, rows }, effective, state.species, dayIdx(), o, radius);
+    let top;
+    try {
+      const rows = await centroids.rowsNear(o, radius);
+      if (seq !== rankingSeq) return;
+      top = topN({ species: centroids.species, rows }, effective, state.species, dayIdx(), o, radius);
+    } catch (e) {
+      console.warn("Ranking:", e);
+      return show(li("Nie udało się wczytać danych rankingu.", "empty"));
+    }
     list.replaceChildren();
     if (!top.length) {
       list.append(li(`Brak miejsc o dodatnim wyniku w promieniu ${radius} km`, "empty"));
@@ -285,6 +305,7 @@ export async function init() {
   function flyToRow(r) {
     if (window.matchMedia("(max-width: 700px)").matches) setPanelOpen(false);
     map.once("idle", () => {
+      if (!map.getLayer("lasy-fill")) return;
       const f = map.queryRenderedFeatures(map.project([r.lon, r.lat]), { layers: ["lasy-fill"] }).find((x) => x.properties.id === r.id);
       if (f) showPopup(f.properties, { lng: r.lon, lat: r.lat });
     });
@@ -387,16 +408,19 @@ export async function init() {
   // Bez dostępnych dni mapa koloruje samym h (jak przy braku pliku).
   effective = days.length ? pogoda : null;
   loaded = true;
-  const banner = bannerText(pogoda, days.length);
-  if (banner) {
-    $("stale").textContent = banner;
-    $("stale").hidden = false;
-  }
+  showBanner(bannerText(pogoda, days.length));
   if (mapReady) setView(map, effective, state.species, dayIdx());
   updateDayControls();
   updateRanking();
   if (mapReady) map.once("idle", openInitialPlace);
   return map;
+
+  // Baner nad mapą: błąd danych mapy (manifest) + stan prognozy.
+  function showBanner(weather = null) {
+    const text = [mapDataError ? MAP_DATA_ERROR : null, weather].filter(Boolean).join(". ");
+    $("stale").textContent = text;
+    $("stale").hidden = !text;
+  }
 }
 
 function openDialog(dlg, opener) {

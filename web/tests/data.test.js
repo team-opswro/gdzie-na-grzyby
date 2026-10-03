@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { LOCAL_MANIFEST } from "../js/config.js";
 import { SPECIES, weatherFor, score, scoreClass, isStale, availableDays, loadData, bannerText } from "../js/data.js";
 
 const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
@@ -184,4 +185,24 @@ test("bestFor: max over species, skips species without data, null when none", ()
   assert.equal(bestFor(P2, "c", { rydz: 90 }, 0), null);
   assert.equal(bestFor(P2, "zzz", { borowik: 40 }, 0), null);
   assert.equal(bestFor(null, "c", { borowik: 40 }, 0), null);
+});
+
+test("loadData: bucket without manifest → no versioned files, pogoda from live/ kept", async () => {
+  const B = "https://d.example.pl/";
+  globalThis.fetch = mockFetch({ [B + "manifest.json"]: 404, [B + "live/pogoda.json"]: P, [B + "centroidy/index.json"]: IDXC });
+  const d = await loadData({ dataBase: B });
+  assert.equal(d.manifest.missing, true);
+  assert.equal(d.centroidIndex, null);
+  assert.equal(d.nazwy, null);
+  assert.deepEqual(d.pogoda, P);
+});
+
+test("loadData: hanging files → nulls after timeout (page not blocked)", async () => {
+  globalThis.fetch = (url) => (url === "data/nazwy.json" ? Promise.resolve({ ok: true, status: 200, json: async () => NZ }) : new Promise(() => {}));
+  const t0 = Date.now();
+  const d = await loadData({ dataBase: "data/", manifest: LOCAL_MANIFEST, timeoutMs: 30 });
+  assert.ok(Date.now() - t0 < 1000);
+  assert.equal(d.pogoda, null);
+  assert.equal(d.centroidIndex, null);
+  assert.deepEqual(d.nazwy, NZ);
 });

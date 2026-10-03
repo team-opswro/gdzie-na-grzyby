@@ -9,4 +9,4 @@ case "$base" in */) ;; *) base="$base/" ;; esac
 # Escape JSON: \ i " (znaki sterujące w URL nie występują — usuwamy je).
 esc=$(printf '%s' "$base" | tr -d '\000-\037' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
 printf '{"dataBase":"%s"}\n' "$esc" > "$out"
-echo "web-entrypoint: config.json dataBase=$esc"
+printf '%s\n' "web-entrypoint: config.json dataBase=$esc"

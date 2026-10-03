@@ -8,3 +8,4 @@ web/data/live/
 web/tests/
 **/__pycache__/
 tests/
+web/data/

@@ -64,9 +64,16 @@ export function createCentroidStore(fetcher, base, index) {
   return {
     species: index?.species ?? [],
     rowsNear: (origin, radiusKm) => rowsOf(tilesForRadius(origin, radiusKm, index)),
+    // Najpierw kafelek środka, sąsiednie (3×3) dopiero gdy tam go nie ma.
     async findRow(id, lat, lon) {
-      const rows = await rowsOf(tilesAround(lat, lon, index));
-      return rows.find((r) => r[0] === id) ?? null;
+      const center = tileKey(lat, lon, index?.tile ?? DEFAULT_TILE);
+      const all = tilesAround(lat, lon, index);
+      const find = (rows) => rows.find((r) => r[0] === id) ?? null;
+      if (all.includes(center)) {
+        const hit = find(await load(center));
+        if (hit) return hit;
+      }
+      return find(await rowsOf(all.filter((k) => k !== center)));
     },
   };
 }

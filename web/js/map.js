@@ -119,22 +119,57 @@ export function lineColor(basemap) {
 
 export function setBasemap(map, key) {
   for (const k of BASEMAP_KEYS) map.setLayoutProperty("base-" + k, "visibility", k === key ? "visible" : "none");
+  if (!map.getLayer("lasy-line")) return; // warstwy lasów jeszcze niedodane
   const { color, opacity } = lineColor(key);
   map.setPaintProperty("lasy-line", "line-color", color);
   map.setPaintProperty("lasy-line", "line-opacity", opacity);
 }
 
 export function setView(map, pogoda, species, dayIdx) {
+  if (!map.getLayer("lasy-fill")) return;
   map.setPaintProperty("lasy-fill", "fill-color", fillColorExpression(pogoda, species, dayIdx));
   map.setPaintProperty("lasy-fill", "fill-opacity", fillOpacityExpression(pogoda, species, dayIdx));
 }
 
+// Warstwy lasów i rezerwatów z PMTiles; dodawane po załadowaniu stylu i manifestu (podkład jest od razu).
 // pmtilesUrl: względny (data/…) lub pełny URL bucketu; PMTiles pobiera zakresy (Range) przez CORS.
-export function createMap(container, { center, zoom, onFeatureClick, onReserveClick, onMove, pogoda = null, species = "borowik", dayIdx = 0, basemap = "osm", pmtilesUrl = "data/lasy.pmtiles" }) {
+export function addForestLayers(map, pmtilesUrl, { pogoda = null, species = "borowik", dayIdx = 0, basemap = "osm" } = {}) {
+  const tilesUrl = new URL(pmtilesUrl, globalThis.location?.href).href;
+  const lc = lineColor(basemap);
+  map.addSource("lasy", { type: "vector", url: "pmtiles://" + tilesUrl, minzoom: 8, maxzoom: 14 });
+  map.addImage("hatch", hatchPattern());
+  const layers = [
+    {
+      id: "lasy-fill", type: "fill", source: "lasy", "source-layer": "lasy",
+      paint: {
+        "fill-color": fillColorExpression(pogoda, species, dayIdx),
+        "fill-opacity": fillOpacityExpression(pogoda, species, dayIdx),
+      },
+    },
+    {
+      id: "lasy-rez-hatch", type: "fill", source: "lasy", "source-layer": "lasy",
+      filter: ["has", "rez"],
+      paint: { "fill-pattern": "hatch" },
+    },
+    {
+      id: "lasy-line", type: "line", source: "lasy", "source-layer": "lasy", minzoom: 12,
+      paint: { "line-color": lc.color, "line-width": 0.6, "line-opacity": lc.opacity },
+    },
+    {
+      id: "rezerwaty-fill", type: "fill", source: "lasy", "source-layer": "rezerwaty",
+      paint: { "fill-color": "#6a1b9a", "fill-opacity": 0.08 },
+    },
+    {
+      id: "rezerwaty-line", type: "line", source: "lasy", "source-layer": "rezerwaty",
+      paint: { "line-color": "#6a1b9a", "line-width": 1.5 },
+    },
+  ];
+  for (const l of layers) map.addLayer(l);
+}
+
+export function createMap(container, { center, zoom, onFeatureClick, onReserveClick, onMove, basemap = "osm" }) {
   const protocol = new pmtiles.Protocol();
   maplibregl.addProtocol("pmtiles", protocol.tile);
-  const tilesUrl = new URL(pmtilesUrl, location.href).href;
-  const lc = lineColor(basemap);
 
   const baseSources = {};
   const baseLayers = [];
@@ -152,48 +187,12 @@ export function createMap(container, { center, zoom, onFeatureClick, onReserveCl
     center,
     zoom,
     attributionControl: false,
-    style: {
-      version: 8,
-      sources: {
-        ...baseSources,
-        lasy: { type: "vector", url: "pmtiles://" + tilesUrl, minzoom: 8, maxzoom: 14 },
-      },
-      layers: [
-        ...baseLayers,
-        {
-          id: "lasy-fill", type: "fill", source: "lasy", "source-layer": "lasy",
-          paint: {
-            "fill-color": fillColorExpression(pogoda, species, dayIdx),
-            "fill-opacity": fillOpacityExpression(pogoda, species, dayIdx),
-          },
-        },
-        {
-          id: "lasy-line", type: "line", source: "lasy", "source-layer": "lasy", minzoom: 12,
-          paint: { "line-color": lc.color, "line-width": 0.6, "line-opacity": lc.opacity },
-        },
-        {
-          id: "rezerwaty-fill", type: "fill", source: "lasy", "source-layer": "rezerwaty",
-          paint: { "fill-color": "#6a1b9a", "fill-opacity": 0.08 },
-        },
-        {
-          id: "rezerwaty-line", type: "line", source: "lasy", "source-layer": "rezerwaty",
-          paint: { "line-color": "#6a1b9a", "line-width": 1.5 },
-        },
-      ],
-    },
+    style: { version: 8, sources: baseSources, layers: baseLayers },
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
-  map.on("load", () => {
-    map.addImage("hatch", hatchPattern());
-    map.addLayer({
-      id: "lasy-rez-hatch", type: "fill", source: "lasy", "source-layer": "lasy",
-      filter: ["has", "rez"],
-      paint: { "fill-pattern": "hatch" },
-    }, "lasy-line");
-  });
-
   map.on("click", (e) => {
+    if (!map.getLayer("lasy-fill")) return;
     const f = map.queryRenderedFeatures(e.point, { layers: ["lasy-fill"] })[0];
     if (f) {
       if (onFeatureClick) onFeatureClick(f.properties, e.lngLat);

@@ -100,3 +100,17 @@ test("findRow: id in 3×3 neighbourhood of center", async () => {
   assert.equal(await store.findRow("zzz", 50.7, 17.3), null);
   assert.equal(await store.findRow("a", 53, 22), null);
 });
+
+test("findRow: center tile first, neighbours only on miss", async () => {
+  const f = tileFetch(ROWS);
+  const store = createCentroidStore(f, "c/", IDX);
+  assert.deepEqual(await store.findRow("a", 50.7, 17.3), ROWS["50.5_17.0"][0]);
+  assert.deepEqual(f.calls, ["c/50.5_17.0.json"]);
+  assert.deepEqual(await store.findRow("b", 50.7, 17.3), ROWS["50.0_17.0"][0]);
+  assert.equal(f.calls.length, 9); // center cached + 8 neighbours
+  // center tile absent from index → neighbours only
+  const idx2 = { ...IDX, tiles: IDX.tiles.filter((k) => k !== "50.5_17.0") };
+  const f2 = tileFetch(ROWS);
+  assert.deepEqual(await createCentroidStore(f2, "c/", idx2).findRow("b", 50.7, 17.3), ROWS["50.0_17.0"][0]);
+  assert.ok(!f2.calls.includes("c/50.5_17.0.json"));
+});

@@ -1,4 +1,4 @@
-import { loadConfig, loadManifest, fileUrl, pogodaUrl } from "./config.js";
+import { loadConfig, loadManifest, fileUrl, pogodaUrl, getJson } from "./config.js";
 
 export const SPECIES = [
   { key: "borowik", name: "Borowik szlachetny" },
@@ -73,21 +73,16 @@ export function bannerText(pogoda, availableDaysCount, now = new Date()) {
 
 // config.json → manifest.json → pliki wersji; pogoda z live/. Każdy plik ładuje się niezależnie:
 // awaria jednego nie wyrzuca pozostałych. Centroidy: tylko indeks kafelków (kafelki — tiles.js).
-export async function loadData({ dataBase, manifest } = {}) {
+export const DATA_TIMEOUT_MS = 15000;
+
+export async function loadData({ dataBase, manifest, timeoutMs = DATA_TIMEOUT_MS } = {}) {
   dataBase ??= (await loadConfig()).dataBase;
   manifest ??= await loadManifest(dataBase);
-  const json = async (url, required) => {
-    if (!url) throw new Error("brak pliku w manifeście");
-    const r = await fetch(url);
-    if (!r.ok) {
-      if (required) throw new Error(`${url}: HTTP ${r.status}`);
-      return null;
-    }
-    return r.json();
-  };
+  const json = (url, cache = "default") =>
+    url ? getJson(globalThis.fetch, url, timeoutMs, cache) : Promise.reject(new Error("brak pliku w manifeście"));
   const [c, p, n] = await Promise.allSettled([
-    json(fileUrl(dataBase, manifest, "centroidy"), true),
-    json(pogodaUrl(dataBase)),
+    json(fileUrl(dataBase, manifest, "centroidy")),
+    json(pogodaUrl(dataBase), "no-cache"),
     json(fileUrl(dataBase, manifest, "nazwy")),
   ]);
   const val = (x) => (x.status === "fulfilled" ? x.value : null);
