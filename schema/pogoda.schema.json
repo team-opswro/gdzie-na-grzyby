@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pogoda.schema.json",
+  "title": "pogoda.json",
+  "type": "object",
+  "required": ["generated_at", "days", "cells"],
+  "additionalProperties": false,
+  "properties": {
+    "generated_at": {"type": "string", "format": "date-time"},
+    "days": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {"type": "string", "format": "date"}
+    },
+    "cells": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/cell"}
+    }
+  },
+  "$defs": {
+    "series": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {"type": "number", "minimum": 0, "maximum": 1}
+    },
+    "species": {
+      "type": "object",
+      "required": ["w", "rain", "temp", "season"],
+      "additionalProperties": false,
+      "properties": {
+        "w": {"$ref": "#/$defs/series"},
+        "rain": {"$ref": "#/$defs/series"},
+        "temp": {"$ref": "#/$defs/series"},
+        "season": {"$ref": "#/$defs/series"}
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/species"}
+    }
+  }
+}
