@@ -39,12 +39,42 @@ def payload(**kw):
 
 def test_payload_shape_and_days():
     p = payload()
-    assert p["days"][0] == "2026-10-03" and len(p["days"]) == 7
+    assert len(p["days"]) == 8
+    assert p["days"][0] == "2026-10-02" and p["days"][1] == "2026-10-03"
     assert p["days"][-1] == "2026-10-09"
     assert p["generated_at"] == "2026-10-03T05:00:12+02:00"
     assert set(p["cells"]["506_178"]) == SPECIES_KEYS
     arr = p["cells"]["506_178"]["borowik"]["w"]
-    assert len(arr) == 7 and all(v == round(v, 3) for v in arr)
+    assert len(arr) == 8 and all(v == round(v, 3) for v in arr)
+
+
+def test_wx_values_and_lim():
+    p = payload()
+    for cid in ("506_178", "507_178"):
+        wx = p["wx"][cid]
+        assert set(wx) == {"rain_mm", "soil_t", "soil_m"}
+        assert all(len(v) == 8 for v in wx.values())
+    assert p["wx"]["506_178"]["rain_mm"][1] == 51.0  # 17 dni * 3,0 mm
+    assert p["wx"]["507_178"]["rain_mm"][1] == 0.0
+    assert p["wx"]["506_178"]["soil_t"][1] == 12.0
+    assert p["wx"]["506_178"]["soil_m"][1] == 0.3
+    allowed = {"dry", "dry_soil", "cold", "hot", "season", None}
+    for sp in SPECIES_KEYS:
+        assert all(v in allowed for v in p["cells"]["507_178"][sp]["lim"])
+        assert len(p["cells"]["507_178"][sp]["lim"]) == 8
+    assert "dry" in p["cells"]["507_178"]["borowik"]["lim"]
+
+
+def test_missing_yesterday_raises_value_error():
+    series = {c["id"]: make_series(1.0, start=TODAY) for c in CELLS}
+    with pytest.raises(ValueError):
+        build_payload(CELLS, series, load_species(), TODAY, NOW)
+
+
+def test_old_v1_fixture_does_not_validate():
+    data = json.loads((FIXTURES / "pogoda_v1.json").read_text())
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(data, SCHEMA)
 
 
 def test_payload_validates_against_schema():
@@ -66,7 +96,7 @@ def test_shared_fixture_validates():
     data = json.loads((FIXTURES / "pogoda.json").read_text())
     jsonschema.validate(data, SCHEMA)
     assert set(data["cells"]) == {"506_178", "507_178"}
-    assert data["days"][0] == "2026-10-03"
+    assert data["days"][0] == "2026-10-02"
 
 
 def test_schema_rejects_bad_values():
@@ -75,7 +105,7 @@ def test_schema_rejects_bad_values():
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(p, SCHEMA)
     p = payload()
-    p["days"] = p["days"][:6]
+    p["days"] = p["days"][:7]
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(p, SCHEMA)
 

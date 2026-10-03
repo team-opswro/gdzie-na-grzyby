@@ -3,15 +3,19 @@
   "$id": "pogoda.schema.json",
   "title": "pogoda.json",
   "type": "object",
-  "required": ["generated_at", "days", "cells"],
+  "required": ["generated_at", "days", "wx", "cells"],
   "additionalProperties": false,
   "properties": {
     "generated_at": {"type": "string", "format": "date-time"},
     "days": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 8,
+      "maxItems": 8,
       "items": {"type": "string", "format": "date"}
+    },
+    "wx": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/wxcell"}
     },
     "cells": {
       "type": "object",
@@ -21,19 +25,31 @@
   "$defs": {
     "series": {
       "type": "array",
-      "minItems": 7,
-      "maxItems": 7,
+      "minItems": 8,
+      "maxItems": 8,
       "items": {"type": "number", "minimum": 0, "maximum": 1}
+    },
+    "lim": {"enum": ["dry", "dry_soil", "cold", "hot", "season", null]},
+    "wxcell": {
+      "type": "object",
+      "required": ["rain_mm", "soil_t", "soil_m"],
+      "additionalProperties": false,
+      "properties": {
+        "rain_mm": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0}},
+        "soil_t": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number"}},
+        "soil_m": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}}
+      }
     },
     "species": {
       "type": "object",
-      "required": ["w", "rain", "temp", "season"],
+      "required": ["w", "rain", "temp", "season", "lim"],
       "additionalProperties": false,
       "properties": {
         "w": {"$ref": "#/$defs/series"},
         "rain": {"$ref": "#/$defs/series"},
         "temp": {"$ref": "#/$defs/series"},
-        "season": {"$ref": "#/$defs/series"}
+        "season": {"$ref": "#/$defs/series"},
+        "lim": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"$ref": "#/$defs/lim"}}
       }
     },
     "cell": {

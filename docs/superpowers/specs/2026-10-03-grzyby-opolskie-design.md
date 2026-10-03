@@ -135,15 +135,18 @@ Model to heurystyki z literatury i wiedzy grzybiarskiej, bez kalibracji. Strona 
 ```json
 {
   "generated_at": "2026-10-03T05:00:12+02:00",
-  "days": ["2026-10-03", "...7 dat"],
+  "days": ["2026-10-02", "...8 dat"],
+  "wx": {"<cell_id>": {"rain_mm": [34.2, "...8"], "soil_t": [...], "soil_m": [...]}},
   "cells": {
     "<cell_id>": {
-      "borowik": {"w": [0.82, "...7"], "rain": [...], "temp": [...], "season": [...]}
+      "borowik": {"w": [0.82, "...8"], "rain": [...], "temp": [...], "season": [...], "lim": ["dry", null, "..."]}
     }
   }
 }
 ```
 Składowe `rain`/`temp`/`season` służą popupowi do wyjaśnienia wyniku.
+
+Uwaga (zmiana formatu): `days` ma 8 dat — `days[0]` to wczoraj, `days[1..7]` to dziś … +6. Dodatkowo `wx` zawiera realne wartości pogody per komórka (opad z okna 5–21 dni, średnia temp. i wilgotność gleby), a `lim` per gatunek wskazuje czynnik ograniczający (`dry`, `dry_soil`, `cold`, `hot`, `season` lub `null`).
 
 ## 6. Frontend
 

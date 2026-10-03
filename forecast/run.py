@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 import jsonschema
 
-from forecast.model import DailySeries, weather_multiplier
+from forecast.model import DailySeries, limiting_factor, weather_multiplier, weather_values
 from forecast.species import ROOT, Species, load_species
 from forecast.weather import WeatherError, fetch_series
 
@@ -18,14 +18,16 @@ log = logging.getLogger("forecast.run")
 
 SCHEMA_PATH = ROOT / "schema/pogoda.schema.json"
 DAYS = 7
+PAST_DAYS = 1
 DIGITS = 3
 TZ = ZoneInfo("Europe/Warsaw")
 
 
 def build_payload(cells: list[dict], series: dict[str, DailySeries], species: dict[str, Species],
                   today: date, now: datetime) -> dict:
-    days = [today + timedelta(days=k) for k in range(DAYS)]
+    days = [today + timedelta(days=k) for k in range(-PAST_DAYS, DAYS)]
     out: dict[str, dict] = {}
+    wx: dict[str, dict] = {}
     for cell in cells:
         cid = cell["id"]
         s = series[cid]
@@ -40,10 +42,20 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
                 name: [round(getattr(c, name), DIGITS) for c in comps]
                 for name in ("w", "rain", "temp", "season")
             }
+            per_species[key]["lim"] = [
+                limiting_factor(c, s, i, sp) for c, i in zip(comps, idx)
+            ]
         out[cid] = per_species
+        vals = [weather_values(s, i) for i in idx]
+        wx[cid] = {
+            "rain_mm": [round(v.rain_mm, 1) for v in vals],
+            "soil_t": [round(v.soil_t, 1) for v in vals],
+            "soil_m": [round(v.soil_m, 3) for v in vals],
+        }
     return {
         "generated_at": now.isoformat(timespec="seconds"),
         "days": [d.isoformat() for d in days],
+        "wx": wx,
         "cells": out,
     }
 
