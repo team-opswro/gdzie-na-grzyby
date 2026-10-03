@@ -1,0 +1,8 @@
+{"type": "FeatureCollection", "features": [
+ {"type": "Feature", "id": "Rezerwaty.1", "properties": {"gid": 1, "nazwa": "Rezerwat Przykladowy Brzeg", "kodinspire": "PL.ZIPOP.1393.RP.1"},
+  "geometry": {"type": "Polygon", "coordinates": [[[17.3, 50.1], [17.7, 50.1], [17.7, 50.3], [17.3, 50.3], [17.3, 50.1]]]}},
+ {"type": "Feature", "id": "Rezerwaty.2", "properties": {"gid": 2, "nazwa": "Rezerwat Przykladowy Wewnatrz", "kodinspire": "PL.ZIPOP.1393.RP.2"},
+  "geometry": {"type": "Polygon", "coordinates": [[[17.1, 50.2], [17.2, 50.2], [17.2, 50.3], [17.1, 50.3], [17.1, 50.2]]]}},
+ {"type": "Feature", "id": "Rezerwaty.3", "properties": {"gid": 3, "nazwa": "Rezerwat Przykladowy Poza", "kodinspire": "PL.ZIPOP.1393.RP.3"},
+  "geometry": {"type": "Polygon", "coordinates": [[[18.5, 51.0], [18.6, 51.0], [18.6, 51.1], [18.5, 51.1], [18.5, 51.0]]]}}
+]}
