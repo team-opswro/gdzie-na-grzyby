@@ -3,7 +3,7 @@ import { buildSpeciesOptions } from "./select.js";
 import { loadConfig, loadManifest, fileUrl } from "./config.js";
 import { createCentroidStore } from "./tiles.js";
 import { trend, trendBy } from "./chart.js";
-import { topN, haversineKm } from "./ranking.js";
+import { topN, haversineKm, renderLoading } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, addForestLayers, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
 import { renderPopup, renderReserve, renderParking, trendArrow, trendLabel, rankLabel } from "./popup.js";
@@ -257,11 +257,13 @@ export async function init() {
     const seq = ++rankingSeq;
     const list = $("ranking-list");
     const show = (...items) => { if (seq === rankingSeq) list.replaceChildren(...items); };
+    const setBusy = (v) => { if (seq === rankingSeq) list.setAttribute("aria-busy", v); };
     if (!loaded) return show();
     if (!centroids) return show(li("Nie udało się wczytać danych rankingu.", "empty"));
     if (!effective) return show(li("Brak danych pogodowych", "empty"));
     const o = origin();
     const radius = state.radius;
+    renderLoading(list);
     let top;
     try {
       const rows = await centroids.rowsNear(o, radius);
@@ -269,8 +271,10 @@ export async function init() {
       top = topN({ species: centroids.species, rows }, effective, keys(), dayIdx(), o, radius);
     } catch (e) {
       console.warn("Ranking:", e);
+      setBusy("false");
       return show(li("Nie udało się wczytać danych rankingu.", "empty"));
     }
+    setBusy("false");
     list.replaceChildren();
     if (!top.length) {
       list.append(li(`Brak miejsc o dodatnim wyniku w promieniu ${radius} km`, "empty"));

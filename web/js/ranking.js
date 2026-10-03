@@ -1,6 +1,14 @@
 import { weatherFor, score, bestFor, ALL } from "./data.js";
 import { oddzKey } from "./names.js";
 
+export function renderLoading(listEl) {
+  listEl.setAttribute("aria-busy", "true");
+  const li = document.createElement("li");
+  li.className = "empty";
+  li.textContent = "Ładowanie…";
+  listEl.replaceChildren(li);
+}
+
 const R_KM = 6371;
 const rad = (d) => (d * Math.PI) / 180;
 
