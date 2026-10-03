@@ -81,3 +81,16 @@ def test_normalize_species(raw, exp):
 )
 def test_normalize_habitat(raw, exp):
     assert normalize_habitat(raw) == exp
+
+
+@pytest.mark.parametrize("upland,lowland", [
+    ("LGSW", "LSW"), ("LWYZS", "LSW"), ("LMWYZ", "LMSW"), ("LMGSW", "LMSW"),
+    ("LWYZW", "LW"), ("LGW", "LW"), ("LMWYZW", "LMW"), ("BMGSW", "BMSW"),
+])
+def test_upland_habitat_scores_like_lowland_analogue(upland, lowland):
+    for sp in S.values():
+        assert habitat_factor(upland, sp) == habitat_factor(lowland, sp)
+
+
+def test_beech_on_upland_site_scores_like_lowland_for_borowik():
+    assert habitat_score(Stand("BK", (), 80, "LGSW"), S["borowik"]) == habitat_score(Stand("BK", (), 80, "LSW"), S["borowik"]) == 1.0
