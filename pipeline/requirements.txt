@@ -4,3 +4,4 @@ shapely
 pyogrio
 duckdb
 pyarrow
+boto3
