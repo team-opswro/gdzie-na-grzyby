@@ -93,3 +93,19 @@ test("topN all with pogoda_v1 does not throw", () => {
   const C2 = { species: SP, rows: [["02-40-1-12-363-i-00", 50.68, 17.92, "506_178", 50, 50, 50, 50, 50, 50]] };
   assert.doesNotThrow(() => topN(C2, V1, "all", 0, origin));
 });
+
+test("topN grupy: najlepszy gatunek z listy kluczy", () => {
+  const C2 = { species: SP, rows: [["a", 50.68, 17.92, "506_178", 10, 100, 90, 10, 10, 10]] };
+  const r = topN(C2, P, ["kurka", "kozlarz"], 0, origin);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].species, "kurka");
+  assert.equal(r[0].best.h, 90);
+});
+
+test("topN pomija klucze spoza centroids.species", () => {
+  const C2 = { species: SP, rows: [["a", 50.68, 17.92, "506_178", 10, 100, 90, 10, 10, 10]] };
+  const r = topN(C2, P, ["nieznany", "kurka"], 0, origin);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].best.h, 90); // kolumna kurki, nie przesunięta przez nieznany klucz
+  assert.deepEqual(topN(C2, P, ["nieznany"], 0, origin), []);
+});

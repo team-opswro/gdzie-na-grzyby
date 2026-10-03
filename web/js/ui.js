@@ -1,4 +1,4 @@
-import { SPECIES, ALL, bestFor, loadData, loadSpecies, availableDays, bannerText, groupsOf, selectionValues, isMulti } from "./data.js";
+import { SPECIES, bestFor, loadData, loadSpecies, availableDays, bannerText, groupsOf, selectionValues, selectionKeys, isMulti } from "./data.js";
 import { buildSpeciesOptions } from "./select.js";
 import { loadConfig, loadManifest, fileUrl } from "./config.js";
 import { createCentroidStore } from "./tiles.js";
@@ -51,6 +51,8 @@ export async function init() {
   const groups = groupsOf(speciesInfo);
   const hash = parseHash(location.hash, selectionValues(speciesList, groups));
   const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
+  // Gatunki bieżącego wyboru: jeden klucz, grupa albo wszystkie (tryb wielu gatunków, gdy > 1).
+  const keys = () => selectionKeys(state.species, speciesList, groups);
   let data = { pogoda: null, centroidIndex: null, nazwy: null };
   let nazwy = null;
   let todayIso = todayLocalIso(); // stała data dnia, wspólna dla days i popupu
@@ -105,11 +107,11 @@ export async function init() {
   };
   styleLoaded.then(() => {
     if (pmtilesUrl) {
-      addForestLayers(map, pmtilesUrl, { pogoda: effective, species: state.species, dayIdx: dayIdx(), basemap: state.basemap });
+      addForestLayers(map, pmtilesUrl, { pogoda: effective, species: keys(), dayIdx: dayIdx(), basemap: state.basemap });
     }
     mapReady = true;
     setBasemap(map, state.basemap); // przełączenie podkładu kliknięte przed końcem ładowania stylu
-    setView(map, effective, state.species, dayIdx());
+    setView(map, effective, keys(), dayIdx());
     if (loaded) map.once("idle", openInitialPlace);
   });
   map.on("idle", openInitialPlace);
@@ -147,6 +149,7 @@ export async function init() {
     const content = renderPopup(props, {
       pogoda: effective,
       species: state.species,
+      keys: keys(),
       speciesList,
       dayIdx: dayIdx(),
       todayIso,
@@ -249,7 +252,7 @@ export async function init() {
     try {
       const rows = await centroids.rowsNear(o, radius);
       if (seq !== rankingSeq) return;
-      top = topN({ species: centroids.species, rows }, effective, state.species, dayIdx(), o, radius);
+      top = topN({ species: centroids.species, rows }, effective, keys(), dayIdx(), o, radius);
     } catch (e) {
       console.warn("Ranking:", e);
       return show(li("Nie udało się wczytać danych rankingu.", "empty"));
@@ -268,9 +271,9 @@ export async function init() {
       sc.textContent = r.best.score;
       const tr = document.createElement("span");
       tr.className = "rank-trend";
-      const t = state.species === ALL
+      const t = r.best.hBy
         ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, r.best.hBy, i)?.score ?? null), dayIdx())
-        : trend(effective, r.best.cell, state.species, r.best.h, dayIdx());
+        : trend(effective, r.best.cell, keys()[0], r.best.h, dayIdx());
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
@@ -314,7 +317,7 @@ export async function init() {
   }
 
   function refresh() {
-    if (mapReady) setView(map, effective, state.species, dayIdx());
+    if (mapReady) setView(map, effective, keys(), dayIdx());
     updateDayControls();
     updateRanking();
     writeHash();
@@ -410,7 +413,7 @@ export async function init() {
   effective = days.length ? pogoda : null;
   loaded = true;
   showBanner(bannerText(pogoda, days.length));
-  if (mapReady) setView(map, effective, state.species, dayIdx());
+  if (mapReady) setView(map, effective, keys(), dayIdx());
   updateDayControls();
   updateRanking();
   if (mapReady) map.once("idle", openInitialPlace);

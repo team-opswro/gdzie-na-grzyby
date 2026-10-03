@@ -41,21 +41,25 @@ const stepOn = (input, values) => {
 
 const reserveFirst = (reserveValue, base) => ["case", ["has", "rez"], reserveValue, base];
 
-// Tryb „all”: max po gatunkach; gatunek bez pogody w komórce daje -1 (nie wygrywa).
-// Zbiór gatunków musi się zgadzać z centroids.species (kolumny h_<klucz> w kafelkach i centroidach).
-const ALL_KEYS = SPECIES.map((s) => s.key);
-const allHExpr = () => ["max", ...ALL_KEYS.map(hExpr)];
-const allSpeciesExpr = (pogoda, dayIdx) => ["max", ...ALL_KEYS.map((k) => ["let", "wv", weatherMatch(pogoda, k, dayIdx),
+// Wybór -> lista kluczy: tablica bez zmian, "all" -> wszystkie gatunki, inny napis -> [klucz].
+const keysOf = (sel) => (Array.isArray(sel) ? sel : sel === ALL ? SPECIES.map((s) => s.key) : [sel]);
+
+// Tryb wielu gatunków (wszystkie lub grupa): max po kluczach; gatunek bez pogody w komórce daje -1.
+const multiHExpr = (keys) => ["max", ...keys.map(hExpr)];
+const multiSpeciesExpr = (pogoda, keys, dayIdx) => ["max", ...keys.map((k) => ["let", "wv", weatherMatch(pogoda, k, dayIdx),
   ["case", ["<", ["var", "wv"], 0], -1, scoreExpr(k, ["var", "wv"])]])];
 
-function allExpression(pogoda, dayIdx, noData, values) {
-  if (pogoda == null) return reserveFirst(values.reserve, stepOn(allHExpr(), values.steps));
-  return reserveFirst(values.reserve, ["let", "sc", allSpeciesExpr(pogoda, dayIdx),
+function multiExpression(pogoda, keys, dayIdx, noData, values) {
+  if (pogoda == null) return reserveFirst(values.reserve, stepOn(multiHExpr(keys), values.steps));
+  return reserveFirst(values.reserve, ["let", "sc", multiSpeciesExpr(pogoda, keys, dayIdx),
     ["case", ["<", ["var", "sc"], 0], noData, stepOn(["var", "sc"], values.steps)]]);
 }
 
-export function fillColorExpression(pogoda, species, dayIdx) {
-  if (species === ALL) return allExpression(pogoda, dayIdx, COLORS.noData, { reserve: COLORS.reserve, steps: COLORS.classes });
+// sel: klucz gatunku, "all" albo lista kluczy (grupa).
+export function fillColorExpression(pogoda, sel, dayIdx) {
+  const keys = keysOf(sel);
+  if (keys.length > 1) return multiExpression(pogoda, keys, dayIdx, COLORS.noData, { reserve: COLORS.reserve, steps: COLORS.classes });
+  const species = keys[0];
   if (pogoda == null) return reserveFirst(COLORS.reserve, stepOn(scoreExpr(species, null), COLORS.classes));
   return reserveFirst(COLORS.reserve, [
     "let", "wv", weatherMatch(pogoda, species, dayIdx),
@@ -65,9 +69,11 @@ export function fillColorExpression(pogoda, species, dayIdx) {
   ]);
 }
 
-export function fillOpacityExpression(pogoda, species, dayIdx) {
+export function fillOpacityExpression(pogoda, sel, dayIdx) {
   const opacities = [FILL_OPACITY.weak, ...Array(4).fill(FILL_OPACITY.normal)];
-  if (species === ALL) return allExpression(pogoda, dayIdx, FILL_OPACITY.noData, { reserve: FILL_OPACITY.reserve, steps: opacities });
+  const keys = keysOf(sel);
+  if (keys.length > 1) return multiExpression(pogoda, keys, dayIdx, FILL_OPACITY.noData, { reserve: FILL_OPACITY.reserve, steps: opacities });
+  const species = keys[0];
   if (pogoda == null) return reserveFirst(FILL_OPACITY.reserve, stepOn(scoreExpr(species, null), opacities));
   return reserveFirst(FILL_OPACITY.reserve, [
     "let", "wv", weatherMatch(pogoda, species, dayIdx),

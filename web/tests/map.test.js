@@ -117,3 +117,15 @@ test("hExpr: brak atrybutu h_* = 0", () => {
   const s = JSON.stringify(fillColorExpression(null, "borowik", 0));
   assert.ok(s.includes('["to-number",["get","h_borowik"],0]'));
 });
+
+test("fillColorExpression dla listy kluczy = max po gatunkach z listy", () => {
+  const s = JSON.stringify(fillColorExpression(P, ["kurka", "kozlarz"], 0));
+  assert.ok(s.includes('"h_kurka"') && s.includes('"h_kozlarz"'));
+  assert.ok(!s.includes('"h_borowik"'));
+  assert.ok(s.includes('"max"'));
+});
+
+test("fillColorExpression: jednoelementowa lista jak pojedynczy klucz", () => {
+  assert.deepEqual(fillColorExpression(P, ["borowik"], 0), fillColorExpression(P, "borowik", 0));
+  assert.deepEqual(fillOpacityExpression(null, ["rydz"], 2), fillOpacityExpression(null, "rydz", 2));
+});

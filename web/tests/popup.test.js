@@ -107,3 +107,22 @@ test("popup: brak atrybutu h_* = 0 (zerowe h nie są zapisywane w kafelkach)", (
   assert.ok(i >= 0);
   assert.equal(cells[i + 1], "0%");
 });
+
+test("popup grupy: paski tylko gatunków grupy, najlepszy w nagłówku", () => {
+  installDom();
+  const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
+  const props = { id: "x", cell: "506_178", h_borowik: 80, h_kurka: 40, h_kozlarz: 30 };
+  const root = popup.renderPopup(props, { pogoda: P, keys: ["kurka", "kozlarz"], species: "g-x", dayIdx: 0, todayIso: P.days[0] });
+  const names = [];
+  walk(root, (n) => { if (n.className === "ps-name") names.push(n.textContent); });
+  assert.deepEqual(names.sort(), ["koźlarz", "kurka"]);
+});
+
+test("popup grupy bez pogody i bez h_* — bez wyjątku, paski po h", () => {
+  installDom();
+  const root = popup.renderPopup({ id: "x", cell: "999_999" }, { pogoda: null, keys: ["kurka", "kozlarz"], species: "g-x", dayIdx: 0 });
+  const vals = [];
+  walk(root, (n) => { if (n.className === "ps-val") vals.push(n.textContent); });
+  assert.equal(vals.length, 2);
+  assert.ok(vals.every((v) => v === "0%"));
+});

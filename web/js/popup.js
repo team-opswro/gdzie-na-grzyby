@@ -136,13 +136,17 @@ function speciesBars(props, list, pogoda, dayIdx) {
 
 export function renderPopup(props, ctx) {
   const { pogoda = null, dayIdx, todayIso, onDaySelect, nazwy = null, lngLat = null, onShare = null, speciesList = SPECIES } = ctx;
-  const isAll = ctx.species === ALL;
+  // ctx.keys: gatunki wyboru (grupa lub wszystkie); bez nich — z ctx.species ("all" albo jeden klucz).
+  const keys = ctx.keys ?? (ctx.species === ALL ? speciesList.map((s) => s.key) : [ctx.species]);
+  const isAll = keys.length > 1;
+  const listed = keys.map((k) => speciesList.find((s) => s.key === k) ?? { key: k, name: k });
   const hAll = {};
-  for (const sp of speciesList) hAll[sp.key] = props["h_" + sp.key] == null ? null : Number(props["h_" + sp.key]);
+  // brak atrybutu h_* w kafelku = 0 (zera nie są zapisywane)
+  for (const k of keys) hAll[k] = Number(props["h_" + k] ?? 0);
   const best = isAll && pogoda ? bestFor(pogoda, props.cell, hAll, dayIdx) : null;
-  let species = ctx.species;
+  let species = keys[0];
   if (isAll) {
-    species = best?.species ?? Object.keys(hAll).reduce((a, k) => ((hAll[k] ?? -1) > (hAll[a] ?? -1) ? k : a), speciesList[0].key);
+    species = best?.species ?? keys.reduce((a, k) => (hAll[k] > hAll[a] ? k : a), keys[0]);
   }
   const scoreAtAll = (idx) => (idx < 0 ? null : bestFor(pogoda, props.cell, hAll, idx)?.score ?? null);
   const root = el("div", null, "popup");
@@ -179,7 +183,7 @@ export function renderPopup(props, ctx) {
     } else {
       root.append(el("div", "Brak danych pogodowych dla tego miejsca", "popup-score popup-nodata"));
     }
-    if (isAll) root.append(speciesBars(props, speciesList, pogoda, dayIdx));
+    if (isAll) root.append(speciesBars(props, listed, pogoda, dayIdx));
     if (pogoda && todayIso) {
       const data = isAll ? chartDataBy(pogoda, scoreAtAll, todayIso) : chartData(pogoda, props.cell, species, h, todayIso);
       if (data.length) {

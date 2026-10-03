@@ -24,11 +24,14 @@ export function bearing(origin, point) {
 
 // centroids.rows: [id, lat, lon, cell, h_<species>...] with h columns in centroids.species order
 // Wynik: grupy po oddziale [{ key, best, count, distanceKm, bearing }].
-// species === "all": wynik wiersza = bestFor; grupa ma dodatkowo `species` (klucz najlepszego).
-export function topN(centroids, pogoda, species, dayIdx, origin, radiusKm = 20, n = 10) {
-  const isAll = species === ALL;
-  const col = isAll ? 4 : 4 + centroids.species.indexOf(species);
-  if (col < 4) return [];
+// sel: klucz gatunku, "all" albo lista kluczy (grupa). Wiele kolumn: wynik wiersza = bestFor po nich,
+// a grupa ma dodatkowo `species` (klucz najlepszego). Klucze spoza centroids.species są pomijane.
+export function topN(centroids, pogoda, sel, dayIdx, origin, radiusKm = 20, n = 10) {
+  const keys = Array.isArray(sel) ? sel : sel === ALL ? centroids.species : [sel];
+  const cols = keys.map((k) => [k, 4 + centroids.species.indexOf(k)]).filter(([, c]) => c >= 4);
+  if (!cols.length) return [];
+  const isAll = cols.length > 1;
+  const [species, col] = cols[0];
   const groups = new Map();
   const dLat = radiusKm / 111;
   const dLon = radiusKm / (111 * Math.max(Math.cos(rad(origin.lat)), 0.01));
@@ -39,7 +42,7 @@ export function topN(centroids, pogoda, species, dayIdx, origin, radiusKm = 20, 
     let s, h, sp, hBy;
     if (isAll) {
       hBy = {};
-      centroids.species.forEach((k, i) => { hBy[k] = row[4 + i]; });
+      for (const [k, c] of cols) hBy[k] = row[c];
       const b = bestFor(pogoda, cell, hBy, dayIdx);
       if (!b) continue;
       s = b.score; sp = b.species; h = hBy[sp];
