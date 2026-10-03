@@ -5,7 +5,7 @@ species:
     name: "Borowik szlachetny"
     partners: [SO, SW, BK, DB]
     age: {min: 30, opt: 50, max: null}
-    habitat: {preferred: [BSW, BGSW, BMSW, LMSW, LSW, BMGSW, LMWYZ, LMGSW, LWYZS, LGSW], adjacent: [BW, BGW, BMW, BMWYZ, LMW, LW, BS, LMWYZW, LWYZW, LGW]}
+    habitat: {preferred: [BSW, BGSW, BMSW, LMSW, LSW, BMGSW, LMWYZ, LMWYZSW, LMGSW, LMG, LWYZS, LWYZSW, LWYZ, LGSW, LG], adjacent: [BW, BWG, BGW, BMW, BMWYZW, BMGW, BMWYZ, BMWYZSW, LMW, LMGW, LW, BS, LMWYZW, LWYZW, LGW]}
     season: {start: "07-01", end: "10-31"}
     temp: [6, 12, 20, 26]
     rain_min: 10
@@ -15,7 +15,7 @@ species:
     name: "Podgrzybek brunatny"
     partners: [SO, SW]
     age: {min: 20, opt: 30, max: null}
-    habitat: {preferred: [BSW, BGSW, BMSW, BW, BGW, BMW, BMWYZ, BMGSW], adjacent: [BS, LMSW, LMW, LMWYZ, LMGSW, LMWYZW]}
+    habitat: {preferred: [BSW, BGSW, BMSW, BW, BWG, BGW, BMW, BMWYZW, BMGW, BMWYZ, BMWYZSW, BMGSW], adjacent: [BS, LMSW, LMW, LMGW, LMWYZ, LMWYZSW, LMGSW, LMG, LMWYZW]}
     season: {start: "08-01", end: "11-30"}
     temp: [4, 10, 18, 24]
     rain_min: 10
@@ -25,7 +25,7 @@ species:
     name: "Kurka"
     partners: [SO, SW, BK, DB]
     age: {min: 20, opt: 30, max: null}
-    habitat: {preferred: [BSW, BGSW, BMSW, BS, BMGSW], adjacent: [BW, BGW, BMW, BMWYZ, LMSW, LMWYZ, LMGSW]}
+    habitat: {preferred: [BSW, BGSW, BMSW, BS, BMGSW], adjacent: [BW, BWG, BGW, BMW, BMWYZW, BMGW, BMWYZ, BMWYZSW, LMSW, LMWYZ, LMWYZSW, LMGSW, LMG]}
     season: {start: "06-01", end: "10-31"}
     temp: [8, 14, 22, 28]
     rain_min: 8
@@ -35,7 +35,7 @@ species:
     name: "Koźlarz babka"
     partners: [BRZ]
     age: {min: 10, opt: 15, max: null}
-    habitat: {preferred: [BMW, BMWYZ, LMW, BW, BGW, LMWYZW], adjacent: [BMSW, LMSW, LW, BB, BMB, BMGSW, LMWYZ, LMGSW, LWYZW, LGW]}
+    habitat: {preferred: [BMW, BMWYZW, BMGW, BMWYZ, BMWYZSW, LMW, LMGW, BW, BWG, BGW, LMWYZW], adjacent: [BMSW, LMSW, LW, BB, BGB, BMB, BMGB, BMGSW, LMWYZ, LMWYZSW, LMGSW, LMG, LWYZW, LGW]}
     season: {start: "06-01", end: "10-31"}
     temp: [6, 12, 20, 26]
     rain_min: 10
@@ -45,7 +45,7 @@ species:
     name: "Maślak zwyczajny"
     partners: [SO]
     age: {min: 5, opt: 10, max: 40}
-    habitat: {preferred: [BSW, BGSW, BS], adjacent: [BMSW, BW, BGW, BMGSW]}
+    habitat: {preferred: [BSW, BGSW, BS], adjacent: [BMSW, BW, BWG, BGW, BMGSW]}
     season: {start: "08-01", end: "11-30"}
     temp: [4, 10, 18, 24]
     rain_min: 10
@@ -55,7 +55,7 @@ species:
     name: "Rydz"
     partners: [SO, SW]
     age: {min: 5, opt: 10, max: 40}
-    habitat: {preferred: [LMSW, LSW, LMWYZ, LMGSW, LWYZS, LGSW], adjacent: [BMSW, LMW, LW, BMGSW, LMWYZW, LWYZW, LGW]}
+    habitat: {preferred: [LMSW, LSW, LMWYZ, LMWYZSW, LMGSW, LMG, LWYZS, LWYZSW, LWYZ, LGSW, LG], adjacent: [BMSW, LMW, LMGW, LW, BMGSW, LMWYZW, LWYZW, LGW]}
     season: {start: "08-01", end: "10-31"}
     temp: [5, 10, 18, 24]
     rain_min: 10

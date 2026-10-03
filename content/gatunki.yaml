@@ -33,6 +33,27 @@ codes:
     LWYZW: las wyżynny wilgotny
     LGSW: las górski świeży
     LGW: las górski wilgotny
+    LMWYZSW: las mieszany wyżynny świeży
+    LWYZSW: las wyżynny świeży
+    BMWYZSW: bór mieszany wyżynny świeży
+    BMWYZW: bór mieszany wyżynny wilgotny
+    LMGW: las mieszany górski wilgotny
+    BMGW: bór mieszany górski wilgotny
+    BWG: bór wysokogórski
+    BMGB: bór mieszany górski bagienny
+    BGB: bór górski bagienny
+    LMG: las mieszany górski
+    LWYZ: las wyżynny
+    LG: las górski
+    LL: las łęgowy
+    LLWYZ: las łęgowy wyżynny
+    LLG: las łęgowy górski
+    OL: ols
+    OLJ: ols jesionowy
+    OLJWYZ: ols jesionowy wyżynny
+    OLJG: ols jesionowy górski
+    OLG: ols górski
+    LMB: las mieszany bagienny
 
 species:
   borowik:

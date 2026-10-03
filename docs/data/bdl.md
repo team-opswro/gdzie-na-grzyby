@@ -78,3 +78,19 @@ Kody siedlisk spoza list gatunków:
 - bez odpowiednika, dostają współczynnik "inne siedlisko": `OL` (940 w nowych nadleśnictwach), `LL` (670), `OLJ` (302), `LMB` (31, las mieszany bagienny; `BMB` jest tylko na liście kozlarza), `OLJWYZ` (3), `LLWYZ` (3; wariant `LL`, ale `LL` nie jest mapowany).
 
 > Aktualizacja (plan E): obszar to suma obrysów nadleśnictw z paczek (`G_INSPECTORATE`) i `api_districts`; lista `districts` usunięta z `bdl_fields.yaml` (źródłem listy jest tabela `district` w DuckDB). `opolskie.geojson` jest nieużywany (plik zostaje).
+
+## Kody siedlisk — odpowiedniki i kody bez odpowiednika (plan E, spec 4.2)
+Nowe kody dopisane w `species.yaml` obok odpowiednika (te same listy `preferred`/`adjacent`):
+
+| Kod | Odpowiednik | Kod | Odpowiednik |
+|---|---|---|---|
+| `LMWYZSW` | `LMWYZ` | `BMGW` | `BMW` |
+| `LWYZSW` | `LWYZS` | `BWG` | `BW` |
+| `BMWYZSW` | `BMWYZ` | `BMGB` | `BMB` |
+| `BMWYZW` | `BMW` | `BGB` | `BB` |
+| `LMGW` | `LMW` | `LMG` | `LMGSW` |
+| `LWYZ` | `LWYZS` | `LG` | `LGSW` |
+
+Bez odpowiednika ("inne siedlisko", współczynnik 0.2): `LL`, `LLWYZ`, `LLG`, `OL`, `OLJ`, `OLJWYZ`, `OLJG`, `OLG`, `LMB`. Każdy kod ma nazwę w `content/gatunki.yaml` (`codes.habitats`).
+
+Ocena partnera: max(gatunek panujący: `age_factor(wiek)`; domieszka: `SHARE_WEIGHT[udział] × age_factor(wiek domieszki)`), `SHARE_WEIGHT`: `PJD` 0.2, `MJS` 0.3, `1` 0.5, `2`–`3` 0.7, `4`–`10` 0.9, nieznany 0.3.

@@ -4,7 +4,10 @@ from dataclasses import dataclass
 
 from forecast.species import Species
 
-ADMIXTURE_FACTOR = 0.6
+# Waga udziału domieszki (kod udziału z BDL); nieznany/pusty kod -> SHARE_UNKNOWN.
+SHARE_WEIGHT = {"PJD": 0.2, "MJS": 0.3, "1": 0.5, "2": 0.7, "3": 0.7,
+                **{str(i): 0.9 for i in range(4, 11)}}
+SHARE_UNKNOWN = 0.3
 ADJACENT_FACTOR = 0.6
 OTHER_HABITAT_FACTOR = 0.2
 AGE_MIN_FACTOR = 0.3
@@ -18,6 +21,8 @@ class Stand:
     sp_admix: tuple[str, ...]
     age: int | None
     hab: str | None
+    # (gatunek, kod udziału, wiek|None) domieszek bez gatunku panującego
+    partners: tuple = ()
 
 
 def _ascii_upper(raw: str) -> str:
@@ -35,14 +40,6 @@ def normalize_habitat(raw: str | None) -> str | None:
     if raw is None:
         return None
     return _ascii_upper(raw) or None
-
-
-def partner_factor(st: Stand, sp: Species) -> float:
-    if st.sp_main in sp.partners:
-        return 1.0
-    if any(code in sp.partners for code in st.sp_admix):
-        return ADMIXTURE_FACTOR
-    return 0.0
 
 
 def age_factor(age: int | None, sp: Species) -> float:
@@ -71,5 +68,19 @@ def habitat_factor(hab: str | None, sp: Species) -> float:
     return OTHER_HABITAT_FACTOR
 
 
+def partner_score(st: Stand, sp: Species) -> float:
+    """Ocena partnera: max po gatunku panującym i domieszkach (spec 4.1)."""
+    best = 0.0
+    if st.sp_main in sp.partners:
+        best = age_factor(st.age, sp)
+    # Legacy: sp_admix bez partners -> kod udziału "" (nieznany, 0.3), wiek None.
+    partners = st.partners or tuple((c, "", None) for c in st.sp_admix)
+    for code, share, age in partners:
+        if code in sp.partners:
+            w = SHARE_WEIGHT.get((share or "").strip().upper(), SHARE_UNKNOWN)
+            best = max(best, w * age_factor(age, sp))
+    return best
+
+
 def habitat_score(st: Stand, sp: Species) -> float:
-    return partner_factor(st, sp) * age_factor(st.age, sp) * habitat_factor(st.hab, sp)
+    return partner_score(st, sp) * habitat_factor(st.hab, sp)

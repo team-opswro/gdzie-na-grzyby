@@ -40,8 +40,10 @@ def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundar
     cache: dict[tuple, dict[str, int]] = {}
     keys = list(species)
     rows = []
-    for sp, adm, age, hab in zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"]):
-        key = (sp, tuple(adm), None if age is None or age != age else int(age), hab)
+    parts = gdf["partners"] if "partners" in gdf.columns else [()] * len(gdf)
+    for sp, adm, age, hab, pt in zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"], parts):
+        key = (sp, tuple(adm), None if age is None or age != age else int(age), hab,
+               tuple((c, s_, None if a is None or a != a else int(a)) for c, s_, a in pt))
         if key not in cache:
             st = Stand(*key)
             cache[key] = {k: int(round(100 * habitat_score(st, species[k]))) for k in keys}
