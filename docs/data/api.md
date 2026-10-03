@@ -16,7 +16,8 @@ v/<build>/centroidy/<lat0>_<lon0>.json  kafelek centroidów 0,5° (immutable)
 v/<build>/grid.json                   siatka pogodowa 0,1° (immutable)
 v/<build>/nazwy.json                  nazwy nadleśnictw i leśnictw (immutable)
 v/<build>/gatunki.json                treści i parametry gatunków (immutable)
-v/<build>/build.json                  metadane builda (informacyjnie, immutable)
+v/<build>/build.json                  metadane builda (informacyjnie, immutable): liczniki, `h_hist`
+                                      (liczba wydzieleń w przedziałach h 0–9 … 90–100 per gatunek)
 ```
 
 `<build>` = `YYYYMMDD-HHMM` (UTC, czas publikacji) + `-` + 7 znaków hasha gita, np.
@@ -76,7 +77,9 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
   - `cell` — identyfikator komórki pogodowej (`grid.json`, `pogoda.json`),
   - `sp` — kod gatunku panującego (BDL), `age` — jego wiek (lata; może brakować), `hab` — kod typu siedliska,
   - `h_<gatunek>` — ocena siedliska 0–100 dla każdego gatunku z `gatunki.json`
-    (np. `h_borowik`, `h_kurka`); wynik dnia = `round(h × w)`, gdzie `w` z `pogoda.json`,
+    (np. `h_borowik`, `h_kurka`); wynik dnia = `round(h × w)`, gdzie `w` z `pogoda.json`;
+    `h` uwzględnia partnera drzewnego i jego wiek, typ siedliskowy oraz (jako modyfikatory)
+    pokrywę runa, wilgotność, degradację, glebę, uszkodzenia i zadrzewienie z BDL,
   - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione).
 - `rezerwaty` — obrysy rezerwatów przyrody (GDOŚ), atrybut `name` (opcjonalny).
 

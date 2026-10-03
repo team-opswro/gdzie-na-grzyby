@@ -80,3 +80,12 @@ def test_no_factors_section_gives_empty(tmp_path):
 
 def test_repo_species_yaml_loads():
     assert load_species()
+
+
+def test_yaml_factor_values():
+    s = load_species()
+    assert s["kozlarz"].factors["moist"]["BO"] == 0.8
+    assert s["rydz"].factors["degr"] == {} and s["maslak"].factors["degr"] == {}
+    assert s["kurka"].factors["moist"]["WW"] == 0.85
+    assert s["borowik"].factors["veg"] == {"ZAD": 0.7, "ZIEL": 0.8, "SZAD": 0.9}
+    assert s["borowik"].factors["damage"] == Ramp(40, 100, 0.6)

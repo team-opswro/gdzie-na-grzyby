@@ -122,3 +122,14 @@ def test_defaults_point_to_out():
     assert build.DEFAULT_OUT == Path(build.__file__).parent / "data" / "out"
     assert fetch_names.NAMES_PATH == build.DEFAULT_OUT / "nazwy.json"
     assert species_info.OUT_PATH == build.DEFAULT_OUT / "gatunki.json"
+
+
+def test_build_json_has_h_hist(tmp_path):
+    names = tmp_path / "n.json"
+    names.write_text('{"nadl": {}, "lesn": {}}', encoding="utf-8")
+    meta = build.run(stands(), S, RES, tmp_path / "out", tmp_path / "b", names,
+                     tippecanoe=FakeTippecanoe(), now="x")
+    hist = meta["h_hist"]
+    assert set(hist) == set(KEYS)
+    assert all(len(v) == 10 and sum(v) == 4 for v in hist.values())
+    assert hist["borowik"][9] >= 2 and hist["borowik"][0] >= 1  # a, c: h 100; d: olcha 0

@@ -1,5 +1,16 @@
 # Reguły gatunków. Jedyne miejsce z parametrami gatunkowymi.
 # Kody drzew i siedlisk: ASCII, wielkie litery (normalizacja kodów BDL w pipeline).
+# Modyfikatory siedliska (spec F): tabele kod BDL -> mnożnik (brak kodu = 1.0), rampa uszkodzeń (%),
+# przedziały zadrzewienia [górna granica włącznie, mnożnik]. Gatunek może nadpisać całą tabelę w `factors:`.
+# Iloczyn modyfikatorów ma dolne ograniczenie 0.4 (pipeline/habitat.py: MOD_FLOOR).
+factors_default:
+  veg: {ZAD: 0.7, ZIEL: 0.8, SZAD: 0.9}
+  moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6}
+  degr: {N1: 1.0, N2: 1.0, Z1: 0.9, D1: 0.9, Z2: 0.8, Z3: 0.8, D2: 0.8, D3: 0.8, P: 0.8}
+  soil: {}
+  damage: {full: 40, zero_at: 100, min: 0.6}
+  density: [[0.4, 0.8], [0.9, 1.0], [1.0, 0.9]]
+
 species:
   borowik:
     name: "Borowik szlachetny"
@@ -11,6 +22,8 @@ species:
     rain_min: 10
     rain_full: 40
     soil_moisture_min: 0.15
+    factors:
+      soil: {G: 0.85, OG: 0.85, MD: 0.85}
   podgrzybek:
     name: "Podgrzybek brunatny"
     partners: [SO, SW]
@@ -21,6 +34,8 @@ species:
     rain_min: 10
     rain_full: 40
     soil_moisture_min: 0.15
+    factors:
+      soil: {BR: 0.85, G: 0.85, OG: 0.85, MD: 0.85}
   kurka:
     name: "Kurka"
     partners: [SO, SW, BK, DB]
@@ -31,6 +46,9 @@ species:
     rain_min: 8
     rain_full: 30
     soil_moisture_min: 0.15
+    factors:
+      moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6, WW: 0.85, WSW: 0.85}
+      soil: {BR: 0.85, G: 0.85, OG: 0.85, MD: 0.85}
   kozlarz:
     name: "Koźlarz babka"
     partners: [BRZ]
@@ -41,6 +59,9 @@ species:
     rain_min: 10
     rain_full: 40
     soil_moisture_min: 0.15
+    factors:
+      moist: {BO: 0.8, BM: 0.8, BBM: 0.8, BSO: 0.9}
+      soil: {B: 0.9, RD: 0.9}
   maslak:
     name: "Maślak zwyczajny"
     partners: [SO]
@@ -51,6 +72,9 @@ species:
     rain_min: 10
     rain_full: 40
     soil_moisture_min: 0.15
+    factors:
+      moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6, WW: 0.85, WSW: 0.85}
+      degr: {}
   rydz:
     name: "Rydz"
     partners: [SO, SW]
@@ -61,3 +85,5 @@ species:
     rain_min: 10
     rain_full: 40
     soil_moisture_min: 0.15
+    factors:
+      degr: {}

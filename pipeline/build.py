@@ -33,6 +33,17 @@ def _write_json(path: Path, obj, **kw) -> None:
     tmp.replace(path)
 
 
+def h_histogram(feats, keys: list[str]) -> dict[str, list[int]]:
+    """Liczba wydzieleń w przedziałach h 0–9, 10–19, …, 90–100 (porównanie rozkładu między buildami)."""
+    out = {}
+    for k in keys:
+        counts = [0] * 10
+        for v in feats[f"h_{k}"]:
+            counts[min(int(v) // 10, 9)] += 1
+        out[k] = counts
+    return out
+
+
 def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
         names_path: Path, tippecanoe=subprocess.run, now: str | None = None,
         build: str | None = None) -> dict:
@@ -74,6 +85,7 @@ def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
                    "centroids": n_centroids, "centroid_tiles": len(index["tiles"]),
                    "grid_cells": len(grid["cells"])},
     }
+    meta["h_hist"] = h_histogram(feats, keys)
     _write_json(out / "build.json", meta, indent=1)
     print(f"centroidy: {n_centroids} w {len(index['tiles'])} kafelkach, "
           f"komorki siatki: {len(grid['cells'])}")

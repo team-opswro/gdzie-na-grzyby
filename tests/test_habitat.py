@@ -253,3 +253,8 @@ def test_components_include_all_factors():
 def test_stand_from_row_rounds_damage_and_density():
     s = stand_from_row("SO", [], 60, "BSW", [], damage=23, density=0.94, veg=float("nan"))
     assert (s.damage, s.density, s.veg) == (20, 0.9, None)
+
+
+def test_kurka_brown_soil_lower_than_podzol():
+    k = S["kurka"]
+    assert habitat_score(st(soil="BRk"), k) < habitat_score(st(soil="Bw"), k)
