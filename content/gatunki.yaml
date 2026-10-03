@@ -1,0 +1,128 @@
+# Treści karty gatunku (opisy, sobowtóry, nazwy kodów). Parametry gatunków: species.yaml.
+# Po zmianie: python -m pipeline.species_info  (-> web/data/gatunki.json)
+# reviewed: true dopiero po weryfikacji tekstów przez grzyboznawcę.
+reviewed: false
+
+codes:
+  trees:
+    SO: sosna
+    SW: świerk
+    BK: buk
+    DB: dąb
+    BRZ: brzoza
+  habitats:
+    BS: bór suchy
+    BSW: bór świeży
+    BW: bór wilgotny
+    BB: bór bagienny
+    BMSW: bór mieszany świeży
+    BMW: bór mieszany wilgotny
+    BMB: bór mieszany bagienny
+    BMWYZ: bór mieszany wyżynny świeży
+    BGSW: bór górski świeży
+    BGW: bór górski wilgotny
+    BMGSW: bór mieszany górski świeży
+    LSW: las świeży
+    LW: las wilgotny
+    LMSW: las mieszany świeży
+    LMW: las mieszany wilgotny
+    LMWYZ: las mieszany wyżynny świeży
+    LMWYZW: las mieszany wyżynny wilgotny
+    LMGSW: las mieszany górski świeży
+    LWYZS: las wyżynny świeży
+    LWYZW: las wyżynny wilgotny
+    LGSW: las górski świeży
+    LGW: las górski wilgotny
+
+species:
+  borowik:
+    latin: Boletus edulis
+    wiki: https://pl.wikipedia.org/wiki/Borowik_szlachetny
+    description: >-
+      Duży grzyb rurkowy o brązowym, gładkim kapeluszu, u młodych owocników białawym;
+      rurki najpierw białe, potem żółtawe i oliwkowozielone; trzon gruby, beczułkowaty,
+      jasny, w górnej części z białą siateczką. Miąższ biały, nie zmienia barwy po
+      przekrojeniu, smak łagodny, orzechowy. Rośnie w borach i lasach mieszanych pod
+      sosną, świerkiem, bukiem i dębem.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki z wiekiem różowieją, a trzon pokrywa wyraźna ciemnobrązowa siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+      - name: Borowik szatański
+        latin: Rubroboletus satanas
+        risk: trujący
+        how: >-
+          Ma jasnoszary kapelusz, czerwone pory i czerwony, pękaty trzon, a miąższ
+          sinieje po przekrojeniu. Rośnie pod dębami i bukami na glebach wapiennych.
+  podgrzybek:
+    latin: Imleria badia
+    wiki: https://pl.wikipedia.org/wiki/Podgrzybek_brunatny
+    description: >-
+      Grzyb rurkowy o kasztanowobrązowym kapeluszu, lepkim w czasie wilgotnej pogody.
+      Rurki żółte do oliwkowych, po uciśnięciu sinieją; trzon żółtobrązowy, bez
+      siateczki. Miąższ białawy do żółtawego, po przekrojeniu lekko sinieje.
+      Rośnie licznie w borach sosnowych i świerkowych.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka są białawe, potem różowe i nie sinieją, a trzon ma ciemną
+          siateczkę. Miąższ jest bardzo gorzki.
+  kurka:
+    latin: Cantharellus cibarius
+    wiki: https://pl.wikipedia.org/wiki/Pieprznik_jadalny
+    description: >-
+      Żółty do żółtopomarańczowego grzyb o lejkowatym kapeluszu z falistym brzegiem.
+      Spód kapelusza ma grube, rozwidlone listewki zbiegające na trzon, a nie
+      prawdziwe blaszki. Miąższ jasny, jędrny, włóknisty, o owocowym zapachu. Rośnie
+      w borach i lasach mieszanych, często w mchu.
+    lookalikes:
+      - name: Lisówka pomarańczowa
+        latin: Hygrophoropsis aurantiaca
+        risk: niejadalny
+        how: >-
+          Ma prawdziwe, cienkie, gęste i wielokrotnie rozwidlone blaszki, intensywniej
+          pomarańczowe od kapelusza. Miąższ jest miękki, nie włóknisty jak u kurki.
+  kozlarz:
+    latin: Leccinum scabrum
+    wiki: https://pl.wikipedia.org/wiki/Koźlarz_babka
+    description: >-
+      Grzyb rurkowy o szarobrązowym do brązowego kapeluszu i białawych, później
+      szarawych rurkach. Smukły, białawy trzon pokryty jest ciemnymi, szorstkimi
+      łuseczkami. Miąższ biały, po przekrojeniu nie zmienia barwy lub lekko różowieje,
+      z wiekiem staje się wodnisty. Rośnie wyłącznie pod brzozami.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Trzon goryczaka ma ciemną siateczkę, a nie łuseczki, a rurki różowieją.
+          Miąższ jest bardzo gorzki.
+  maslak:
+    latin: Suillus luteus
+    wiki: https://pl.wikipedia.org/wiki/Maślak_zwyczajny
+    description: >-
+      Grzyb rurkowy o brązowym, śliskim i błyszczącym kapeluszu, z którego łatwo
+      ściąga się skórkę. Rurki żółte; na trzonie wyraźny, błoniasty pierścień,
+      od spodu fioletowawy. Rośnie pod młodymi sosnami, często na skrajach lasu.
+      W Polsce wśród maślaków nie ma groźnych sobowtórów.
+    lookalikes: []
+  rydz:
+    latin: Lactarius deliciosus
+    wiki: https://pl.wikipedia.org/wiki/Mleczaj_rydz
+    description: >-
+      Pomarańczowy mleczaj o lejkowatym kapeluszu z ciemniejszymi, koncentrycznymi
+      pasami. Po uszkodzeniu wydziela marchewkowopomarańczowe mleczko, a miejsca
+      zranione zielenieją. Trzon krótki, pusty, z ciemniejszymi dołkami. Rośnie pod
+      sosnami i świerkami, często w młodnikach i na trawiastych skrajach lasu.
+    lookalikes:
+      - name: Mleczaj wełnianka
+        latin: Lactarius torminosus
+        risk: trujący
+        how: >-
+          Wydziela białe, bardzo ostre mleczko (rydz — pomarańczowe), a brzeg
+          kapelusza jest kosmaty i podwinięty. Rośnie pod brzozami.

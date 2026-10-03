@@ -20,6 +20,7 @@ python -m pipeline.area                            # obrys obszaru: opolskie + n
 python -m pipeline.fetch_reserves                  # rezerwaty przyrody z GDOŚ (WFS) -> pipeline/data/rezerwaty.geojson
 python -m pipeline.fetch_bdl                       # pobranie danych BDL do pipeline/data/raw
 python -m pipeline.fetch_names                     # nazwy nadleśnictw i leśnictw -> web/data/nazwy.json
+python -m pipeline.species_info                    # karty gatunków: species.yaml + content/gatunki.yaml -> web/data/gatunki.json
 podman build -f pipeline/Dockerfile -t grzyby-pipeline .      # (docker: to samo polecenie)
 podman run --rm -v $PWD:/w:z -w /w grzyby-pipeline \
   python -m pipeline.build_tiles --bdl pipeline/data/raw --boundary pipeline/data/obszar.geojson \
