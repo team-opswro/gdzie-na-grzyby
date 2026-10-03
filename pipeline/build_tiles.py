@@ -12,14 +12,35 @@ import shapely
 
 from forecast.species import Species
 from pipeline.grid import cell_id
-from pipeline.habitat import habitat_score, stand_from_row
+from pipeline.habitat import HABITAT_FACTORS, habitat_components, habitat_score, stand_from_row
 
 CENTROID_THRESHOLD = 40
 CENTROID_TILE = 0.5
 MINZOOM, MAXZOOM = 8, 14
 ATTRS = ["id", "cell", "sp", "age", "hab"]
+# „Słabe strony siedliska” (spec J §3): najsłabszy modyfikator < HL_THRESHOLD, zapisywany przy h ≥ HL_MIN_H.
+HL_THRESHOLD = 0.8
+HL_MIN_H = 20
 # kolumny load_stands przekazywane do Stand (modyfikatory siedliska, spec F)
 STAND_EXTRA = ("moist", "degr", "soil", "veg", "damage", "density", "twi_class", "exposure")
+
+
+def weakest_factor(components: dict[str, float]) -> str | None:
+    """Najsłabszy czynnik poza partnerem (remis: kolejność HABITAT_FACTORS); None, gdy wszystkie ≥ próg."""
+    best = None
+    for name in HABITAT_FACTORS:
+        if name == "partner" or name not in components:
+            continue
+        if components[name] < HL_THRESHOLD and (best is None or components[name] < components[best]):
+            best = name
+    return best
+
+
+def _weak_point(st, sp) -> str | None:
+    c = habitat_components(st, sp)
+    if st.sp_main not in sp.partners:
+        c.pop("age")  # wiek panującego nie-partnera nie wpływa na ocenę
+    return weakest_factor(c)
 
 
 def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundary=None):
@@ -47,10 +68,12 @@ def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundar
             zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"], parts)):
         st = stand_from_row(sp, adm, age, hab, pt, **{c: extra[c][i] for c in STAND_EXTRA})
         if st not in cache:
-            cache[st] = {k: int(round(100 * habitat_score(st, species[k]))) for k in keys}
+            cache[st] = ({k: int(round(100 * habitat_score(st, species[k]))) for k in keys},
+                         {k: _weak_point(st, species[k]) for k in keys})
         rows.append(cache[st])
     for k in keys:
-        gdf[f"h_{k}"] = [r[k] for r in rows]
+        gdf[f"h_{k}"] = [r[0][k] for r in rows]
+        gdf[f"hl_{k}"] = pd.Series([r[1][k] for r in rows], dtype=object).values
     return gdf
 
 
@@ -158,10 +181,13 @@ def write_geojsonseq(gdf, keys: list[str], path: Path) -> None:
             props = {"id": rec.id, "cell": rec.cell, "sp": rec.sp_main,
                      "age": None if rec.age is None or rec.age != rec.age else int(rec.age),
                      "hab": rec.hab}
-            for c in hcols:  # h = 0 pomijane (klient: brak atrybutu = 0), mniejsze kafelki
+            for k, c in zip(keys, hcols):  # h = 0 pomijane (klient: brak atrybutu = 0), mniejsze kafelki
                 h = int(getattr(rec, c))
                 if h:
                     props[c] = h
+                weak = getattr(rec, f"hl_{k}", None)
+                if h >= HL_MIN_H and isinstance(weak, str):
+                    props[f"hl_{k}"] = weak
             rez = getattr(rec, "rez", None)
             if isinstance(rez, str) and rez:
                 props["rez"] = rez

@@ -53,6 +53,19 @@ export const LIM_TEXT = {
   season: "Ogranicza: poza sezonem",
   frost: "Ogranicza: niedawny przymrozek",
 };
+// „Słabe strony siedliska” (atrybut hl_<gatunek> w kafelkach, spec J §3).
+export const HAB_LIM_TEXT = {
+  veg: "Ogranicza siedlisko: gęste runo/zadarnienie",
+  moist: "Ogranicza siedlisko: zbyt mokre (bagienne)",
+  degr: "Ogranicza siedlisko: siedlisko zniekształcone",
+  soil: "Ogranicza siedlisko: mniej korzystna gleba",
+  damage: "Ogranicza siedlisko: uszkodzony drzewostan",
+  density: "Ogranicza siedlisko: zadrzewienie (za rzadko lub za gęsto)",
+  twi: "Ogranicza siedlisko: położenie (za sucho lub za mokro)",
+  exposure: "Ogranicza siedlisko: stromy stok południowy",
+  habitat: "Ogranicza siedlisko: typ siedliskowy mniej korzystny",
+  age: "Ogranicza siedlisko: wiek drzewostanu",
+};
 export const SOIL_DRY = 0.15;
 export const SOIL_WET = 0.3;
 
@@ -216,6 +229,14 @@ export function renderPopup(props, ctx) {
   row(t, "Wiek", props.age != null && props.age !== "" ? props.age + " lat" : "—");
   row(t, "Typ siedliskowy", props.hab || "—");
   row(t, "Siedlisko", pct(h / 100));
+  const weak = !isAll ? HAB_LIM_TEXT[props["hl_" + species]] : null;
+  if (weak && !props.rez) {
+    const tr = document.createElement("tr");
+    const td = el("td", weak, "popup-hablim");
+    td.colSpan = 2;
+    tr.append(td);
+    t.append(tr);
+  }
   if (weather && weather.wx && !props.rez) {
     const f = formatWx(weather.wx);
     for (const line of [f.rain, f.soil, f.et0]) {

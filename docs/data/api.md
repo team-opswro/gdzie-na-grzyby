@@ -83,6 +83,9 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
     pokrywę runa, wilgotność, degradację, glebę, uszkodzenia i zadrzewienie z BDL oraz położenie
     w terenie (wilgotność topograficzna TWI, strome stoki południowe) z Copernicus DEM GLO-30;
     **brak atrybutu `h_<gatunek>` = 0** (zera nie są zapisywane, żeby zmniejszyć kafelki),
+  - `hl_<gatunek>` — „słaba strona siedliska”: nazwa najsłabszego modyfikatora (`veg`, `moist`, `degr`,
+    `soil`, `damage`, `density`, `twi`, `exposure`, `habitat`, `age`), gdy jego mnożnik < 0,8, a
+    `h_<gatunek>` ≥ 20; opcjonalny (brak = brak wyraźnej słabej strony),
   - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione).
 - `rezerwaty` — obrysy rezerwatów przyrody (GDOŚ), atrybut `name` (opcjonalny).
 - `parkingi` — parkingi z OpenStreetMap (punkty), atrybuty:

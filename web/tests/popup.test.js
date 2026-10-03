@@ -163,3 +163,36 @@ test("popup z pulse i frost pokazuje wiersze", () => {
   assert.ok(rows.some(([l, v]) => l === "Ochłodzenie" && v === "+10%"));
   assert.ok(rows.some(([l, v]) => l === "Przymrozek" && v === "60%"));
 });
+
+import { HAB_LIM_TEXT } from "../js/popup.js";
+
+test("HAB_LIM_TEXT dokładnie wg specu J", () => assert.deepEqual(HAB_LIM_TEXT, {
+  veg: "Ogranicza siedlisko: gęste runo/zadarnienie",
+  moist: "Ogranicza siedlisko: zbyt mokre (bagienne)",
+  degr: "Ogranicza siedlisko: siedlisko zniekształcone",
+  soil: "Ogranicza siedlisko: mniej korzystna gleba",
+  damage: "Ogranicza siedlisko: uszkodzony drzewostan",
+  density: "Ogranicza siedlisko: zadrzewienie (za rzadko lub za gęsto)",
+  twi: "Ogranicza siedlisko: położenie (za sucho lub za mokro)",
+  exposure: "Ogranicza siedlisko: stromy stok południowy",
+  habitat: "Ogranicza siedlisko: typ siedliskowy mniej korzystny",
+  age: "Ogranicza siedlisko: wiek drzewostanu",
+}));
+
+test("popup: tekst słabej strony siedliska", () => {
+  installDom();
+  const root = popup.renderPopup({ id: "x", cell: "1_1", h_kurka: 70, hl_kurka: "veg" }, { pogoda: null, species: "kurka", dayIdx: 0 });
+  const all = [];
+  walk(root, (n) => { if (n.textContent) all.push(n.textContent); });
+  assert.ok(all.includes("Ogranicza siedlisko: gęste runo/zadarnienie"));
+});
+
+test("popup: nieznany kod hl_ pomijany, tryb grupy bez hl_", () => {
+  installDom();
+  for (const ctx of [{ species: "kurka" }, { species: "g-x", keys: ["kurka", "kozlarz"] }]) {
+    const root = popup.renderPopup({ id: "x", cell: "1_1", h_kurka: 70, hl_kurka: ctx.keys ? "veg" : "xyz" }, { pogoda: null, dayIdx: 0, ...ctx });
+    const all = [];
+    walk(root, (n) => { if (n.textContent) all.push(n.textContent); });
+    assert.ok(!all.some((t) => String(t).startsWith("Ogranicza siedlisko")));
+  }
+});
