@@ -47,7 +47,9 @@ def test_build_info_translates_and_keeps_order():
         "age_min": 30, "description": "Db.",
         "lookalikes": [{"name": "X", "latin": "Lx", "risk": "trujący", "how": "H."}],
         "wiki": "https://pl.wikipedia.org/wiki/B",
+        "group": None,
     }
+    assert out["groups"] == []
 
 
 def test_build_info_missing_code_raises():
@@ -119,3 +121,63 @@ def test_main_writes_file(tmp_path):
     out = tmp_path / "g.json"
     assert species_info.main(["--out", str(out)]) == 0
     assert json.loads(out.read_text(encoding="utf-8"))["species"][0]["key"] == "borowik"
+
+
+# --- grupy i nowe gatunki (spec K) ---
+
+def repo_info():
+    return build_info(yaml.safe_load(SPECIES_PATH.read_text(encoding="utf-8")),
+                      yaml.safe_load(CONTENT_PATH.read_text(encoding="utf-8")))
+
+
+def by_key(info):
+    return {s["key"]: s for s in info["species"]}
+
+
+def test_groups_in_info():
+    g = {x["key"]: x for x in repo_info()["groups"]}
+    assert [x["key"] for x in repo_info()["groups"]] == ["borowiki", "podgrzybki", "kozlarze", "maslaki",
+                                                         "rydze"]
+    assert g["kozlarze"]["species"] == ["kozlarz", "kozlarz_czerwony", "kozlarz_pomaranczowy",
+                                        "kozlarz_grabowy", "kozlarz_debowy"]
+    assert g["kozlarze"]["name"] == "Koźlarze (kozaki)" and g["kozlarze"]["all"] == "Wszystkie koźlarze"
+
+
+def test_species_have_group_field():
+    s = by_key(repo_info())
+    assert s["kurka"]["group"] is None and s["maslak_zolty"]["group"] == "maslaki"
+
+
+def test_missing_group_texts_raises():
+    sp = yaml.safe_load(SPECIES_PATH.read_text(encoding="utf-8"))
+    content = yaml.safe_load(CONTENT_PATH.read_text(encoding="utf-8"))
+    del content["groups"]["rydze"]
+    with pytest.raises(ValueError):
+        build_info(sp, content)
+
+
+def test_new_tree_codes_translated():
+    s = by_key(repo_info())
+    assert s["maslak_zolty"]["partners"] == ["modrzew"]
+    assert s["kozlarz_czerwony"]["partners"] == ["osika", "topola"]
+    assert s["kozlarz_grabowy"]["partners"] == ["grab"]
+
+
+def test_habitat_sets_expanded_in_info():
+    s = by_key(repo_info())
+    assert s["borowik_sosnowy"]["habitats_preferred"][:3] == ["bór suchy", "bór świeży", "bór górski świeży"]
+    assert not set(s["borowik_sosnowy"]["habitats_preferred"]) & set(s["borowik_sosnowy"]["habitats_adjacent"])
+
+
+def test_required_lookalikes_present():
+    s = by_key(repo_info())
+    rs = {lk["name"]: lk["risk"] for lk in s["rydz_swierkowy"]["lookalikes"]}
+    assert rs == {"Mleczaj wełnianka": "trujący", "Mleczaj omszony": "trujący"}
+    for k in ("borowik_sosnowy", "borowik_usiatkowany", "podgrzybek_czerwonawy"):
+        assert any(lk["name"] == "Borowik szatański" and lk["risk"] == "trujący"
+                   for lk in s[k]["lookalikes"]), k
+    for k in ("kozlarz_czerwony", "kozlarz_pomaranczowy", "kozlarz_grabowy", "kozlarz_debowy",
+              "borowik_sosnowy", "borowik_usiatkowany", "podgrzybek_zajaczek", "podgrzybek_zlotawy"):
+        assert any(lk["name"] == "Goryczak żółciowy" for lk in s[k]["lookalikes"]), k
+    for k in ("podgrzybek_zajaczek", "podgrzybek_zlotawy", "maslak_zolty", "maslak_sitarz"):
+        assert any(lk["latin"] == "Chalciporus piperatus" for lk in s[k]["lookalikes"]), k

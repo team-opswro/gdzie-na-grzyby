@@ -71,18 +71,22 @@ def _parse_factors(key: str, raw: dict | None) -> dict[str, object]:
     return {name: _parse_factor(key, name, v) for name, v in (raw or {}).items()}
 
 
-def expand_habitats(items: list[str], sets: Mapping[str, list[str]], key: str = "") -> frozenset[str]:
-    """Kody siedlisk; element "@nazwa" -> kody zestawu z `habitat_sets` (spec K §2.3)."""
-    out: set[str] = set()
+def expand_habitat_list(items: list[str], sets: Mapping[str, list[str]], key: str = "") -> list[str]:
+    """Kody siedlisk w kolejności, bez powtórzeń; "@nazwa" -> kody zestawu z `habitat_sets`."""
+    out: list[str] = []
     for it in items:
         if isinstance(it, str) and it.startswith("@"):
-            name = it[1:]
-            if name not in sets:
+            if it[1:] not in sets:
                 raise ValueError(f"{key}: nieznany zestaw siedlisk {it!r}")
-            out.update(sets[name])
+            codes = sets[it[1:]]
         else:
-            out.add(it)
-    return frozenset(out)
+            codes = [it]
+        out += [c for c in codes if c not in out]
+    return out
+
+
+def expand_habitats(items: list[str], sets: Mapping[str, list[str]], key: str = "") -> frozenset[str]:
+    return frozenset(expand_habitat_list(items, sets, key))
 
 
 def _parse(key: str, d: dict, defaults: Mapping[str, object] | None = None,
