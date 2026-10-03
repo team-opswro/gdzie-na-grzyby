@@ -12,8 +12,8 @@ import yaml
 
 from forecast.species import Species, load_species
 from pipeline.fetch_bdl import FIELDS_YAML, load_bdl
-from pipeline.grid import build_grid, cell_id
 from pipeline.fetch_reserves import RESERVES_PATH
+from pipeline.grid import build_grid, cell_id
 from pipeline.habitat import Stand, habitat_score
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -64,7 +64,7 @@ def mark_reserves(feats: gpd.GeoDataFrame, reserves) -> gpd.GeoDataFrame:
         j = gpd.sjoin(pts, res, predicate="within", how="inner")
         j = j.sort_values(["_i", "_r"]).drop_duplicates("_i")
         for i, name in zip(j["_i"], j["name"]):
-            rez.iloc[i] = name
+            rez.iloc[i] = name if isinstance(name, str) and name.strip() else "rezerwat"
     if "fun" in out.columns:
         flag = out["fun"].map(lambda v: isinstance(v, str) and v.startswith("REZ"))
         rez = rez.where(rez.notna() | ~flag, "rezerwat")
@@ -76,7 +76,8 @@ def write_reserves_seq(reserves: gpd.GeoDataFrame, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as fh:
         for name, geom in zip(reserves["name"], reserves.geometry):
-            fh.write(json.dumps({"type": "Feature", "properties": {"name": name},
+            props = {"name": name} if isinstance(name, str) and name.strip() else {}
+            fh.write(json.dumps({"type": "Feature", "properties": props,
                                  "geometry": json.loads(shapely.to_geojson(geom))},
                                 ensure_ascii=False) + "\n")
 

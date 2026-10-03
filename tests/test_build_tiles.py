@@ -148,3 +148,23 @@ def test_tippecanoe_cmd_two_layers(tmp_path):
     assert cmd[:3] == ["tippecanoe", "-o", str(tmp_path / "lasy.pmtiles")]
     assert "-L" in cmd and "lasy:a.seq" in cmd and "rezerwaty:r.seq" in cmd and "-l" not in cmd
     assert "-Z8" in cmd and "-z14" in cmd and "--force" in cmd
+
+
+def test_mark_reserves_null_name_still_marked(tmp_path):
+    res = gpd.GeoDataFrame({"name": [None]}, geometry=[box(17.0, 50.0, 17.5, 50.5)], crs=4326)
+    f = compute_features(gdf_from([sq(50.2, 17.2), sq(50.8, 17.9)]), S)
+    m = mark_reserves(f, res)
+    assert list(m["rez"]) == ["rezerwat", None]
+    p = tmp_path / "c.json"
+    assert write_centroids(m, KEYS, p) == 1
+
+
+def test_write_reserves_seq_null_name_is_valid_json(tmp_path):
+    res = gpd.GeoDataFrame({"name": [None]}, geometry=[box(17.0, 50.0, 17.5, 50.5)], crs=4326)
+    p = tmp_path / "r.seq"
+    write_reserves_seq(res, p)
+
+    def boom(c):
+        raise ValueError(c)
+    o = json.loads(p.read_text(encoding="utf-8").splitlines()[0], parse_constant=boom)
+    assert "name" not in o["properties"]
