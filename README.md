@@ -74,28 +74,40 @@ Obraz `web` nie zawiera danych: bez `DATA_BASE_URL` strona szuka ich w `data/`, 
    python -m pipeline.publish --keep 3
    ```
 
-5. **CORS (raz):** strona czyta bucket z innej domeny, więc bucket potrzebuje reguły CORS
-   (GET, HEAD, nagłówek `Range` dla PMTiles) dla każdego originu — dane są publiczne i tylko do odczytu.
-   Token **Object Read & Write nie ma prawa** zmieniać konfiguracji bucketu (`PutBucketCors` →
-   `AccessDenied`; `publish --cors` zgłasza to po wysłaniu danych, kod wyjścia 3). Ustaw regułę w panelu:
-   R2 → bucket → **Settings → CORS Policy → Add/Edit**:
+5. **Jak strona czyta bucket — proxy (domyślnie) albo wprost:**
+   - **Proxy (domyślny tryb przy `DATA_BASE_URL`):** kontener `web` przy starcie generuje w nginx
+     lokalizację `/dane/`, która przekazuje żądania do `DATA_BASE_URL` (także `Range` dla PMTiles → `206`,
+     `ETag`/`If-None-Match`, `Content-Encoding: gzip` i `Cache-Control` z bucketu bez zmian; tylko `GET`/`HEAD`),
+     a `config.json` dostaje `"dataBase": "/dane/"`. Przeglądarka czyta dane z tej samej domeny co strona,
+     więc **bucket nie potrzebuje reguły CORS**. `DATA_BASE_URL` musi mieć postać `https://host[/ścieżka/]`
+     (znaki `A-Z a-z 0-9 . _ ~ / -`) — inaczej kontener nie wystartuje (czytelny błąd w logu).
+     Koszt: cały ruch danych (≈110 MB PMTiles na wersję, czytane fragmentami) idzie przez VPS, a `r2.dev`
+     ma limit żądań i brak cache Cloudflare — przy większym ruchu podłącz do bucketu własną domenę
+     (cache Cloudflare) i rozważ tryb bezpośredni.
+   - **Wprost (`DATA_DIRECT=1`):** `config.json` dostaje sam `DATA_BASE_URL`, przeglądarka czyta bucket
+     bezpośrednio (bez obciążania VPS). Wymaga reguły CORS na buckecie (GET, HEAD, nagłówek `Range`).
+     Token **Object Read & Write nie ma prawa** zmieniać konfiguracji bucketu (`PutBucketCors` →
+     `AccessDenied`; `publish --cors` zgłasza to po wysłaniu danych, kod wyjścia 3). Ustaw regułę w panelu:
+     R2 → bucket → **Settings → CORS Policy → Add/Edit**:
 
-   ```json
-   [
-     {
-       "AllowedOrigins": ["*"],
-       "AllowedMethods": ["GET", "HEAD"],
-       "AllowedHeaders": ["Range", "If-Match", "If-None-Match"],
-       "ExposeHeaders": ["ETag", "Content-Range", "Content-Length"],
-       "MaxAgeSeconds": 3600
-     }
-   ]
-   ```
+     ```json
+     [
+       {
+         "AllowedOrigins": ["*"],
+         "AllowedMethods": ["GET", "HEAD"],
+         "AllowedHeaders": ["Range", "If-Match", "If-None-Match"],
+         "ExposeHeaders": ["ETag", "Content-Range", "Content-Length"],
+         "MaxAgeSeconds": 3600
+       }
+     ]
+     ```
 
-   (albo jednorazowo `publish --cors '*'` z tokenem **Admin Read & Write**). Kolejne publikacje — bez `--cors`.
+     (albo jednorazowo `publish --cors '*'` z tokenem **Admin Read & Write**), a potem ustaw w `web`
+     `DATA_DIRECT=1`. Aplikacje natywne CORS nie potrzebują — czytają bucket wprost w obu trybach.
 6. **Coolify:** **New Resource -> Docker Compose** z repozytorium git, plik `docker-compose.yml`
    (porty nie są publikowane — routing robi Traefik w Coolify). Zmienne środowiskowe usług:
-   - `web` — `DATA_BASE_URL`; ustaw domenę (port 80), HTTPS załatwia Coolify.
+   - `web` — `DATA_BASE_URL` (opcjonalnie `DATA_DIRECT=1`, patrz punkt 5); ustaw domenę (port 80),
+     HTTPS załatwia Coolify.
    - `forecast` — `DATA_BASE_URL` oraz `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
      `S3_SECRET_ACCESS_KEY` (`S3_REGION` domyślnie `auto`); bez domeny.
 7. **Deploy.** `forecast` przy starcie pobiera `manifest.json` i `grid.json` z `DATA_BASE_URL`, liczy
@@ -105,8 +117,9 @@ Obraz `web` nie zawiera danych: bez `DATA_BASE_URL` strona szuka ich w `data/`, 
 8. **Nowa wersja danych:** build + `pipeline.publish` — strona i `forecast` same przechodzą na nowy
    `manifest.json`; redeploy nie jest potrzebny.
 
-Weryfikacja: `curl -sI <DATA_BASE_URL>manifest.json` (`content-encoding: gzip`, `cache-control: no-cache`)
-i `curl -s -D - -o /dev/null -H 'Origin: https://example.org' -H 'Range: bytes=0-99' <DATA_BASE_URL>v/<build>/lasy.pmtiles`
+Weryfikacja: `curl -sI <DATA_BASE_URL>manifest.json` (`content-encoding: gzip`, `cache-control: no-cache`).
+Tryb proxy: `curl -s -D - -o /dev/null -H 'Range: bytes=0-99' https://<domena strony>/dane/v/<build>/lasy.pmtiles`
+→ `206`. Tryb wprost: `curl -s -D - -o /dev/null -H 'Origin: https://example.org' -H 'Range: bytes=0-99' <DATA_BASE_URL>v/<build>/lasy.pmtiles`
 → `206` oraz `access-control-allow-origin` (brak tego nagłówka = brak reguły CORS, mapa się nie wczyta).
 
 ## Dane i licencje

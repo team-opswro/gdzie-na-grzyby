@@ -19,6 +19,7 @@ services:
       - "8080:80"
     environment:
       DATA_BASE_URL: ${DATA_BASE_URL:-}
+      DATA_DIRECT: ${DATA_DIRECT:-}
     volumes:
       - ./pipeline/data/out:/usr/share/nginx/html/data:ro,z
       - ./pipeline/data/live:/usr/share/nginx/html/data/live:ro,z

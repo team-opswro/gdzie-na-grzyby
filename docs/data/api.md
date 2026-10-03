@@ -42,7 +42,10 @@ powinien pobrać `manifest.json` ponownie.
 - CORS: `GET`, `HEAD` z dowolnego originu (`*`); dozwolone nagłówki żądania `Range`, `If-Match`,
   `If-None-Match`; eksponowane `ETag`, `Content-Range`, `Content-Length`.
   Reguła CORS jest konfiguracją bucketu (panel R2 albo `publish --cors` z tokenem Admin) — patrz README,
-  „Wdrożenie z R2”.
+  „Wdrożenie z R2”. Aplikacje natywne czytają bucket wprost (`DATA_BASE_URL`) i CORS nie potrzebują.
+  Strona WWW domyślnie czyta te same pliki przez proxy nginx pod własną domeną (`/dane/` → `DATA_BASE_URL`,
+  bez CORS; nagłówki `Content-Encoding`, `Cache-Control`, `ETag`, `Content-Range` i status `206`
+  przechodzą bez zmian), a wprost z bucketu tylko z `DATA_DIRECT=1` (wtedy reguła CORS jest wymagana).
 
 ## `manifest.json`
 

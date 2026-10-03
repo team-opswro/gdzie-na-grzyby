@@ -1,6 +1,7 @@
 FROM nginx:1.27-alpine
 COPY web /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-# config.json (DATA_BASE_URL) generowany przy starcie przez /docker-entrypoint.sh obrazu nginx.
+# config.json i proxy /dane/ (DATA_BASE_URL, DATA_DIRECT) generowane przy starcie przez /docker-entrypoint.sh obrazu nginx.
 COPY docker/web-entrypoint.sh /docker-entrypoint.d/40-web-config.sh
-RUN chmod 755 /docker-entrypoint.d/40-web-config.sh
+# /etc/nginx/dane.d/ — fragment z lokalizacją proxy /dane/ (tryb proxy, domyślny przy DATA_BASE_URL).
+RUN chmod 755 /docker-entrypoint.d/40-web-config.sh && mkdir -p /etc/nginx/dane.d
