@@ -3,3 +3,4 @@ arodes_int_num	a_year	area_type_cd	site_type_cd	moisture_cd	degradation_cd	soil_
 299000002	2026	D-STAN    	BMŚW   	WSW	N1  	MRm   		DRZEW  	OCHR  	P-Z  	70	0.78			
 299000003	2026	ZRĄB      	BŚW    						GOSP  			0.50			
 299000004	2026	D-STAN    	LŁ     					DWUP   	REZ   			2.00			
+299000005	2026	D-STAN    	BMW    						GOSP  			1.00			

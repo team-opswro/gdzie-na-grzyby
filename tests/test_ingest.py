@@ -20,6 +20,9 @@ G_ROWS = [
     (299000002, "02-99-1-01-2     -b   -00", "D-STAN", "DB.S", 45, "BMŚW", "OCHR"),
     (299000003, "02-99-1-01-3     -c   -00", "ZRĄB", None, 0, "BŚW", "GOSP"),
     (299000004, "02-99-1-01-4     -d   -00", "D-STAN", "BK", 100, "LŁ", "REZ"),
+    # wydzielenie wieloczęściowe: dwa obiekty o tym samym a_i_num
+    (299000005, "02-99-1-01-5     -f   -00", "D-STAN", "SO", 90, "BMW", "GOSP"),
+    (299000005, "02-99-1-01-5     -f   -00", "D-STAN", "SO", 90, "BMW", "GOSP"),
 ]
 
 
@@ -96,19 +99,20 @@ def test_read_table_trims_and_zip_equals_dir(tmp_path):
     assert tz.loc[0, "area_type_cd"] == "D-STAN"
     assert tz.loc[1, "site_type_cd"] == "BMŚW"
     assert all(isinstance(v, str) for v in tz["arodes_int_num"])
-    assert tz["sub_area"].tolist() == ["1.91", "0.78", "0.50", "2.00"]
+    assert tz["sub_area"].tolist() == ["1.91", "0.78", "0.50", "2.00", "1.00"]
 
 
 def test_ingest_tables_and_stats(tmp_path):
     make_pkg(tmp_path)
     stats, db, pq, outline = run_ingest(tmp_path, tmp_path)
     assert stats["02-99"]["name"] == "Testowo"
-    assert stats["02-99"]["d_stan"] == 3
+    assert stats["02-99"]["d_stan"] == 4
+    assert stats["02-99"]["geometries"] == 5
     con = duckdb.connect(str(db), read_only=True)
     assert con.execute("select prefix, name, source, cast(produced_at as varchar) from district").fetchall() \
         == [("02-99", "Testowo", "package", "2026-06-23")]
-    assert con.execute("select count(*) from subarea where prefix = '02-99'").fetchone()[0] == 4
-    assert con.execute("select count(*) from storey_species").fetchone()[0] == 9
+    assert con.execute("select count(*) from subarea where prefix = '02-99'").fetchone()[0] == 5
+    assert con.execute("select count(*) from storey_species").fetchone()[0] == 12
     assert con.execute("select count(*) from arod_storey").fetchone()[0] == 3
     con.close()
     g = gpd.read_parquet(pq)
@@ -124,7 +128,7 @@ def test_ingest_is_idempotent(tmp_path):
     run_ingest(tmp_path, tmp_path)
     _, db, _, _ = run_ingest(tmp_path, tmp_path)
     con = duckdb.connect(str(db), read_only=True)
-    assert con.execute("select count(*) from subarea").fetchone()[0] == 4
+    assert con.execute("select count(*) from subarea").fetchone()[0] == 5
     con.close()
 
 
@@ -136,7 +140,8 @@ def test_load_stands_columns_filter_and_partners(tmp_path):
                                "prefix", "geometry"]
     assert g.crs.to_epsg() == 4326
     by = g.set_index("id")
-    assert set(by.index) == {"02-99-1-01-1-a-00", "02-99-1-01-2-b-00", "02-99-1-01-4-d-00"}
+    assert set(by.index) == {"02-99-1-01-1-a-00", "02-99-1-01-2-b-00", "02-99-1-01-4-d-00",
+                             "02-99-1-01-5-f-00"}
 
     s1 = by.loc["02-99-1-01-1-a-00"]
     assert s1["sp_main"] == "SO" and s1["age"] == 80
@@ -201,4 +206,68 @@ def test_cli_ok(tmp_path, capsys):
                       "--outline", str(tmp_path / "o.geojson")])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "nadleśnictw: 1" in out and "D-STAN: 3" in out
+    assert "nadleśnictw: 1" in out and "D-STAN: 4" in out
+
+
+def test_partners_exclude_every_row_of_dominant_species(tmp_path):
+    # 299000001: SO panujący w DRZEW, SO także w IIP (wiek 40) -> nie jest partnerem
+    make_pkg(tmp_path)
+    _, db, pq, _ = run_ingest(tmp_path, tmp_path)
+    s1 = load_stands(db, pq).set_index("id").loc["02-99-1-01-1-a-00"]
+    assert all(p[0] != "SO" for p in s1["partners"])
+    assert "SO" not in s1["sp_admix"]
+
+
+def test_drzew_rank1_wins_over_ip_rank1(tmp_path):
+    make_pkg(tmp_path)
+    _, db, pq, _ = run_ingest(tmp_path, tmp_path)
+    s5 = load_stands(db, pq).set_index("id").loc["02-99-1-01-5-f-00"]
+    assert s5["sp_main"] == "SO" and s5["age"] == 90
+    assert s5["partners"] == (("MD", "5", 50),)
+
+
+def test_multipart_stand_dissolved_to_one_geometry(tmp_path):
+    make_pkg(tmp_path)
+    _, db, pq, _ = run_ingest(tmp_path, tmp_path)
+    g = gpd.read_parquet(pq)
+    assert not g.duplicated(["prefix", "a_i_num"]).any()
+    part = g[g["a_i_num"] == 299000005].to_crs(2180).geometry.iloc[0]
+    assert part.area == pytest.approx(2 * 150 * 150, rel=1e-3)
+    st = load_stands(db, pq)
+    assert (st["id"] == "02-99-1-01-5-f-00").sum() == 1
+    con = duckdb.connect(str(db), read_only=True)
+    assert con.execute("select count(*) from g_subarea where a_i_num = 299000005").fetchone()[0] == 1
+    con.close()
+
+
+def test_bad_value_skips_package_and_falls_back_to_next_candidate(tmp_path, capsys):
+    make_pkg(tmp_path, date="2026-06-20")
+    newer = make_pkg(tmp_path, NAME + "(1)", zipped=False, date="2026-06-23")
+    sub = newer / "f_subarea.txt"
+    sub.write_text(sub.read_text(encoding="utf-8").replace("299000002", "29900000X"),
+                   encoding="utf-8")
+    stats, db, pq, _ = run_ingest(tmp_path, tmp_path)
+    assert stats["02-99"]["package"] == NAME + ".zip"
+    assert stats["02-99"]["produced_at"] == "2026-06-20"
+    err = capsys.readouterr().err
+    assert NAME + "(1)" in err
+    con = duckdb.connect(str(db), read_only=True)
+    assert con.execute("select count(*) from subarea").fetchone()[0] == 5
+    assert con.execute("select package from district").fetchall() == [(NAME + ".zip",)]
+    con.close()
+
+
+def test_missing_file_in_newest_candidate_falls_back(tmp_path, capsys):
+    make_pkg(tmp_path, date="2026-06-20")
+    make_pkg(tmp_path, NAME + "(1)", date="2026-06-23", drop="f_arod_storey.txt")
+    stats, *_ = run_ingest(tmp_path, tmp_path)
+    assert stats["02-99"]["package"] == NAME + ".zip"
+    assert "f_arod_storey" in capsys.readouterr().err
+
+
+def test_outputs_written_atomically_no_tmp_left(tmp_path):
+    make_pkg(tmp_path)
+    _, db, pq, outline = run_ingest(tmp_path, tmp_path)
+    run_ingest(tmp_path, tmp_path)
+    left = sorted(p.name for p in db.parent.iterdir())
+    assert left == sorted([db.name, pq.name, outline.name])

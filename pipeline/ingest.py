@@ -7,6 +7,7 @@ Baza budowana od zera przy każdym uruchomieniu.
 """
 import argparse
 import io
+import json
 import re
 import sys
 import time
@@ -16,6 +17,7 @@ from pathlib import Path
 import duckdb
 import geopandas as gpd
 import pandas as pd
+import pyarrow.parquet as pq
 import pyogrio
 
 from pipeline.habitat import normalize_habitat, normalize_species_code
@@ -119,8 +121,8 @@ def read_metadata(pkg: Path) -> dict:
 
 # --- wybór paczek --------------------------------------------------------------------------
 
-def find_packages(root: Path) -> dict[str, Path]:
-    """`RR-NN` → wybrana paczka. Duplikaty: najpóźniejsza data wytworzenia, przy remisie
+def find_candidates(root: Path) -> dict[str, list[Path]]:
+    """`RR-NN` → paczki od najlepszej: najpóźniejsza data wytworzenia, przy remisie
     bez sufiksu `(1)`, dalej zip przed katalogiem."""
     candidates: dict[str, list[tuple]] = {}
     for p in sorted(Path(root).iterdir()):
@@ -130,43 +132,62 @@ def find_packages(root: Path) -> dict[str, Path]:
         prefix = f"{m.group(1)}-{m.group(2)}"
         try:
             produced = read_metadata(p)["produced_at"] or ""
-        except PackageError:
+        except Exception:  # noqa: BLE001 - uszkodzona paczka trafia na koniec listy
             produced = ""
-        key = (produced, m.group(5) is None, p.is_file())
+        key = (produced, m.group(5) is None, p.is_file(), p.name)
         candidates.setdefault(prefix, []).append((key, p))
-    return {prefix: max(c, key=lambda kv: kv[0])[1] for prefix, c in sorted(candidates.items())}
+    return {prefix: [p for _, p in sorted(c, key=lambda kv: kv[0], reverse=True)]
+            for prefix, c in sorted(candidates.items())}
+
+
+def find_packages(root: Path) -> dict[str, Path]:
+    """`RR-NN` → wybrana (najlepsza) paczka."""
+    return {prefix: c[0] for prefix, c in find_candidates(root).items()}
 
 
 # --- wczytanie jednej paczki ---------------------------------------------------------------
 
 def _with_columns(df: pd.DataFrame, cols: list[str], prefix: str) -> pd.DataFrame:
     out = pd.DataFrame({c: df[c] if c in df.columns else None for c in cols}, dtype=object)
+    out["arodes_int_num"] = pd.to_numeric(out["arodes_int_num"], errors="raise").astype("int64")
     out.insert(0, "prefix", prefix)
     return out
 
 
-def load_package(prefix: str, pkg: Path) -> dict:
-    meta = read_metadata(pkg)
-    tables = {}
-    for table, (fname, cols) in TABLES.items():
-        tables[table] = _with_columns(read_table(pkg, fname), cols, prefix)
+def _strip(v):
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    s = str(v).strip()
+    return s or None
 
-    try:
-        g = pyogrio.read_dataframe(_gdal_path(pkg, "G_SUBAREA.shp"), columns=G_SUBAREA_COLS)
-        insp = pyogrio.read_dataframe(_gdal_path(pkg, "G_INSPECTORATE.shp"))
-    except PackageError:
-        raise
-    except Exception as exc:  # noqa: BLE001 - błąd GDAL = uszkodzona paczka
-        raise PackageError(f"nie można odczytać shapefile: {exc}") from exc
+
+def _dissolve_multipart(g: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Jedno wydzielenie = jeden rekord: obiekty o tym samym a_i_num łączone w jedną geometrię."""
+    dup = g["a_i_num"].duplicated(keep=False)
+    if not dup.any():
+        return g
+    merged = g[dup].dissolve(by="a_i_num", aggfunc="first", as_index=False)
+    out = pd.concat([g[~dup], merged[g.columns]], ignore_index=True)
+    return gpd.GeoDataFrame(out, geometry=g.geometry.name, crs=g.crs)
+
+
+def _load_package(prefix: str, pkg: Path) -> dict:
+    meta = read_metadata(pkg)
+    tables = {table: _with_columns(read_table(pkg, fname), cols, prefix)
+              for table, (fname, cols) in TABLES.items()}
+
+    g = pyogrio.read_dataframe(_gdal_path(pkg, "G_SUBAREA.shp"), columns=G_SUBAREA_COLS)
+    insp = pyogrio.read_dataframe(_gdal_path(pkg, "G_INSPECTORATE.shp"))
     if g.crs is None:
         g = g.set_crs(2180)
     if insp.crs is None:
         insp = insp.set_crs(2180)
 
     g = g[g.geometry.notna()].copy()
+    g["a_i_num"] = g["a_i_num"].astype("int64")
+    g = _dissolve_multipart(g)
     g["prefix"] = prefix
     g["id"] = g["adr_for"].astype(str).map(lambda v: re.sub(r"\s+", "", v))
-    g["a_i_num"] = g["a_i_num"].astype("int64")
     attrs = pd.DataFrame({
         "prefix": prefix,
         "a_i_num": g["a_i_num"].values,
@@ -177,8 +198,8 @@ def load_package(prefix: str, pkg: Path) -> dict:
         "species_cd": [_strip(v) for v in g["species_cd"]],
         "spec_age": pd.array(pd.to_numeric(g["spec_age"], errors="coerce"), dtype="Int64"),
     })
-    geo = gpd.GeoDataFrame(g[["a_i_num", "id", "prefix"]], geometry=g.geometry.values,
-                           crs=g.crs).to_crs(4326)
+    geo = gpd.GeoDataFrame(g[["a_i_num", "id", "prefix"]].reset_index(drop=True),
+                           geometry=g.geometry.values, crs=g.crs).to_crs(4326)
 
     name = meta["name"]
     if not name and "i_name" in insp.columns and len(insp):
@@ -191,72 +212,132 @@ def load_package(prefix: str, pkg: Path) -> dict:
             "outline": outline}
 
 
-def _strip(v):
-    if v is None or (isinstance(v, float) and pd.isna(v)):
-        return None
-    s = str(v).strip()
-    return s or None
+def load_package(prefix: str, pkg: Path) -> dict:
+    """Wczytuje paczkę; każdy błąd (brak pliku, zip, GDAL, wartości) → PackageError."""
+    try:
+        return _load_package(prefix, pkg)
+    except PackageError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - każdy błąd paczki = pominięcie
+        raise PackageError(f"{type(exc).__name__}: {exc}") from exc
 
 
 # --- zapis ---------------------------------------------------------------------------------
 
-def _write_db(db_path: Path, parts: list[dict]) -> None:
-    tmp = db_path.with_name(db_path.name + ".tmp")
-    tmp.unlink(missing_ok=True)
-    con = duckdb.connect(str(tmp))
+def _tmp(path: Path) -> Path:
+    """Plik tymczasowy obok docelowego, z tym samym rozszerzeniem (wykrywanie sterownika)."""
+    return path.with_name(f".{path.stem}.tmp{path.suffix}")
+
+
+SCHEMA_SQL = ["CREATE TABLE district (prefix VARCHAR, name VARCHAR, source VARCHAR, "
+              "produced_at DATE, package VARCHAR)"]
+for _table, (_f, _cols) in TABLES.items():
+    _defs = ", ".join(f"{c} BIGINT" if c == "arodes_int_num" else f"{c} VARCHAR" for c in _cols)
+    SCHEMA_SQL.append(f"CREATE TABLE {_table} (prefix VARCHAR, {_defs})")
+SCHEMA_SQL.append("CREATE TABLE g_subarea (prefix VARCHAR, a_i_num BIGINT, id VARCHAR, "
+                  "area_type VARCHAR, site_type VARCHAR, forest_fun VARCHAR, "
+                  "species_cd VARCHAR, spec_age INTEGER)")
+
+
+def _insert_package(con, part: dict) -> None:
+    con.execute("BEGIN TRANSACTION")
     try:
-        district = pd.DataFrame([p["district"] for p in parts])
-        con.register("district_df", district)
-        con.execute("CREATE TABLE district AS SELECT prefix, name, source, "
-                    "CAST(produced_at AS DATE) AS produced_at, package FROM district_df")
-        for table in TABLES:
-            df = pd.concat([p["tables"][table] for p in parts], ignore_index=True)
-            con.register("t_df", df)
-            con.execute(f"CREATE TABLE {table} AS SELECT * REPLACE "
-                        f"(CAST(arodes_int_num AS BIGINT) AS arodes_int_num) FROM t_df")
-            con.unregister("t_df")
-        gs = pd.concat([p["g_subarea"] for p in parts], ignore_index=True)
-        con.register("g_df", gs)
-        con.execute("CREATE TABLE g_subarea AS SELECT * FROM g_df")
-    finally:
-        con.close()
-    db_path.unlink(missing_ok=True)
-    Path(str(db_path) + ".wal").unlink(missing_ok=True)
-    tmp.replace(db_path)
+        d = part["district"]
+        con.execute("INSERT INTO district VALUES (?, ?, ?, CAST(? AS DATE), ?)",
+                    [d["prefix"], d["name"], d["source"], d["produced_at"], d["package"]])
+        frames = dict(part["tables"], g_subarea=part["g_subarea"])
+        for table, df in frames.items():
+            con.register("pkg_df", df)
+            con.execute(f"INSERT INTO {table} BY NAME SELECT * FROM pkg_df")
+            con.unregister("pkg_df")
+        con.execute("COMMIT")
+    except Exception:
+        con.execute("ROLLBACK")
+        raise
+
+
+class _GeoParquetWriter:
+    """Dopisuje kolejne GeoDataFrame (EPSG:4326) do jednego pliku GeoParquet."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self.writer = None
+        self.schema = None
+
+    def write(self, gdf: gpd.GeoDataFrame) -> None:
+        buf = io.BytesIO()
+        gdf.to_parquet(buf, index=False, write_covering_bbox=False)
+        buf.seek(0)
+        table = pq.read_table(buf)
+        if self.writer is None:
+            meta = dict(table.schema.metadata or {})
+            geo = json.loads(meta[b"geo"])
+            for col in geo["columns"].values():
+                col.pop("bbox", None)
+                col["geometry_types"] = []
+            meta[b"geo"] = json.dumps(geo).encode()
+            self.schema = table.schema.with_metadata(meta)
+            self.writer = pq.ParquetWriter(self.path, self.schema)
+        self.writer.write_table(table.cast(self.schema))
+
+    def close(self) -> None:
+        if self.writer is not None:
+            self.writer.close()
 
 
 def ingest(root: Path, db_path: Path, parquet_path: Path, outline_path: Path) -> dict:
-    """Wczytuje wszystkie paczki z `root`; zwraca statystyki per prefix (tylko wczytane)."""
-    parts, stats = [], {}
-    for prefix, pkg in find_packages(Path(root)).items():
-        try:
-            part = load_package(prefix, pkg)
-        except PackageError as exc:
-            warn(f"{prefix} ({pkg.name}) pominięte: {exc}")
-            continue
-        sub = part["tables"]["subarea"]
-        stats[prefix] = {
-            "name": part["district"]["name"],
-            "package": pkg.name,
-            "produced_at": part["district"]["produced_at"],
-            "subareas": len(sub),
-            "d_stan": int((sub["area_type_cd"] == "D-STAN").sum()),
-            "geometries": len(part["geo"]),
-        }
-        parts.append(part)
-    if not parts:
+    """Wczytuje wszystkie paczki z `root` paczka po paczce (zapis przyrostowy do DuckDB
+    i GeoParquet); zwraca statystyki per prefix (tylko wczytane). Gdy wybrana paczka jest
+    uszkodzona, próbuje kolejnego kandydata dla tego nadleśnictwa."""
+    db_path, parquet_path, outline_path = Path(db_path), Path(parquet_path), Path(outline_path)
+    for path in (db_path, parquet_path, outline_path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_db, tmp_pq, tmp_outline = _tmp(db_path), _tmp(parquet_path), _tmp(outline_path)
+    for t in (tmp_db, Path(str(tmp_db) + ".wal"), tmp_pq, tmp_outline):
+        t.unlink(missing_ok=True)
+
+    stats, outlines = {}, []
+    con = duckdb.connect(str(tmp_db))
+    writer = _GeoParquetWriter(tmp_pq)
+    try:
+        for sql in SCHEMA_SQL:
+            con.execute(sql)
+        for prefix, candidates in find_candidates(root).items():
+            for pkg in candidates:
+                try:
+                    part = load_package(prefix, pkg)
+                    _insert_package(con, part)
+                except Exception as exc:  # noqa: BLE001
+                    warn(f"{prefix} ({pkg.name}) pominięte: {exc}")
+                    continue
+                writer.write(part["geo"])
+                outlines.append(part["outline"])
+                sub = part["tables"]["subarea"]
+                stats[prefix] = {
+                    "name": part["district"]["name"],
+                    "package": pkg.name,
+                    "produced_at": part["district"]["produced_at"],
+                    "subareas": len(sub),
+                    "d_stan": int((sub["area_type_cd"] == "D-STAN").sum()),
+                    "geometries": len(part["geo"]),
+                }
+                del part
+                break
+    finally:
+        con.close()
+        writer.close()
+
+    if not stats:
+        for t in (tmp_db, tmp_pq):
+            t.unlink(missing_ok=True)
         return stats
 
-    for path in (db_path, parquet_path, outline_path):
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-    _write_db(Path(db_path), parts)
-    geo = pd.concat([p["geo"] for p in parts], ignore_index=True)
-    gpd.GeoDataFrame(geo, geometry="geometry", crs=4326).to_parquet(parquet_path, index=False)
-    outline = pd.concat([p["outline"] for p in parts], ignore_index=True)
-    outline_path = Path(outline_path)
-    outline_path.unlink(missing_ok=True)
-    gpd.GeoDataFrame(outline, geometry="geometry", crs=4326).to_file(outline_path,
-                                                                     driver="GeoJSON")
+    gpd.GeoDataFrame(pd.concat(outlines, ignore_index=True), geometry="geometry",
+                     crs=4326).to_file(tmp_outline, driver="GeoJSON")
+    Path(str(db_path) + ".wal").unlink(missing_ok=True)
+    tmp_db.replace(db_path)
+    tmp_pq.replace(parquet_path)
+    tmp_outline.replace(outline_path)
     return stats
 
 
@@ -281,8 +362,7 @@ part AS (
            list(struct_pack(sp := ss.species_cd, share := ss.part_cd_act, age := ss.age)
                 ORDER BY CASE ss.storey_cd WHEN 'DRZEW' THEN 0 WHEN 'IP' THEN 1 ELSE 2 END,
                          ss.rnk) AS partners
-    FROM ss LEFT JOIN dom USING (prefix, arodes_int_num)
-    WHERE ss.storey_cd IS DISTINCT FROM dom.storey_cd OR ss.rnk IS DISTINCT FROM 1
+    FROM ss
     GROUP BY ALL
 )
 SELECT g.prefix, g.a_i_num,
@@ -326,9 +406,10 @@ def load_stands(db_path: Path, parquet_path: Path) -> gpd.GeoDataFrame:
     df = geo.merge(attrs, on=["prefix", "a_i_num"], how="inner")
 
     sp_main = df["sp_main"].map(normalize_species_code)
-    partners = [_partners(v) for v in df["partners"]]
-    sp_admix = [tuple(dict.fromkeys(p[0] for p in ps if p[0] != m))
-                for ps, m in zip(partners, sp_main)]
+    # partnerzy bez żadnego wiersza gatunku panującego (w dowolnym piętrze)
+    partners = [tuple(p for p in _partners(v) if p[0] != m)
+                for v, m in zip(df["partners"], sp_main)]
+    sp_admix = [tuple(dict.fromkeys(p[0] for p in ps)) for ps in partners]
     out = gpd.GeoDataFrame(
         {
             "id": df["id"].values,
