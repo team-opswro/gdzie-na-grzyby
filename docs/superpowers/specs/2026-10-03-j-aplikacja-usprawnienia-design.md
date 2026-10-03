@@ -1,7 +1,7 @@
 # J. Usprawnienia aplikacji: parkingi, słabe strony siedliska, offline, stany ładowania — projekt
 
 Data: 2026-10-03
-Status: zaakceptowany (zlecenie pracy nocnej 2026-10-03 — „przeanalizuj propozycje Gemini, zastanów się nad dodatkowymi funkcjami, zrób wszystko”)
+Status: do akceptacji
 Zakres: analiza zewnętrznych propozycji i wybór tych, które mają sens w obecnej architekturze (statyczna strona + statyczne dane w R2); parkingi z OSM jako nowa warstwa kafelków, „słabe strony siedliska” w popupie (po F/I), praca offline (PWA), stan ładowania rankingu, aktualny tytuł strony.
 Poza zakresem: zgłaszanie znalezisk przez użytkowników (wymaga backendu — zastępuje je walidacja na GBIF, spec H), warstwa zakazów wstępu (serwis BDL `mapserver.bdl.lasy.gov.pl/.../Mapa_zakazow_wstepu_do_lasu/MapServer` zwraca 403 dla żądań spoza ich strony — zostaje link), zmiana palety legendy.
 
@@ -21,7 +21,7 @@ Poza zakresem: zgłaszanie znalezisk przez użytkowników (wymaga backendu — z
 | Rozróżnienie gatunków | **Jest** — 6 gatunków z różnymi partnerami, wiekiem, TSL, sezonem i progami | nic (F/I zwiększają różnice) |
 | Legenda dla daltonistów | Paleta szary → jasnożółty → żółty → pomarańczowy → czerwony jest sekwencyjna jasnościowo (poza szarym „brak”) | nic |
 
-Dodatkowo znalezione: tytuł strony „Grzyby w opolskiem” jest nieaktualny (obszar to RDLP Katowice i Wrocław) → „Gdzie na grzyby — mapa szans w lasach” (§5).
+Dodatkowo znalezione: tytuł strony „Grzyby w opolskiem” jest nieaktualny (obszar to RDLP Katowice i Wrocław) → „Gdzie na grzyby?” (§5).
 
 ## 2. Parkingi z OpenStreetMap
 
@@ -34,13 +34,13 @@ Dodatkowo znalezione: tytuł strony „Grzyby w opolskiem” jest nieaktualny (o
 
 ## 3. Słabe strony siedliska w popupie
 
-- **Pipeline:** `build_tiles.compute_features` dla każdego gatunku liczy `habitat_components` (spec H/F/I) i zapisuje atrybut `hl_<gatunek>` = nazwa najsłabszego czynnika spośród modyfikatorów (czynniki F i I oraz `habitat`, `age`), gdy jego wartość < 0.8 i `h_<gatunek>` > 0; inaczej atrybut pominięty. Kody: nazwy czynników (`veg`, `moist`, `degr`, `soil`, `damage`, `density`, `twi`, `exposure`, `habitat`, `age`).
+- **Pipeline:** `build_tiles.compute_features` dla każdego gatunku liczy `habitat_components` (spec H/F/I) i zapisuje atrybut `hl_<gatunek>` = nazwa najsłabszego czynnika spośród modyfikatorów (czynniki F i I oraz `habitat`, `age`), gdy jego wartość < 0.8 i `h_<gatunek>` ≥ 20; inaczej atrybut pominięty (próg 20 ogranicza rozmiar kafelków przy 18 gatunkach ze specu K — słabe strony mają sens tylko tam, gdzie siedlisko w ogóle się liczy). Kody: nazwy czynników (`veg`, `moist`, `degr`, `soil`, `damage`, `density`, `twi`, `exposure`, `habitat`, `age`).
 - **Klient:** `HAB_LIM_TEXT` w `web/js/popup.js`: `veg` „Ogranicza siedlisko: gęste runo/zadarnienie”, `moist` „…: zbyt mokre (bagienne)”, `degr` „…: siedlisko zniekształcone”, `soil` „…: mniej korzystna gleba”, `damage` „…: uszkodzony drzewostan”, `density` „…: zadrzewienie (za rzadko lub za gęsto)”, `twi` „…: położenie (za sucho lub za mokro)”, `exposure` „…: stromy stok południowy”, `habitat` „…: typ siedliskowy mniej korzystny”, `age` „…: wiek drzewostanu”. Wyświetlane w trybie jednego gatunku pod oceną siedliska, gdy atrybut jest; nieznany kod → nic.
 - **Kontrakt:** nowy opcjonalny atrybut `hl_<gatunek>` w warstwie `lasy` (`docs/data/api.md`).
 
 ## 4. Praca offline (PWA)
 
-- `web/manifest.webmanifest` (nazwa „Gdzie na grzyby”, `display: standalone`, kolor paska jak `--bar`, ikona SVG generowana raz i commitowana w `web/icons/icon.svg`), `<link rel="manifest">` w `index.html`.
+- `web/manifest.webmanifest` (nazwa „Gdzie na grzyby?”, `short_name` „Grzyby”, `display: standalone`, kolor paska jak `--bar`, ikona SVG generowana raz i commitowana w `web/icons/icon.svg`), `<link rel="manifest">` w `index.html`.
 - `web/sw.js` (rejestrowany w `ui.js` tylko gdy `"serviceWorker" in navigator` i strona nie jest `file:`):
   - **precache** powłoki: `index.html`, `css/app.css`, `js/*.js`, `vendor/*`, `manifest.webmanifest`, ikona; nazwa cache z wersją `grzyby-shell-<N>` (stała w `sw.js`, podbijana przy zmianie listy plików); przy `activate` usuwane stare cache `grzyby-*` spoza bieżących;
   - **network-first z timeoutem 4 s, fallback do cache:** `config.json`, `manifest.json`, `live/pogoda.json` (w trybach lokalnym, proxy `/dane/` i bezpośrednim — po końcówce ścieżki);
@@ -53,7 +53,7 @@ Dodatkowo znalezione: tytuł strony „Grzyby w opolskiem” jest nieaktualny (o
 ## 5. Drobne
 
 - Ranking: na czas pobierania kafelków centroidów lista dostaje `aria-busy="true"` i jeden element „Ładowanie…”; po wyniku/błędzie `aria-busy="false"`.
-- Tytuł strony: `<title>Gdzie na grzyby — mapa szans w lasach</title>`.
+- Tytuł strony: `<title>Gdzie na grzyby?</title>`.
 
 ## 6. Testy
 
