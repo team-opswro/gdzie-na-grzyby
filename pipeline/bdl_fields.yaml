@@ -28,7 +28,15 @@ districts:
   - {name: "Kłobuck", prefix: "02-12", layer: "RDLP_Katowice_wydzielenia"}
   - {name: "Henryków", prefix: "13-02", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
   - {name: "Oława", prefix: "13-20", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
-# whole: true = nadlesnictwo poza woj. (dolnoslaskie, RDLP Wroclaw, okolice Grodkowa) wlaczone w calosci, bez przycinania do granicy woj.;
+  - {name: "Miękinia", prefix: "13-17", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
+  - {name: "Oborniki Śląskie", prefix: "13-19", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
+  - {name: "Oleśnica Śląska", prefix: "13-09", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
+  - {name: "Żmigród", prefix: "13-31", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
+  - {name: "Milicz", prefix: "13-18", layer: "RDLP_Wroclaw_wydzielenia", whole: true}
+  - {name: "Złoty Potok", prefix: "02-38", layer: "RDLP_Katowice_wydzielenia", whole: true}
+  - {name: "Koniecpol", prefix: "02-15", layer: "RDLP_Katowice_wydzielenia", whole: true}
+# whole: true = nadlesnictwo poza woj. wlaczone w calosci, bez przycinania do granicy woj.: RDLP Wroclaw (dolnoslaskie: Grodkow, okolice Wroclawia, lasy trzebnickie i milickie)
+# oraz RDLP Katowice (Zloty Potok, Koniecpol - okolice Drochlina kolo Czestochowy);
 # jego obrys (kolekcja nadlesnictwa: region_cd, inspectorate_cd) trafia do pipeline/data/obszar.geojson (python -m pipeline.area).
 # adr_for w RDLP_Wroclaw_wydzielenia ma ten sam format (np. "13-02-1-03-63    -b   -00"), filtr LIKE '13-02%' dziala.
-# Wieluń = RDLP Łódź. Pominiete slivery granicy (<1.1 km2 w woj.): Syców, Bardo Śląskie, Przedborów, Herby, Oleśnica Śląska.
+# Wieluń = RDLP Łódź. Pominiete slivery granicy (<1.1 km2 w woj.): Syców, Bardo Śląskie, Przedborów, Herby (Oleśnica Śląska jest teraz wlaczona w calosci).

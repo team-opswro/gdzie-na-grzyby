@@ -1,6 +1,6 @@
 # gdzie-na-grzyby
 
-Hobbystyczna mapa szans na grzyby (borowik, podgrzybek, kurka, kozlarz, maślak, rydz) w woj. opolskim.
+Hobbystyczna mapa szans na grzyby (borowik, podgrzybek, kurka, kozlarz, maślak, rydz) w woj. opolskim oraz w całych nadleśnictwach spoza województwa (okolice Wrocławia, Milicza i Złotego Potoku k. Częstochowy; `whole: true` w `pipeline/bdl_fields.yaml`).
 Wynik = siedlisko (statyczne kafelki z danych BDL) × pogoda (prognoza Open-Meteo, odświeżana 2× dziennie).
 Projekt: `docs/superpowers/specs/2026-10-03-grzyby-opolskie-design.md`.
 

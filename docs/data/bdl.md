@@ -53,8 +53,26 @@ Kolekcja `nadlesnictwa` (429 obiektow; pola `inspectorate_name`, `region_cd`, `i
 - Pobranie calego woj.: ok. 18 nadlesnictw x ~5-8 tys. rekordow; stronicowac po 1000 z filtrem `adr_for LIKE 'RR-NN%'`. Pole `numberMatched` w odpowiedziach z filtrem bywa nierzetelne — stronicowac do pustej/niepelnej strony.
 
 ## Mapowanie nadlesnictw (bdl_fields.yaml `districts`)
-Kazdy wpis: `name` (jak `inspectorate_name`), `prefix` (`region_cd-inspectorate_cd`, kody z kolekcji `nadlesnictwa`), `layer`. 17 nadlesnictw w RDLP Katowice (region 02), Wieluń 06-20 w `RDLP_Lodz_wydzielenia`, Henryków 13-02 i Oława 13-20 w `RDLP_Wroclaw_wydzielenia` (`whole: true`).
+Kazdy wpis: `name` (jak `inspectorate_name`), `prefix` (`region_cd-inspectorate_cd`, kody z kolekcji `nadlesnictwa`), `layer`. 17 nadlesnictw w RDLP Katowice (region 02), Wieluń 06-20 w `RDLP_Lodz_wydzielenia`, Henryków 13-02, Oława 13-20, Miękinia 13-17, Oborniki Śląskie 13-19, Oleśnica Śląska 13-09, Żmigród 13-31 i Milicz 13-18 w `RDLP_Wroclaw_wydzielenia` oraz Złoty Potok 02-38 i Koniecpol 02-15 w `RDLP_Katowice_wydzielenia` (wszystkie `whole: true`).
 
-## Nadleśnictwa spoza województwa, włączone w całości (RDLP Wrocław)
-Henryków (`13-02`) i Oława (`13-20`), dolnośląskie przy Grodkowie, warstwa `RDLP_Wroclaw_wydzielenia`; w `bdl_fields.yaml` oznaczone `whole: true`. Format `adr_for` jak w innych RDLP (np. `13-02-1-03-63    -b   -00`), filtr `LIKE '13-02%'` działa. Dane pobrane w całości (Henryków 2663, Oława 4662 wydzieleń D-STAN), bez przycinania do granicy woj.
-Obrys z kolekcji `nadlesnictwa` (`region_cd='13' AND inspectorate_cd IN ('02','20')`) jest łączony z `opolskie.geojson` krokiem `python -m pipeline.area` do `pipeline/data/obszar.geojson` (EPSG:4326, uproszczony do 100 m w EPSG:2180); build kafelków przycina do tego pliku. Nowe kody siedlisk: `BMWYZ` (1 wydz.) dodany jako odpowiednik `BMW`; `OLJWYZ` (18) nie ma odpowiednika na listach gatunków (jak `OLJ`, `OL`, `LL`) i dostaje współczynnik "inne siedlisko".
+## Nadleśnictwa spoza województwa, włączone w całości (`whole: true`)
+Dziewięć nadleśnictw włączonych w całości, bez przycinania do granicy woj. (liczby = wydzielenia D-STAN z gatunkiem panującym, po `load_bdl`):
+
+| Nadleśnictwo | Kod | Warstwa | Wydzielenia |
+|---|---|---|---|
+| Henryków | `13-02` | `RDLP_Wroclaw_wydzielenia` | 2663 |
+| Oława | `13-20` | `RDLP_Wroclaw_wydzielenia` | 4662 |
+| Miękinia | `13-17` | `RDLP_Wroclaw_wydzielenia` | 4829 |
+| Oborniki Śląskie | `13-19` | `RDLP_Wroclaw_wydzielenia` | 5269 |
+| Oleśnica Śląska | `13-09` | `RDLP_Wroclaw_wydzielenia` | 7572 |
+| Żmigród | `13-31` | `RDLP_Wroclaw_wydzielenia` | 4907 |
+| Milicz | `13-18` | `RDLP_Wroclaw_wydzielenia` | 8321 |
+| Złoty Potok | `02-38` | `RDLP_Katowice_wydzielenia` | 6070 |
+| Koniecpol | `02-15` | `RDLP_Katowice_wydzielenia` | 5057 |
+
+Henryków i Oława leżą w dolnośląskiem przy Grodkowie; Miękinia, Oborniki Śląskie, Oleśnica Śląska, Żmigród i Milicz to okolice Wrocławia (lasy trzebnickie i milickie); Złoty Potok i Koniecpol to okolice Drochlina koło Częstochowy. Format `adr_for` jak w innych RDLP (np. `13-02-1-03-63    -b   -00`), filtr `LIKE '13-02%'` działa. Oleśnica Śląska była wcześniej pominiętym sliverem granicy; teraz jest w całości.
+Obrys z kolekcji `nadlesnictwa` (`region_cd`, `inspectorate_cd`) jest łączony z `opolskie.geojson` krokiem `python -m pipeline.area` do `pipeline/data/obszar.geojson` (EPSG:4326, uproszczony do 100 m w EPSG:2180); build kafelków przycina do tego pliku.
+
+Kody siedlisk spoza list gatunków:
+- dodane jako odpowiedniki (wariant górski "G", jak `BMGSW` ≙ `BMSW`): `BMWYZ` ≙ `BMW` (1 wydz., Henryków/Oława), `BGSW` ≙ `BSW` (1), `BGW` ≙ `BW` (1) - dopisane obok odpowiedników na tych samych listach w `species.yaml`;
+- bez odpowiednika, dostają współczynnik "inne siedlisko": `OL` (940 w nowych nadleśnictwach), `LL` (670), `OLJ` (302), `LMB` (31, las mieszany bagienny; `BMB` jest tylko na liście kozlarza), `OLJWYZ` (3), `LLWYZ` (3; wariant `LL`, ale `LL` nie jest mapowany).
