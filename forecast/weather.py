@@ -9,8 +9,8 @@ from forecast.model import DailySeries
 
 API_URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT_S = 30
-# Limit minutowy Open-Meteo (429): zapytanie o 50 punktów z 37 dniami godzinowych danych waży ~130
-# „wywołań”, więc przy ~14 partiach limit 600/min wypada w połowie przebiegu. Czekamy ~minutę.
+# Limit minutowy Open-Meteo (429): zapytanie o 30 punktów z 37 dniami i trzema zmiennymi godzinowymi
+# waży ~95 „wywołań”, więc przy ~23 partiach limit 600/min wypada pod koniec przebiegu. Czekamy ~minutę.
 RATE_LIMIT_WAIT_S = 65
 RATE_LIMIT_RETRIES = 6
 PARAMS = {
@@ -130,7 +130,7 @@ def _request(params: dict, retries: int, sleep, session) -> list[dict]:
     raise WeatherError(f"Open-Meteo niedostępne po {retries} próbach: {last!r}")
 
 
-def fetch_series(points: list[tuple[str, float, float]], *, batch: int = 50,
+def fetch_series(points: list[tuple[str, float, float]], *, batch: int = 30,
                  retries: int = 3, sleep=time.sleep, session=None) -> dict[str, DailySeries]:
     out: dict[str, DailySeries] = {}
     for i in range(0, len(points), batch):
