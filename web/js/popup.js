@@ -71,6 +71,12 @@ export function trendArrow(dir) {
   return dir === "up" ? "↑" : dir === "down" ? "↓" : dir === "flat" ? "→" : "";
 }
 
+export function trendLabel(t) {
+  if (!t || !t.dir) return "";
+  const word = t.dir === "up" ? "rośnie" : t.dir === "down" ? "spada" : "bez zmian";
+  return `${word}, ${t.delta > 0 ? "+" : ""}${t.delta}`;
+}
+
 export function renderPopup(props, ctx) {
   const { pogoda = null, species, dayIdx, todayIso, onDaySelect } = ctx;
   const root = el("div", null, "popup");
@@ -90,6 +96,7 @@ export function renderPopup(props, ctx) {
       if (tr.dir) {
         const arrow = el("span", " " + trendArrow(tr.dir), "popup-trend");
         arrow.title = `${tr.delta > 0 ? "+" : ""}${tr.delta} względem poprzedniego dnia`;
+        arrow.setAttribute("aria-label", trendLabel(tr));
         badge.append(arrow);
       }
       if (tr.peak) {

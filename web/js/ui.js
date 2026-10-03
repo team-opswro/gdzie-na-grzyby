@@ -3,7 +3,7 @@ import { trend } from "./chart.js";
 import { topN } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
-import { renderPopup, renderReserve, trendArrow } from "./popup.js";
+import { renderPopup, renderReserve, trendArrow, trendLabel } from "./popup.js";
 
 const OPOLSKIE_CENTER = [17.9, 50.65];
 const DEFAULT_ZOOM = 9;
@@ -24,6 +24,7 @@ export async function init() {
   const hash = parseHash(location.hash);
   const state = { species: hash.species, day: hash.day, basemap: hash.basemap };
   let data = { pogoda: null, centroids: null };
+  let todayIso = todayLocalIso(); // stała data dnia, wspólna dla days i popupu
   let days = []; // availableDays(...) — pozycja w tej tablicy to „day” w hashu
   let gps = null; // {lat, lon} po zgodzie na lokalizację
   let popup = null;
@@ -77,7 +78,7 @@ export async function init() {
       pogoda: effective,
       species: state.species,
       dayIdx: dayIdx(),
-      todayIso: todayLocalIso(),
+      todayIso,
       onDaySelect,
     });
     const pp = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
@@ -145,6 +146,7 @@ export async function init() {
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
+        tr.setAttribute("aria-label", trendLabel(t));
       }
       btn.append(sc, tr, name, dist);
       btn.addEventListener("click", () => flyToRow(r));
@@ -218,7 +220,8 @@ export async function init() {
   updateDayControls();
   data = await loadData();
   ({ pogoda, centroids } = data);
-  if (pogoda) days = availableDays(pogoda.days, todayLocalIso());
+  todayIso = todayLocalIso();
+  if (pogoda) days = availableDays(pogoda.days, todayIso);
   state.day = Math.min(state.day, Math.max(days.length - 1, 0));
   // Bez dostępnych dni mapa koloruje samym h (jak przy braku pliku).
   effective = days.length ? pogoda : null;

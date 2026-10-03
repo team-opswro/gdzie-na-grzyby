@@ -10,7 +10,7 @@ test("reserveText with and without name", () => {
 });
 test("zakazy URL", () => assert.equal(ZAKAZY_URL, "https://zakazywstepu.bdl.lasy.gov.pl/zakazy/"));
 
-import { LIM_TEXT, moistureLabel, formatWx, trendArrow } from "../js/popup.js";
+import { LIM_TEXT, moistureLabel, formatWx, trendArrow, trendLabel } from "../js/popup.js";
 
 test("LIM_TEXT exact", () => assert.deepEqual(LIM_TEXT, {
   dry: "Ogranicza: za mało deszczu",
@@ -33,4 +33,11 @@ test("trendArrow", () => {
   assert.equal(trendArrow("down"), "↓");
   assert.equal(trendArrow("flat"), "→");
   assert.equal(trendArrow(null), "");
+});
+
+test("trendLabel", () => {
+  assert.equal(trendLabel({ dir: "up", delta: 12 }), "rośnie, +12");
+  assert.equal(trendLabel({ dir: "down", delta: -7 }), "spada, -7");
+  assert.equal(trendLabel({ dir: "flat", delta: 2 }), "bez zmian, +2");
+  assert.equal(trendLabel({ dir: null, delta: 0 }), "");
 });
