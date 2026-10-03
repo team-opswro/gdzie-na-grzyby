@@ -113,14 +113,39 @@ def test_clean_filters_uncertainty_area_and_duplicates():
 
 
 @responses.activate
-def test_load_observations_warns_on_unmatched_taxon(tmp_path):
+def test_load_observations_warns_on_unmatched_taxon(tmp_path, monkeypatch):
+    monkeypatch.setattr(gbif, "FIRST_YEAR", 2026)  # tło: jedno zapytanie roczne
     responses.get(MATCH, json={"matchType": "NONE"})
     responses.get(MATCH, json=fx("gbif_match.json"))
     _pages()  # gatunek
-    _pages()  # tło (kingdomKey=5)
+    _pages()  # tło (kingdomKey=5, rok 2026)
     pres, bg, warns = load_observations({"xyz": "Xyz abc", "borowik": "Boletus edulis"}, AREA,
                                         tmp_path, sleep=no_sleep, year_to=2026)
     assert len(warns) == 1 and "xyz" in warns[0]
     assert set(pres["species"]) == {"borowik"} and set(bg["species"]) == {"*"}
-    assert (tmp_path / "borowik" / "0.json").exists() and (tmp_path / "fungi" / "0.json").exists()
+    assert (tmp_path / "borowik" / "0.json").exists()
+    assert (tmp_path / "fungi" / "2026" / "0.json").exists()
     assert "kingdomKey=5" in responses.calls[-1].request.url
+
+
+@responses.activate
+def test_background_fetched_per_year(tmp_path, monkeypatch):
+    # głębokie stronicowanie GBIF jest bardzo wolne -> tło pobierane rok po roku (małe offsety)
+    monkeypatch.setattr(gbif, "FIRST_YEAR", 2024)
+    for _ in range(3):
+        responses.get(SEARCH, json={"endOfRecords": True, "results": []})
+    load_observations({}, AREA, tmp_path, sleep=no_sleep, year_to=2026)
+    years = [c.request.url.split("year=")[1].split("&")[0] for c in responses.calls]
+    assert years == ["2024", "2025", "2026"]
+
+
+@responses.activate
+def test_big_year_split_into_months(tmp_path, monkeypatch):
+    monkeypatch.setattr(gbif, "FIRST_YEAR", 2026)
+    responses.get(SEARCH, json={"count": 5000, "endOfRecords": False, "results": []})
+    for _ in range(12):
+        responses.get(SEARCH, json={"endOfRecords": True, "results": []})
+    load_observations({}, AREA, tmp_path, sleep=no_sleep, year_to=2026)
+    months = [c.request.url.split("month=")[1].split("&")[0] for c in responses.calls[1:]]
+    assert months == [str(m) for m in range(1, 13)]
+    assert (tmp_path / "fungi" / "2026-12" / "0.json").exists()
