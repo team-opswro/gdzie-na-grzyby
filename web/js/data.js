@@ -1,3 +1,5 @@
+import { loadConfig, loadManifest, fileUrl, pogodaUrl } from "./config.js";
+
 export const SPECIES = [
   { key: "borowik", name: "Borowik szlachetny" },
   { key: "podgrzybek", name: "Podgrzybek brunatny" },
@@ -69,32 +71,39 @@ export function bannerText(pogoda, availableDaysCount, now = new Date()) {
   return availableDaysCount > 0 ? null : `Brak aktualnych dni w prognozie — ${habitatOnly}`;
 }
 
-// Pogoda i centroidy ładują się niezależnie: awaria jednego nie wyrzuca drugiego.
-export async function loadData(base = "data/") {
-  const [c, p, n] = await Promise.allSettled([
-    fetch(base + "centroidy.json").then((r) => {
-      if (!r.ok) throw new Error(`centroidy.json: HTTP ${r.status}`);
-      return r.json();
-    }),
-    fetch(base + "live/pogoda.json").then((r) => (r.ok ? r.json() : null)),
-    fetch(base + "nazwy.json").then((r) => (r.ok ? r.json() : null)),
-  ]);
-  return {
-    pogoda: p.status === "fulfilled" ? p.value : null,
-    centroids: c.status === "fulfilled" ? c.value : null,
-    nazwy: n.status === "fulfilled" ? n.value : null,
+// config.json → manifest.json → pliki wersji; pogoda z live/. Każdy plik ładuje się niezależnie:
+// awaria jednego nie wyrzuca pozostałych. Centroidy: tylko indeks kafelków (kafelki — tiles.js).
+export async function loadData({ dataBase, manifest } = {}) {
+  dataBase ??= (await loadConfig()).dataBase;
+  manifest ??= await loadManifest(dataBase);
+  const json = async (url, required) => {
+    if (!url) throw new Error("brak pliku w manifeście");
+    const r = await fetch(url);
+    if (!r.ok) {
+      if (required) throw new Error(`${url}: HTTP ${r.status}`);
+      return null;
+    }
+    return r.json();
   };
+  const [c, p, n] = await Promise.allSettled([
+    json(fileUrl(dataBase, manifest, "centroidy"), true),
+    json(pogodaUrl(dataBase)),
+    json(fileUrl(dataBase, manifest, "nazwy")),
+  ]);
+  const val = (x) => (x.status === "fulfilled" ? x.value : null);
+  return { pogoda: val(p), centroidIndex: val(c), nazwy: val(n), manifest, dataBase };
 }
 
 // Lista gatunków z gatunki.json (limit czasu timeoutMs); przy błędzie lub zawieszeniu — wbudowane SPECIES (info: null).
-export async function loadSpecies(base = "data/", timeoutMs = 3000) {
+export async function loadSpecies(url = "data/gatunki.json", timeoutMs = 3000) {
   const ctl = new AbortController();
   let timer;
   const timeout = new Promise((_, rej) => {
     timer = setTimeout(() => { ctl.abort(); rej(new Error("gatunki.json: timeout")); }, timeoutMs);
   });
   const load = async () => {
-    const r = await fetch(base + "gatunki.json", { signal: ctl.signal });
+    if (!url) throw new Error("gatunki.json: brak w manifeście");
+    const r = await fetch(url, { signal: ctl.signal });
     if (!r.ok) throw new Error(`gatunki.json: HTTP ${r.status}`);
     const info = await r.json();
     if (!Array.isArray(info?.species) || info.species.length === 0) throw new Error("gatunki.json: brak listy");

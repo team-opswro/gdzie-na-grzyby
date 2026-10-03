@@ -1,3 +1,5 @@
 FROM nginx:1.27-alpine
 COPY web /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# config.json (DATA_BASE_URL) generowany przy starcie przez /docker-entrypoint.sh obrazu nginx.
+COPY --chmod=755 docker/web-entrypoint.sh /docker-entrypoint.d/40-web-config.sh

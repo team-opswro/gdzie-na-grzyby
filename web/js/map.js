@@ -129,10 +129,11 @@ export function setView(map, pogoda, species, dayIdx) {
   map.setPaintProperty("lasy-fill", "fill-opacity", fillOpacityExpression(pogoda, species, dayIdx));
 }
 
-export function createMap(container, { center, zoom, onFeatureClick, onReserveClick, onMove, pogoda = null, species = "borowik", dayIdx = 0, basemap = "osm" }) {
+// pmtilesUrl: względny (data/…) lub pełny URL bucketu; PMTiles pobiera zakresy (Range) przez CORS.
+export function createMap(container, { center, zoom, onFeatureClick, onReserveClick, onMove, pogoda = null, species = "borowik", dayIdx = 0, basemap = "osm", pmtilesUrl = "data/lasy.pmtiles" }) {
   const protocol = new pmtiles.Protocol();
   maplibregl.addProtocol("pmtiles", protocol.tile);
-  const tilesUrl = new URL("data/lasy.pmtiles", location.href).href;
+  const tilesUrl = new URL(pmtilesUrl, location.href).href;
   const lc = lineColor(basemap);
 
   const baseSources = {};

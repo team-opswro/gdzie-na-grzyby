@@ -52,31 +52,58 @@ function mockFetch(map) {
   return async (url) => {
     const r = map[url];
     if (r === undefined || r === "throw") throw new Error("net");
-    return { ok: r !== 500, status: r === 500 ? 500 : 200, json: async () => r };
+    if (typeof r === "number") return { ok: false, status: r, json: async () => null };
+    return { ok: true, status: 200, json: async () => r };
   };
 }
-test("loadData ok", async () => {
-  const c = { species: [], rows: [] };
-  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": P, "data/nazwy.json": NZ });
+const IDXC = { tile: 0.5, species: ["borowik"], tiles: ["50.5_17.0"] };
+const LOCAL = { "data/manifest.json": 404, "data/centroidy/index.json": IDXC, "data/live/pogoda.json": P, "data/nazwy.json": NZ };
+test("loadData: data/ without manifest reads files from data/ root, pogoda from live/", async () => {
+  globalThis.fetch = mockFetch(LOCAL);
+  const d = await loadData({ dataBase: "data/" });
+  assert.deepEqual(d.pogoda, P);
+  assert.deepEqual(d.centroidIndex, IDXC);
+  assert.deepEqual(d.nazwy, NZ);
+  assert.equal(d.dataBase, "data/");
+  assert.equal(d.manifest.base, "");
+});
+test("loadData: without arguments reads config.json (missing → data/)", async () => {
+  globalThis.fetch = mockFetch({ ...LOCAL, "config.json": 404 });
   const d = await loadData();
-  assert.deepEqual(d, { pogoda: P, centroids: c, nazwy: NZ });
+  assert.equal(d.dataBase, "data/");
+  assert.deepEqual(d.centroidIndex, IDXC);
+});
+test("loadData: bucket with manifest reads versioned files; pogoda from live/", async () => {
+  const B = "https://d.example.pl/";
+  const M = { build: "b1", base: "v/b1/", files: { centroidy: "centroidy/index.json", nazwy: "nazwy.json", lasy: "lasy.pmtiles" } };
+  globalThis.fetch = mockFetch({
+    "config.json": { dataBase: "https://d.example.pl" },
+    [B + "manifest.json"]: M,
+    [B + "v/b1/centroidy/index.json"]: IDXC,
+    [B + "v/b1/nazwy.json"]: NZ,
+    [B + "live/pogoda.json"]: P,
+  });
+  const d = await loadData();
+  assert.deepEqual(d, { pogoda: P, centroidIndex: IDXC, nazwy: NZ, manifest: M, dataBase: B });
 });
 test("loadData pogoda failure → null; non-OK → null", async () => {
-  const c = { species: [], rows: [] };
-  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": "throw" });
-  assert.equal((await loadData()).pogoda, null);
-  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": 500 });
-  assert.equal((await loadData()).pogoda, null);
+  globalThis.fetch = mockFetch({ ...LOCAL, "data/live/pogoda.json": "throw" });
+  assert.equal((await loadData({ dataBase: "data/" })).pogoda, null);
+  globalThis.fetch = mockFetch({ ...LOCAL, "data/live/pogoda.json": 500 });
+  assert.equal((await loadData({ dataBase: "data/" })).pogoda, null);
 });
-test("loadData centroids failure → centroids null, pogoda kept", async () => {
-  globalThis.fetch = mockFetch({ "data/centroidy.json": "throw", "data/live/pogoda.json": P });
-  assert.deepEqual(await loadData(), { pogoda: P, centroids: null, nazwy: null });
-  globalThis.fetch = mockFetch({ "data/centroidy.json": 500, "data/live/pogoda.json": P });
-  assert.deepEqual(await loadData(), { pogoda: P, centroids: null, nazwy: null });
+test("loadData centroid index failure → null, pogoda kept", async () => {
+  for (const r of ["throw", 500]) {
+    globalThis.fetch = mockFetch({ ...LOCAL, "data/centroidy/index.json": r });
+    const d = await loadData({ dataBase: "data/" });
+    assert.equal(d.centroidIndex, null);
+    assert.deepEqual(d.pogoda, P);
+  }
 });
-test("loadData both fail → both null", async () => {
-  globalThis.fetch = mockFetch({ "data/centroidy.json": "throw", "data/live/pogoda.json": "throw" });
-  assert.deepEqual(await loadData(), { pogoda: null, centroids: null, nazwy: null });
+test("loadData everything fails → nulls", async () => {
+  globalThis.fetch = mockFetch({});
+  const d = await loadData({ dataBase: "data/" });
+  assert.equal(d.pogoda, null); assert.equal(d.centroidIndex, null); assert.equal(d.nazwy, null);
 });
 test("bannerText states", () => {
   const now = new Date("2026-10-03T12:00:00+02:00");
@@ -96,11 +123,13 @@ test("weatherFor: partially missing wx values -> wx null", () => {
   assert.equal(weatherFor(p, "c", "borowik", 0).wx, null);
 });
 test("loadData nazwy failure → nazwy null, rest unchanged", async () => {
-  const c = { species: [], rows: [] };
-  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": P, "data/nazwy.json": "throw" });
-  assert.deepEqual(await loadData(), { pogoda: P, centroids: c, nazwy: null });
-  globalThis.fetch = mockFetch({ "data/centroidy.json": c, "data/live/pogoda.json": P, "data/nazwy.json": 500 });
-  assert.deepEqual(await loadData(), { pogoda: P, centroids: c, nazwy: null });
+  for (const r of ["throw", 500]) {
+    globalThis.fetch = mockFetch({ ...LOCAL, "data/nazwy.json": r });
+    const d = await loadData({ dataBase: "data/" });
+    assert.equal(d.nazwy, null);
+    assert.deepEqual(d.pogoda, P);
+    assert.deepEqual(d.centroidIndex, IDXC);
+  }
 });
 
 import { ALL, loadSpecies } from "../js/data.js";
@@ -112,8 +141,8 @@ test("loadSpecies reads list from gatunki.json", async () => {
   let url;
   globalThis.fetch = async (u) => { url = u; return { ok: true, json: async () => doc }; };
   try {
-    const r = await loadSpecies("data/");
-    assert.equal(url, "data/gatunki.json");
+    const r = await loadSpecies("https://d.example.pl/v/b1/gatunki.json");
+    assert.equal(url, "https://d.example.pl/v/b1/gatunki.json");
     assert.deepEqual(r.list, doc.species);
     assert.deepEqual(r.info, doc);
   } finally { globalThis.fetch = orig; }
@@ -134,7 +163,7 @@ test("loadSpecies: zawieszony fetch -> po limicie czasu SPECIES", async () => {
   const orig = globalThis.fetch;
   globalThis.fetch = () => new Promise(() => {});
   try {
-    const r = await loadSpecies("data/", 20);
+    const r = await loadSpecies("data/gatunki.json", 20);
     assert.deepEqual(r.list, SPECIES);
     assert.equal(r.info, null);
   } finally { globalThis.fetch = orig; }

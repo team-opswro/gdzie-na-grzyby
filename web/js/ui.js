@@ -1,4 +1,6 @@
 import { ALL, bestFor, loadData, loadSpecies, availableDays, bannerText } from "./data.js";
+import { loadConfig, loadManifest, fileUrl } from "./config.js";
+import { createCentroidStore } from "./tiles.js";
 import { trend, trendBy } from "./chart.js";
 import { topN, haversineKm } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
@@ -23,10 +25,12 @@ function formatDay(iso) {
 }
 
 export async function init() {
-  const { list: speciesList, info: speciesInfo } = await loadSpecies();
+  const { dataBase } = await loadConfig();
+  const manifest = await loadManifest(dataBase);
+  const { list: speciesList, info: speciesInfo } = await loadSpecies(fileUrl(dataBase, manifest, "gatunki"));
   const hash = parseHash(location.hash, [...speciesList.map((x) => x.key), ALL]);
   const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
-  let data = { pogoda: null, centroids: null, nazwy: null };
+  let data = { pogoda: null, centroidIndex: null, nazwy: null };
   let nazwy = null;
   let todayIso = todayLocalIso(); // stała data dnia, wspólna dla days i popupu
   let days = []; // availableDays(...) — pozycja w tej tablicy to „day” w hashu
@@ -62,7 +66,7 @@ export async function init() {
 
   // Mapa powstaje od razu (styl samego h); pogoda i centroidy dołączają po załadowaniu.
   let pogoda = null;
-  let centroids = null;
+  let centroids = null; // createCentroidStore(...) po wczytaniu indeksu kafelków
   let effective = null;
   const dayIdx = () => (days.length ? days[state.day].idx : 0);
 
@@ -73,6 +77,7 @@ export async function init() {
     species: state.species,
     dayIdx: 0,
     basemap: state.basemap,
+    pmtilesUrl: fileUrl(dataBase, manifest, "lasy") ?? "data/lasy.pmtiles",
     onFeatureClick: (props, lngLat) => showPopup(props, lngLat),
     onReserveClick: (name, lngLat) => {
       popup?.remove();
@@ -95,11 +100,13 @@ export async function init() {
   map.on("idle", openInitialPlace);
 
   // Jednorazowe otwarcie wydzielenia z parametru w= po załadowaniu danych.
-  function openInitialPlace() {
+  // Centroid szukany w kafelku środka z hasha i 8 sąsiednich.
+  async function openInitialPlace() {
     if (placeTried || !loaded || !mapReady || !state.place) return;
     placeTried = true;
     const byId = (x) => x.properties.id === state.place;
-    const row = centroids?.rows.find((r) => r[0] === state.place);
+    const [hLon, hLat] = hash.center ?? [map.getCenter().lng, map.getCenter().lat];
+    const row = centroids ? await centroids.findRow(state.place, hLat, hLon) : null;
     const open = (lngLat) => {
       const f = (lngLat ? map.queryRenderedFeatures(map.project([lngLat.lng, lngLat.lat]), { layers: ["lasy-fill"] }).find(byId) : null)
         ?? map.queryRenderedFeatures({ layers: ["lasy-fill"] }).find(byId);
@@ -213,21 +220,22 @@ export async function init() {
     return { lat: c.lat, lon: c.lng };
   }
 
-  function updateRanking() {
+  let rankingSeq = 0; // tylko najnowsze wywołanie (kafelki ładują się asynchronicznie) rysuje listę
+  async function updateRanking() {
+    const seq = ++rankingSeq;
     const list = $("ranking-list");
+    const show = (...items) => { if (seq === rankingSeq) list.replaceChildren(...items); };
+    if (!loaded) return show();
+    if (!centroids) return show(li("Nie udało się wczytać danych rankingu.", "empty"));
+    if (!effective) return show(li("Brak danych pogodowych", "empty"));
+    const o = origin();
+    const radius = state.radius;
+    const rows = await centroids.rowsNear(o, radius);
+    if (seq !== rankingSeq) return;
+    const top = topN({ species: centroids.species, rows }, effective, state.species, dayIdx(), o, radius);
     list.replaceChildren();
-    if (!loaded) return;
-    if (!centroids) {
-      list.append(li("Nie udało się wczytać danych rankingu.", "empty"));
-      return;
-    }
-    if (!effective) {
-      list.append(li("Brak danych pogodowych", "empty"));
-      return;
-    }
-    const top = topN(centroids, effective, state.species, dayIdx(), origin(), state.radius);
     if (!top.length) {
-      list.append(li(`Brak miejsc o dodatnim wyniku w promieniu ${state.radius} km`, "empty"));
+      list.append(li(`Brak miejsc o dodatnim wyniku w promieniu ${radius} km`, "empty"));
       return;
     }
     top.forEach((r, i) => {
@@ -367,8 +375,12 @@ export async function init() {
   $("panel-toggle").addEventListener("click", () => setPanelOpen(!$("panel").classList.contains("open")));
 
   updateDayControls();
-  data = await loadData();
-  ({ pogoda, centroids, nazwy } = data);
+  data = await loadData({ dataBase, manifest });
+  ({ pogoda, nazwy } = data);
+  const tilesIdx = fileUrl(dataBase, manifest, "centroidy");
+  if (data.centroidIndex && tilesIdx) {
+    centroids = createCentroidStore((u) => fetch(u), tilesIdx.slice(0, tilesIdx.lastIndexOf("/") + 1), data.centroidIndex);
+  }
   todayIso = todayLocalIso();
   if (pogoda) days = availableDays(pogoda.days, todayIso);
   state.day = Math.min(state.day, Math.max(days.length - 1, 0));
