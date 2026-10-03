@@ -63,3 +63,91 @@ def test_exposure_class():
     assert exposure_class(15, 0) == "OTHER"
     assert exposure_class(15, 135) == "S_STEEP"
     assert exposure_class(15, 226) == "OTHER"
+
+
+# --- I/O: kafle GLO-30, statystyki strefowe, CLI ---
+
+import geopandas as gpd
+import pyarrow.parquet as pq
+import responses
+from affine import Affine
+from shapely.geometry import box
+
+from pipeline import terrain
+from pipeline.terrain import DEM_URL, download_tiles, main, tile_names, zonal
+
+
+def test_tile_names_for_bbox():
+    names = tile_names((17.2, 49.4, 19.8, 51.1))
+    assert sorted(names) == [(la, lo) for la in (49, 50, 51) for lo in (17, 18, 19)]
+
+
+def test_dem_url_format():
+    assert DEM_URL.format(lat=50, lon=18) == (
+        "https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N50_00_E018_00_DEM/"
+        "Copernicus_DSM_COG_10_N50_00_E018_00_DEM.tif")
+
+
+@responses.activate
+def test_download_skips_404_and_caches(tmp_path):
+    responses.get(DEM_URL.format(lat=50, lon=18), body=b"TIFF")
+    responses.get(DEM_URL.format(lat=50, lon=19), status=404)
+    paths = download_tiles([(50, 18), (50, 19)], tmp_path)
+    assert [p.name for p in paths] == ["N50_E018.tif"] and paths[0].read_bytes() == b"TIFF"
+    again = download_tiles([(50, 18), (50, 19)], tmp_path)
+    assert again == paths and len(responses.calls) == 3  # 404 pytany ponownie, 200 z cache
+
+
+def _grid():
+    """Raster 2180: 20×20 pikseli 30 m od (500000, 300600) w dół; wartości = numer kolumny."""
+    tr = Affine(30, 0, 500000, 0, -30, 300600)
+    vals = np.tile(np.arange(20, dtype=float), (20, 1))
+    return tr, vals
+
+
+def test_zonal_two_polygons_epsg2180():
+    tr, vals = _grid()
+    st = gpd.GeoDataFrame({"prefix": ["p", "p"], "a_i_num": [1, 2]},
+                          geometry=[box(500000, 300300, 500150, 300600),   # kolumny 0–4
+                                    box(500300, 300300, 500450, 300600)],  # kolumny 10–14
+                          crs=2180)
+    asp = np.full((20, 20), 180.0)
+    df = zonal(st, twi=vals, slope=vals * 2, aspect=asp, transform=tr)
+    assert list(df.columns) == ["prefix", "a_i_num", "twi", "slope", "aspect"]
+    r = df.set_index("a_i_num")
+    assert r.loc[1, "twi"] == pytest.approx(2.0) and r.loc[2, "twi"] == pytest.approx(12.0)
+    assert r.loc[2, "slope"] == pytest.approx(24.0) and r.loc[1, "aspect"] == pytest.approx(180.0)
+
+
+def test_tiny_polygon_gets_pixel():
+    tr, vals = _grid()
+    st = gpd.GeoDataFrame({"prefix": ["p"], "a_i_num": [7]},
+                          geometry=[box(500100, 300500, 500105, 300505)], crs=2180)  # 5×5 m
+    df = zonal(st, twi=vals, slope=vals, aspect=np.zeros((20, 20)), transform=tr)
+    assert len(df) == 1 and df.iloc[0]["twi"] == pytest.approx(3.0)
+
+
+def test_main_writes_parquet_with_metadata(tmp_path, monkeypatch):
+    area = tmp_path / "obszar.geojson"
+    gpd.GeoDataFrame({"n": [1]}, geometry=[box(18.0, 50.0, 18.05, 50.05)], crs=4326).to_file(area)
+    stands = gpd.GeoDataFrame({"prefix": ["p"] * 3, "a_i_num": [1, 2, 3], "id": ["a", "b", "c"]},
+                              geometry=[box(18.005 + 0.01 * i, 50.01, 18.012 + 0.01 * i, 50.02)
+                                        for i in range(3)], crs=4326)
+    stands.to_parquet(tmp_path / "stands.parquet")
+    monkeypatch.setattr(terrain, "download_tiles", lambda tiles, cache, **k: [tmp_path / "fake.tif"])
+
+    def fake_window(paths, bounds_2180):
+        minx, miny, maxx, maxy = bounds_2180
+        w, h = int((maxx - minx) // 30) + 1, int((maxy - miny) // 30) + 1
+        x = np.arange(w)
+        dem = np.tile(np.abs(x - w // 2).astype(float), (h, 1)) + np.linspace(50, 0, h)[:, None]
+        return dem, Affine(30, 0, minx, 0, -30, maxy)
+    monkeypatch.setattr(terrain, "window_dem", fake_window)
+    out = tmp_path / "terrain.parquet"
+    assert main(["--area", str(area), "--parquet", str(tmp_path / "stands.parquet"), "--out", str(out),
+                 "--cache", str(tmp_path / "c")]) == 0
+    df = pq.read_table(out).to_pandas()
+    assert set(df["a_i_num"]) == {1, 2, 3}
+    assert set(df["twi_class"]) <= {"DRY", "MID", "WET"} and set(df["exposure"]) <= {"S_STEEP", "OTHER"}
+    meta = pq.read_schema(out).metadata
+    assert b"twi_terciles" in meta and meta[b"dem"] == b"GLO-30"
