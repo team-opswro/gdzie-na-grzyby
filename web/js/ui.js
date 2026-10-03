@@ -6,7 +6,7 @@ import { trend, trendBy } from "./chart.js";
 import { topN, haversineKm } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, addForestLayers, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
-import { renderPopup, renderReserve, trendArrow, trendLabel, rankLabel } from "./popup.js";
+import { renderPopup, renderReserve, renderParking, trendArrow, trendLabel, rankLabel } from "./popup.js";
 import { shareUrl } from "./share.js";
 import { speciesCardModel, renderSpeciesCard, aboutForecastText } from "./dialogs.js";
 
@@ -38,6 +38,7 @@ export async function init() {
     basemap: pre.basemap,
     onFeatureClick: (props, lngLat) => handlers.feature?.(props, lngLat),
     onReserveClick: (name, lngLat) => handlers.reserve?.(name, lngLat),
+    onParkingClick: (props, lngLat) => handlers.parking?.(props, lngLat),
     onMove: () => handlers.move?.(),
   });
   const styleLoaded = new Promise((resolve) => map.once("load", resolve));
@@ -93,6 +94,14 @@ export async function init() {
   const dayIdx = () => (days.length ? days[state.day].idx : 0);
 
   handlers.feature = (props, lngLat) => showPopup(props, lngLat);
+  handlers.parking = (props, lngLat) => {
+    popup?.remove();
+    lastPopup = null;
+    const content = renderParking(props, lngLat);
+    const pp = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    popup = pp;
+    pp.on("close", () => { if (popup === pp) popup = null; });
+  };
   handlers.reserve = (name, lngLat) => {
     popup?.remove();
     lastPopup = null;
