@@ -6,16 +6,23 @@ services:
     restart: unless-stopped
     expose:
       - "80"
-    volumes:
-      - weather:/usr/share/nginx/html/data/live:ro
+    environment:
+      DATA_BASE_URL: ${DATA_BASE_URL:-}
 
   forecast:
     build:
       context: .
       dockerfile: forecast/Dockerfile
     restart: unless-stopped
+    environment:
+      DATA_BASE_URL: ${DATA_BASE_URL:?ustaw DATA_BASE_URL}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_REGION: ${S3_REGION:-auto}
     volumes:
-      - weather:/out
+      - forecast-state:/state
 
 volumes:
-  weather:
+  forecast-state:

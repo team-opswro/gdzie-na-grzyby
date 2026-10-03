@@ -1,1 +1,1 @@
-0 5,14 * * * python -m forecast.run --grid /app/web/data/grid.json --out /out/pogoda.json
+0 5,14 * * * python -m forecast.run --grid-from-url --upload

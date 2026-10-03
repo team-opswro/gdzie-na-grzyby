@@ -22,3 +22,12 @@ def test_stale(tmp_path):
 
 def test_missing(tmp_path):
     assert is_fresh(tmp_path / "nope.json") is False
+
+
+def test_marker_fresh_and_missing(tmp_path, monkeypatch):
+    from forecast.healthcheck import marker_path
+    monkeypatch.setenv("STATE_DIR", str(tmp_path))
+    assert is_fresh(marker_path()) is False
+    m = tmp_path / "last_upload"
+    m.write_text("x")
+    assert is_fresh(marker_path()) is True

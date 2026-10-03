@@ -165,3 +165,136 @@ def test_main_returns_1_on_missing_grid_file(tmp_path, caplog):
     assert run.main(["--grid", str(tmp_path / "nope.json"), "--out", str(out)]) == 1
     assert not out.exists()
     assert "nieoczekiwany błąd" in caplog.text
+
+
+# --- grid z bucketu, upload, znacznik -------------------------------------
+
+import gzip  # noqa: E402
+
+
+class FakeResp:
+    def __init__(self, content, status=200):
+        self.content = content
+        self.status_code = status
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self):
+        return json.loads(self.content)
+
+
+class FakeSession:
+    def __init__(self, files):
+        self.files = files
+        self.urls = []
+
+    def get(self, url, timeout=None):
+        self.urls.append(url)
+        if url not in self.files:
+            return FakeResp(b"", 404)
+        return FakeResp(self.files[url])
+
+
+MANIFEST = {"base": "v/B1/", "files": {"grid": "grid.json"}}
+GRID_BYTES = (FIXTURES / "grid.json").read_bytes()
+
+
+def test_fetch_grid_normalizes_slash_and_reads_manifest():
+    s = FakeSession({
+        "https://d.example/manifest.json": json.dumps(MANIFEST).encode(),
+        "https://d.example/v/B1/grid.json": GRID_BYTES,
+    })
+    cells = run.fetch_grid("https://d.example", s)
+    assert cells == json.loads(GRID_BYTES)["cells"]
+
+
+def test_fetch_grid_handles_raw_gzip_bytes():
+    s = FakeSession({
+        "https://d.example/manifest.json": gzip.compress(json.dumps(MANIFEST).encode()),
+        "https://d.example/v/B1/grid.json": gzip.compress(GRID_BYTES),
+    })
+    assert run.fetch_grid("https://d.example/", s) == json.loads(GRID_BYTES)["cells"]
+
+
+def test_fetch_grid_http_error():
+    with pytest.raises(Exception):
+        run.fetch_grid("https://d.example/", FakeSession({}))
+
+
+class StubS3:
+    def __init__(self):
+        self.puts = []
+
+    def put_object(self, **kw):
+        self.puts.append(kw)
+
+
+def test_upload_pogoda(tmp_path):
+    p = tmp_path / "pogoda.json"
+    p.write_text('{"a": 1}')
+    c = StubS3()
+    run.upload_pogoda(c, "bkt", p)
+    kw = c.puts[0]
+    assert kw["Bucket"] == "bkt" and kw["Key"] == "live/pogoda.json"
+    assert kw["ContentType"] == "application/json"
+    assert kw["ContentEncoding"] == "gzip"
+    assert kw["CacheControl"] == "no-cache"
+    assert json.loads(gzip.decompress(kw["Body"])) == {"a": 1}
+
+
+def _setup_main(tmp_path, monkeypatch, with_env=True):
+    today = datetime.now(ZoneInfo("Europe/Warsaw")).date()
+    series = {c["id"]: make_series(2.0, start=today - timedelta(days=30)) for c in CELLS}
+    monkeypatch.setattr(run, "fetch_series", lambda points, **kw: series)
+    monkeypatch.setenv("STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("DATA_BASE_URL", "https://d.example")
+    monkeypatch.setattr(run, "fetch_grid", lambda url, session: json.loads(GRID_BYTES)["cells"])
+    stub = StubS3()
+    monkeypatch.setattr(run, "make_client", lambda: stub)
+    for k in ("S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
+        if with_env:
+            monkeypatch.setenv(k, "x")
+        else:
+            monkeypatch.delenv(k, raising=False)
+    return stub
+
+
+def test_main_upload_writes_marker(tmp_path, monkeypatch):
+    stub = _setup_main(tmp_path, monkeypatch)
+    assert main(["--grid-from-url", "--upload"]) == 0
+    assert stub.puts[0]["Key"] == "live/pogoda.json"
+    assert (tmp_path / "state" / "last_upload").exists()
+
+
+def test_main_upload_failure_no_marker(tmp_path, monkeypatch):
+    stub = _setup_main(tmp_path, monkeypatch)
+
+    def boom(**kw):
+        raise RuntimeError("s3 down")
+
+    stub.put_object = boom
+    assert main(["--grid-from-url", "--upload"]) == 1
+    assert not (tmp_path / "state" / "last_upload").exists()
+
+
+def test_main_upload_missing_env(tmp_path, monkeypatch, caplog):
+    stub = _setup_main(tmp_path, monkeypatch, with_env=False)
+    assert main(["--grid-from-url", "--upload"]) == 1
+    assert not stub.puts
+    assert not (tmp_path / "state" / "last_upload").exists()
+    assert "S3_" in caplog.text
+
+
+def test_main_no_upload_no_marker(tmp_path, monkeypatch):
+    _setup_main(tmp_path, monkeypatch)
+    out = tmp_path / "p.json"
+    assert main(["--grid-from-url", "--out", str(out)]) == 0
+    assert out.exists() and not (tmp_path / "state" / "last_upload").exists()
+
+
+def test_main_grid_from_url_without_base_url(tmp_path, monkeypatch):
+    _setup_main(tmp_path, monkeypatch)
+    monkeypatch.delenv("DATA_BASE_URL")
+    assert main(["--grid-from-url", "--out", str(tmp_path / "p.json")]) == 1
