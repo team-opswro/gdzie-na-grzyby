@@ -83,10 +83,10 @@ export async function init() {
     const byId = (x) => x.properties.id === state.place;
     const f = map.queryRenderedFeatures(map.project(c), { layers: ["lasy-fill"] }).find(byId)
       ?? map.queryRenderedFeatures({ layers: ["lasy-fill"] }).find(byId);
-    if (f) showPopup(f.properties, { lng: c.lng, lat: c.lat });
+    if (f) showPopup(f.properties, { lng: c.lng, lat: c.lat }, { pan: false });
   }
 
-  function showPopup(props, lngLat) {
+  function showPopup(props, lngLat, { pan = true } = {}) {
     popup?.remove();
     lastPopup = { props, lngLat };
     const content = renderPopup(props, {
@@ -109,7 +109,8 @@ export async function init() {
       }
     });
     // Na telefonie popup ma być w górnej części ekranu, nad zwiniętym panelem.
-    if (window.matchMedia("(max-width: 700px)").matches) {
+    if (pan && window.matchMedia("(max-width: 700px)").matches
+      && map.project([lngLat.lng, lngLat.lat]).y > map.getContainer().clientHeight / 3) {
       map.easeTo({ center: [lngLat.lng, lngLat.lat], offset: [0, -map.getContainer().clientHeight / 6], duration: 300 });
     }
     writeHash();
@@ -117,7 +118,7 @@ export async function init() {
   }
 
   function sharePlace(props, lngLat) {
-    const url = location.origin + location.pathname + formatHash({
+    const url = location.href.split("#")[0] + formatHash({
       species: state.species,
       day: state.day,
       zoom: Math.max(map.getZoom(), 15),
@@ -133,10 +134,11 @@ export async function init() {
   let toastTimer = 0;
   function toast(text) {
     const t = $("toast");
-    t.textContent = text;
-    t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 2000);
+    t.classList.add("show");
+    t.textContent = "";
+    setTimeout(() => { t.textContent = text; }, 50);
+    toastTimer = setTimeout(() => { t.classList.remove("show"); t.textContent = ""; }, 2000);
   }
 
   function onDaySelect(idx) {
@@ -146,7 +148,7 @@ export async function init() {
     state.day = p;
     refresh();
     if (keep) {
-      const content = showPopup(keep.props, keep.lngLat);
+      const content = showPopup(keep.props, keep.lngLat, { pan: false });
       content.querySelector('[aria-pressed="true"]')?.focus?.();
     }
   }
@@ -207,7 +209,7 @@ export async function init() {
       text.className = "rank-text";
       const name = document.createElement("span");
       name.className = "rank-name";
-      name.textContent = `${i + 1}. ${line1}`;
+      name.textContent = line1;
       const dist = document.createElement("span");
       dist.className = "rank-dist";
       dist.textContent = line2;
@@ -263,6 +265,7 @@ export async function init() {
         : "od środka mapy";
   }
 
+  let locating = false;
   $("locate").addEventListener("click", () => {
     if (gps) {
       gps = null;
@@ -271,9 +274,12 @@ export async function init() {
       updateRanking();
       return;
     }
-    if (!navigator.geolocation) return;
+    if (locating) return;
+    if (!navigator.geolocation) { updateSource(true); return; }
+    locating = true;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        locating = false;
         gps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         $("locate").setAttribute("aria-pressed", "true");
         updateSource();
@@ -281,6 +287,7 @@ export async function init() {
         updateRanking();
       },
       () => {
+        locating = false;
         gps = null;
         $("locate").setAttribute("aria-pressed", "false");
         updateSource(true);
@@ -330,7 +337,7 @@ export async function init() {
   if (mapReady) setView(map, effective, state.species, dayIdx());
   updateDayControls();
   updateRanking();
-  openInitialPlace();
+  if (mapReady) map.once("idle", openInitialPlace);
   return map;
 }
 
