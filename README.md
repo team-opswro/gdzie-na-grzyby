@@ -64,3 +64,4 @@ Wymaga zdalnego repozytorium git i dostępu do panelu Coolify (nic nie jest push
   o regulamin BDL i ustawę o dostępie do informacji publicznej (szczegóły: `docs/data/bdl.md`).
 - Pogoda: [Open-Meteo](https://open-meteo.com/) (darmowe API, użycie niekomercyjne).
 - Mapa podkładowa: © OpenStreetMap.
+# gdzie-na-grzyby
