@@ -12,3 +12,12 @@ pipeline/data/*.duckdb.tmp
 pipeline/data/*.parquet
 pipeline/data/out/
 pipeline/data/nadlesnictwa.geojson
+# wynik builda jest w pipeline/data/out/ (publikowany na R2); lokalne kopie w web/data poza gitem
+web/data/lasy.pmtiles
+web/data/centroidy.json
+web/data/centroidy/
+web/data/grid.json
+web/data/nazwy.json
+web/data/gatunki.json
+web/data/manifest.json
+web/data/build.json

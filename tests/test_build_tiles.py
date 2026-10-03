@@ -6,8 +6,8 @@ import pandas as pd
 from shapely.geometry import Polygon, box
 
 from forecast.species import load_species
-from pipeline.build_tiles import (compute_features, mark_reserves, tippecanoe_cmd,
-                                  write_centroids, write_geojsonseq, write_reserves_seq)
+from pipeline.build_tiles import (compute_features, mark_reserves, tile_key, tippecanoe_cmd,
+                                  write_centroid_tiles, write_geojsonseq, write_reserves_seq)
 from pipeline.grid import cell_id
 from pipeline.habitat import Stand
 
@@ -22,6 +22,7 @@ def gdf_from(geoms, stands=None):
             "id": [f"id{i}" for i in range(len(geoms))],
             "sp_main": [s.sp_main for s in stands],
             "sp_admix": [s.sp_admix for s in stands],
+            "partners": pd.Series([s.partners for s in stands], dtype=object).values,
             "age": pd.array([s.age for s in stands], dtype="Int64"),
             "hab": [s.hab for s in stands],
         },
@@ -74,10 +75,10 @@ def test_centroids_threshold(tmp_path):
     f.loc[1, "h_borowik"] = 39
     for k in KEYS[1:]:
         f[f"h_{k}"] = 0
-    p = tmp_path / "c.json"
-    assert write_centroids(f, KEYS, p) == 1
-    d = json.load(open(p))
-    assert d["species"] == KEYS
+    idx = write_centroid_tiles(f, KEYS, tmp_path)
+    assert idx["species"] == KEYS and idx["tiles"] == ["50.5_17.5"]
+    d = json.load(open(tmp_path / "50.5_17.5.json"))
+    assert len(d["rows"]) == 1 and "species" not in d
     row = d["rows"][0]
     assert row[0] == "id0" and len(row) == 4 + len(KEYS) and row[4] == 40
     assert row[1] == round(f.loc[0, "lat"], 5)
@@ -121,9 +122,9 @@ def test_mark_reserves_overlap_takes_first():
 
 def test_centroids_skip_reserves(tmp_path):
     f = mark_reserves(compute_features(gdf_from([sq(50.2, 17.2), sq(50.8, 17.9)]), S), RES)
-    p = tmp_path / "c.json"
-    assert write_centroids(f, KEYS, p) == 1
-    assert json.load(open(p))["rows"][0][0] == "id1"
+    idx = write_centroid_tiles(f, KEYS, tmp_path)
+    assert idx["tiles"] == ["50.5_17.5"]
+    assert [r[0] for r in json.load(open(tmp_path / "50.5_17.5.json"))["rows"]] == ["id1"]
 
 
 def test_geojsonseq_has_rez(tmp_path):
@@ -155,8 +156,8 @@ def test_mark_reserves_null_name_still_marked(tmp_path):
     f = compute_features(gdf_from([sq(50.2, 17.2), sq(50.8, 17.9)]), S)
     m = mark_reserves(f, res)
     assert list(m["rez"]) == ["rezerwat", None]
-    p = tmp_path / "c.json"
-    assert write_centroids(m, KEYS, p) == 1
+    idx = write_centroid_tiles(m, KEYS, tmp_path)
+    assert idx["tiles"] == ["50.5_17.5"]
 
 
 def test_write_reserves_seq_null_name_is_valid_json(tmp_path):
@@ -168,3 +169,53 @@ def test_write_reserves_seq_null_name_is_valid_json(tmp_path):
         raise ValueError(c)
     o = json.loads(p.read_text(encoding="utf-8").splitlines()[0], parse_constant=boom)
     assert "name" not in o["properties"]
+
+
+def test_partners_change_scores():
+    # dąb panujący (nie partner podgrzybka), sosna w domieszce z udziałem 4 i wiekiem 80
+    base = Stand("DB", ("SO",), 80, "BSW", ())
+    withp = Stand("DB", ("SO",), 80, "BSW", (("SO", "4", 80),))
+    f = compute_features(gdf_from([sq(50.7, 17.9), sq(50.8, 17.9)], [base, withp]), S)
+    assert f.loc[0, "h_podgrzybek"] != f.loc[1, "h_podgrzybek"]
+    assert f.loc[1, "h_podgrzybek"] == 90
+
+
+def test_missing_ages_do_not_crash():
+    st = Stand("SO", ("BRZ",), None, "BSW", (("BRZ", "", None),))
+    f = compute_features(gdf_from([sq(50.7, 17.9)], [st]), S)
+    assert f.loc[0, "h_podgrzybek"] == 50
+
+
+def test_tile_key_bounds():
+    assert tile_key(50.0, 17.0) == "50.0_17.0"
+    assert tile_key(50.49999, 17.49999) == "50.0_17.0"
+    assert tile_key(50.5, 17.5) == "50.5_17.5"
+    assert tile_key(50.99, 18.2) == "50.5_18.0"
+    assert tile_key(-0.1, -0.6) == "-0.5_-1.0"
+    assert tile_key(-0.5, -0.0) == "-0.5_0.0"
+    assert tile_key(0.0, 0.25) == "0.0_0.0"
+
+
+def test_centroid_tiles_split_and_index(tmp_path):
+    geoms = [sq(50.2, 17.2), sq(50.3, 17.4), sq(50.6, 17.2), sq(51.1, 18.6)]
+    f = compute_features(gdf_from(geoms), S)
+    old = tmp_path / "49.0_17.0.json"
+    old.write_text("{}")
+    idx = write_centroid_tiles(f, KEYS, tmp_path)
+    assert idx == {"tile": 0.5, "species": KEYS,
+                   "tiles": ["50.0_17.0", "50.5_17.0", "51.0_18.5"]}
+    assert json.load(open(tmp_path / "index.json")) == idx
+    assert not old.exists()
+    rows = {t: json.load(open(tmp_path / f"{t}.json"))["rows"] for t in idx["tiles"]}
+    assert [r[0] for r in rows["50.0_17.0"]] == ["id0", "id1"]
+    assert [r[0] for r in rows["50.5_17.0"]] == ["id2"]
+    assert [r[0] for r in rows["51.0_18.5"]] == ["id3"]
+    for t, rs in rows.items():
+        for r in rs:
+            assert tile_key(r[1], r[2]) == t and len(r) == 4 + len(KEYS)
+
+
+def test_centroid_tiles_empty(tmp_path):
+    f = compute_features(gdf_from([sq(50.2, 17.2)], [Stand("OL", (), 60, "OL")]), S)
+    idx = write_centroid_tiles(f, KEYS, tmp_path)
+    assert idx["tiles"] == [] and sorted(p.name for p in tmp_path.iterdir()) == ["index.json"]

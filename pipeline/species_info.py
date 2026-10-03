@@ -1,4 +1,4 @@
-"""Karta gatunku: species.yaml + content/gatunki.yaml -> web/data/gatunki.json."""
+"""Karta gatunku: species.yaml + content/gatunki.yaml -> pipeline/data/out/gatunki.json."""
 import argparse
 import json
 import sys
@@ -9,7 +9,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 SPECIES_PATH = ROOT / "species.yaml"
 CONTENT_PATH = ROOT / "content" / "gatunki.yaml"
-OUT_PATH = ROOT / "web" / "data" / "gatunki.json"
+OUT_PATH = ROOT / "pipeline" / "data" / "out" / "gatunki.json"
 
 MONTHS = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"]
 RISKS = {"niejadalny", "trujący", "śmiertelnie trujący"}

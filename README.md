@@ -13,19 +13,21 @@ node --test web/tests/*.test.js     # JS (podaj pliki jawnie; katalog nie dział
 
 ## Przebudowa danych statycznych (pipeline)
 
-Wykonywana lokalnie; wynik (`web/data/lasy.pmtiles`, `centroidy.json`, `grid.json`) trafia do repozytorium.
+Wykonywana lokalnie; wynik trafia do `pipeline/data/out/` (poza gitem): `lasy.pmtiles`,
+`centroidy/index.json` + `centroidy/<lat0>_<lon0>.json` (kafelki 0,5°), `grid.json`, `nazwy.json`,
+`gatunki.json`, `build.json`. Paczki BDL leżą w `Nadlesnictwa/` (poza gitem).
 
 ```sh
-python -m pipeline.area                            # obszar = suma obrysów nadleśnictw (ingest + api_districts) -> pipeline/data/obszar.geojson; opolskie.geojson nieużywany
+python -m pipeline.ingest                          # paczki BDL -> pipeline/data/bdl.duckdb + stands.parquet + obszar.geojson
 python -m pipeline.fetch_reserves                  # rezerwaty przyrody z GDOŚ (WFS) -> pipeline/data/rezerwaty.geojson
-python -m pipeline.fetch_bdl                       # pobranie danych BDL do pipeline/data/raw
-python -m pipeline.fetch_names                     # nazwy nadleśnictw i leśnictw -> web/data/nazwy.json
-python -m pipeline.species_info                    # karty gatunków: species.yaml + content/gatunki.yaml -> web/data/gatunki.json
+python -m pipeline.fetch_names                     # nazwy nadleśnictw i leśnictw -> pipeline/data/out/nazwy.json
 podman build -f pipeline/Dockerfile -t grzyby-pipeline .      # (docker: to samo polecenie)
-podman run --rm -v $PWD:/w:z -w /w grzyby-pipeline \
-  python -m pipeline.build_tiles --bdl pipeline/data/raw --boundary pipeline/data/obszar.geojson \
-  --reserves pipeline/data/rezerwaty.geojson --out web/data
+podman run --rm -v $PWD:/w:z -w /w grzyby-pipeline python -m pipeline.build   # -> pipeline/data/out/
 ```
+
+`pipeline.build` sam generuje `gatunki.json` (jak `python -m pipeline.species_info`) i kopiuje
+`nazwy.json`. Wczytuje wszystkie wydzielenia naraz (~340 tys., kilka GB RAM).
+Do podglądu bez bucketu skopiuj zawartość `pipeline/data/out/` do `web/data/` (pliki są w `.gitignore`).
 
 ## Uruchomienie lokalne (Docker Compose)
 

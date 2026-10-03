@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r forecast/requirements.txt
 COPY species.yaml species.yaml
 COPY schema schema
 COPY forecast forecast
+# UWAGA: web/data/grid.json nie jest już w gicie (pipeline/data/out/); Task 6 (E) usuwa tę linię — grid z bucketu.
 COPY web/data/grid.json web/data/grid.json
 RUN chmod +x forecast/entrypoint.sh && mkdir -p /out
 

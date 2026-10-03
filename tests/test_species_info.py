@@ -4,7 +4,7 @@ import pytest
 import yaml
 
 from pipeline import species_info
-from pipeline.species_info import CONTENT_PATH, OUT_PATH, SPECIES_PATH, build_info, format_season
+from pipeline.species_info import CONTENT_PATH, SPECIES_PATH, build_info, format_season
 
 SPECIES = {"species": {
     "b": {"name": "B", "partners": ["SO", "BRZ"], "age": {"min": 30},
@@ -113,11 +113,6 @@ def test_content_covers_constraints():
     assert sp["maslak"]["lookalikes"] == []
     for v in sp.values():
         assert v["wiki"].startswith("https://pl.wikipedia.org/wiki/")
-
-
-def test_generated_file_is_up_to_date():
-    expected = build_info(_load(SPECIES_PATH), _load(CONTENT_PATH))
-    assert json.loads(OUT_PATH.read_text(encoding="utf-8")) == expected
 
 
 def test_main_writes_file(tmp_path):

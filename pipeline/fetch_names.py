@@ -1,4 +1,4 @@
-"""Słownik nazw nadleśnictw i leśnictw (BDL OGC API) -> web/data/nazwy.json."""
+"""Słownik nazw nadleśnictw i leśnictw (BDL OGC API) -> pipeline/data/out/nazwy.json."""
 import argparse
 import json
 import re
@@ -12,7 +12,7 @@ import yaml
 from pipeline.fetch_bdl import DEFAULT_BASE_URL, FIELDS_YAML, PAGE_LIMIT, ROOT, _get_json
 from pipeline.ingest import DEFAULT_DB, list_districts
 
-NAMES_PATH = ROOT / "web" / "data" / "nazwy.json"
+NAMES_PATH = ROOT / "pipeline" / "data" / "out" / "nazwy.json"
 LAYER = "lesnictwa"
 
 

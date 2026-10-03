@@ -1,23 +1,21 @@
-"""BDL -> lasy.pmtiles + centroidy.json + grid.json."""
-import argparse
+"""Funkcje budowy danych mapy: h_*, rezerwaty, GeoJSONSeq dla tippecanoe, centroidy w kafelkach.
+
+Orkiestracja: `python -m pipeline.build`.
+"""
 import json
-import subprocess
-import sys
+import math
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
 import shapely
-import yaml
 
-from forecast.species import Species, load_species
-from pipeline.fetch_bdl import FIELDS_YAML, load_bdl
-from pipeline.fetch_reserves import RESERVES_PATH
-from pipeline.grid import build_grid, cell_id
+from forecast.species import Species
+from pipeline.grid import cell_id
 from pipeline.habitat import Stand, habitat_score
 
-ROOT = Path(__file__).resolve().parent.parent
 CENTROID_THRESHOLD = 40
+CENTROID_TILE = 0.5
 MINZOOM, MAXZOOM = 8, 14
 ATTRS = ["id", "cell", "sp", "age", "hab"]
 
@@ -37,13 +35,15 @@ def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundar
     gdf["lon"] = pts.x.values
     gdf["cell"] = [cell_id(la, lo) for la, lo in zip(gdf["lat"], gdf["lon"])]
 
+    def _age(a):
+        return None if a is None or pd.isna(a) else int(a)
+
     cache: dict[tuple, dict[str, int]] = {}
     keys = list(species)
     rows = []
     parts = gdf["partners"] if "partners" in gdf.columns else [()] * len(gdf)
     for sp, adm, age, hab, pt in zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"], parts):
-        key = (sp, tuple(adm), None if age is None or age != age else int(age), hab,
-               tuple((c, s_, None if a is None or a != a else int(a)) for c, s_, a in pt))
+        key = (sp, tuple(adm), _age(age), hab, tuple((c, s_, _age(a)) for c, s_, a in pt))
         if key not in cache:
             st = Stand(*key)
             cache[key] = {k: int(round(100 * habitat_score(st, species[k]))) for k in keys}
@@ -91,20 +91,44 @@ def tippecanoe_cmd(out: Path, layers: dict[str, Path]) -> list[str]:
     return cmd + [f"-Z{MINZOOM}", f"-z{MAXZOOM}", "--drop-smallest-as-needed", "--force"]
 
 
-def write_centroids(gdf, keys: list[str], path: Path, threshold: int = CENTROID_THRESHOLD) -> int:
+def tile_key(lat: float, lon: float) -> str:
+    """Klucz kafelka centroidów 0,5°: "<lat0>_<lon0>", lat0 = floor(lat/0.5)*0.5 ("%.1f")."""
+    def lo(v):
+        return math.floor(round(v / CENTROID_TILE, 9)) * CENTROID_TILE + 0.0
+    return f"{lo(lat):.1f}_{lo(lon):.1f}"
+
+
+def centroid_rows(gdf, keys: list[str], threshold: int = CENTROID_THRESHOLD) -> list[list]:
+    """Wiersze [id, lat, lon, cell, h_...] wydzieleń z max h >= threshold, bez rezerwatów."""
     cols = [f"h_{k}" for k in keys]
     sel = gdf[gdf[cols].max(axis=1) >= threshold]
     if "rez" in sel.columns:
         sel = sel[sel["rez"].isna()]
-    rows = [
+    return [
         [i, round(float(la), 5), round(float(lo), 5), c, *[int(v) for v in hs]]
         for i, la, lo, c, hs in zip(sel["id"], sel["lat"], sel["lon"], sel["cell"],
                                     sel[cols].to_numpy())
     ]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"species": keys, "rows": rows}, separators=(",", ":")),
-                    encoding="utf-8")
-    return len(rows)
+
+
+def write_centroid_tiles(gdf, keys: list[str], out_dir: Path,
+                         threshold: int = CENTROID_THRESHOLD) -> dict:
+    """Zapisuje `out_dir/index.json` i `out_dir/<lat0>_<lon0>.json` ({rows}); zwraca index.
+    Stare pliki *.json w `out_dir` są usuwane."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.glob("*.json"):
+        old.unlink()
+    tiles: dict[str, list] = {}
+    for row in centroid_rows(gdf, keys, threshold):
+        tiles.setdefault(tile_key(row[1], row[2]), []).append(row)
+    for key, rows in tiles.items():
+        (out_dir / f"{key}.json").write_text(json.dumps({"rows": rows}, separators=(",", ":")),
+                                             encoding="utf-8")
+    index = {"tile": CENTROID_TILE, "species": list(keys), "tiles": sorted(tiles)}
+    (out_dir / "index.json").write_text(json.dumps(index, separators=(",", ":")),
+                                        encoding="utf-8")
+    return index
 
 
 def write_geojsonseq(gdf, keys: list[str], path: Path) -> None:
@@ -124,48 +148,3 @@ def write_geojsonseq(gdf, keys: list[str], path: Path) -> None:
             fh.write(json.dumps({"type": "Feature", "properties": props,
                                  "geometry": json.loads(shapely.to_geojson(geom))},
                                 ensure_ascii=False) + "\n")
-
-
-def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--bdl", type=Path, required=True)
-    ap.add_argument("--boundary", type=Path, required=True)
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--build-dir", type=Path, default=ROOT / "pipeline" / "data" / "build")
-    ap.add_argument("--reserves", type=Path, default=RESERVES_PATH)
-    args = ap.parse_args(argv)
-    if not args.reserves.exists():
-        print(f"brak pliku rezerwatów {args.reserves}: uruchom python -m pipeline.fetch_reserves",
-              file=sys.stderr)
-        return 1
-
-    cfg = yaml.safe_load(FIELDS_YAML.read_text(encoding="utf-8"))
-    species = load_species()
-    keys = list(species)
-
-    gdf = load_bdl(args.bdl, cfg)
-    print(f"po filtrze lasu: {len(gdf)}")
-    boundary = gpd.read_file(args.boundary).to_crs(4326)
-    feats = compute_features(gdf, species, boundary)
-    print(f"po przycieciu: {len(feats)}")
-    reserves = gpd.read_file(args.reserves).to_crs(4326)
-    feats = mark_reserves(feats, reserves)
-    print(f"wydzielenia w rezerwatach: {int(feats['rez'].notna().sum())}")
-
-    args.out.mkdir(parents=True, exist_ok=True)
-    seq = args.build_dir / "lasy.geojsonseq"
-    write_geojsonseq(feats, keys, seq)
-    rseq = args.build_dir / "rezerwaty.geojsonseq"
-    write_reserves_seq(reserves, rseq)
-    subprocess.run(tippecanoe_cmd(args.out, {"lasy": seq, "rezerwaty": rseq}), check=True)
-
-    n = write_centroids(feats, keys, args.out / "centroidy.json")
-    grid = build_grid(zip(feats["lat"], feats["lon"]))
-    (args.out / "grid.json").write_text(json.dumps(grid, separators=(",", ":")),
-                                        encoding="utf-8")
-    print(f"centroidy: {n}, komorki siatki: {len(grid['cells'])}")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
