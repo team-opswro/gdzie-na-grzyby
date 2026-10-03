@@ -67,14 +67,14 @@ def daily_from_response(obj: dict) -> DailySeries:
     )
 
 
-def _request(params: dict, retries: int, sleep, session) -> list[dict]:
+def _request(params: dict, retries: int, sleep, session, url: str = API_URL) -> list[dict]:
     http = session or requests
     last: Exception | None = None
     limited = 0
     attempt = 0
     while attempt < retries:
         try:
-            r = http.get(API_URL, params=params, timeout=TIMEOUT_S)
+            r = http.get(url, params=params, timeout=TIMEOUT_S)
             if r.status_code == 429:
                 if limited >= RATE_LIMIT_RETRIES:
                     # Kolejne partie też dostałyby 429 — kończymy przebieg zamiast zużywać limit.
