@@ -3,7 +3,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Polygon, box
+from shapely.geometry import Point, Polygon, box
 
 from forecast.species import load_species
 from pipeline.build_tiles import (compute_features, mark_reserves, tile_key, tippecanoe_cmd,
@@ -238,3 +238,23 @@ def test_geojsonseq_omits_zero_h(tmp_path):
     props = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["properties"]
     assert props.get("h_kozlarz", 0) > 0
     assert "h_borowik" not in props  # brzoza: borowik 0 -> atrybut pominięty
+
+
+def test_parkings_seq_minzoom(tmp_path):
+    from pipeline.build_tiles import write_parkings_seq
+    gdf = gpd.GeoDataFrame(
+        {"osm": ["n1", "n2", "w3"], "name": ["Leśny", None, "Droga"],
+         "fee": ["yes", "no", None]},
+        geometry=[Point(17.0, 50.0), Point(17.1, 50.1), Point(17.2, 50.2)],
+        crs=4326,
+    )
+    p = tmp_path / "parkingi.seq"
+    write_parkings_seq(gdf, p)
+    lines = p.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 3
+    for i, line in enumerate(lines):
+        obj = json.loads(line)
+        assert obj["tippecanoe"] == {"minzoom": 11}
+        assert obj["properties"]["osm"] == gdf.iloc[i]["osm"]
+        assert ("name" in obj["properties"]) == (not pd.isna(gdf.iloc[i]["name"]))
+        assert ("fee" in obj["properties"]) == (not pd.isna(gdf.iloc[i]["fee"]))

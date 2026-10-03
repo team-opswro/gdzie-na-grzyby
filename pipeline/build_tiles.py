@@ -85,6 +85,24 @@ def write_reserves_seq(reserves: gpd.GeoDataFrame, path: Path) -> None:
                                 ensure_ascii=False) + "\n")
 
 
+def write_parkings_seq(gdf: gpd.GeoDataFrame, path: Path) -> None:
+    """GeoJSONSeq parkingów z `tippecanoe: {minzoom: 11}`; atrybuty: osm, opcjonalnie name/fee."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    names = gdf["name"] if "name" in gdf.columns else [None] * len(gdf)
+    fees = gdf["fee"] if "fee" in gdf.columns else [None] * len(gdf)
+    with path.open("w", encoding="utf-8") as fh:
+        for osm, name, fee, geom in zip(gdf["osm"], names, fees, gdf.geometry):
+            props = {"osm": osm}
+            if isinstance(name, str) and name.strip():
+                props["name"] = name
+            if fee in ("yes", "no"):
+                props["fee"] = fee
+            fh.write(json.dumps({"type": "Feature", "tippecanoe": {"minzoom": 11},
+                                 "properties": props,
+                                 "geometry": json.loads(shapely.to_geojson(geom))},
+                                ensure_ascii=False) + "\n")
+
+
 def tippecanoe_cmd(out: Path, layers: dict[str, Path]) -> list[str]:
     cmd = ["tippecanoe", "-o", str(out / "lasy.pmtiles")]
     for name, seq in layers.items():

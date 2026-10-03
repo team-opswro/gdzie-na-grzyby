@@ -75,7 +75,7 @@ def test_run_writes_out_dir(tmp_path):
     assert bj == meta
     assert bj["build"] is None and bj["generated_at"] == "2026-10-03T12:00:00Z"
     assert bj["counts"] == {"stands": 4, "with_partners": 1, "rez": 1, "centroids": 2,
-                            "centroid_tiles": 2, "grid_cells": 4}
+                            "centroid_tiles": 2, "grid_cells": 4, "parkings": 0}
     assert not (out / "centroidy.json").exists()
 
 
@@ -133,3 +133,25 @@ def test_build_json_has_h_hist(tmp_path):
     assert set(hist) == set(KEYS)
     assert all(len(v) == 10 and sum(v) == 4 for v in hist.values())
     assert hist["borowik"][9] >= 2 and hist["borowik"][0] >= 1  # a, c: h 100; d: olcha 0
+
+
+def test_parkings_layer_only_when_file_exists(tmp_path):
+    from shapely.geometry import Point
+    out = tmp_path / "out"
+    names = tmp_path / "nazwy_src.json"
+    names.write_text('{"nadl": {}, "lesn": {}}', encoding="utf-8")
+
+    parkings = tmp_path / "parkingi.geojson"
+    gpd.GeoDataFrame({"osm": ["p1"]}, geometry=[Point(17.0, 50.0)], crs=4326).to_file(parkings, driver="GeoJSON")
+
+    tip = FakeTippecanoe()
+    meta = build.run(stands(), S, RES, out, tmp_path / "b", names, tippecanoe=tip,
+                     now="2026-10-03T12:00:00Z", parkings_path=parkings)
+    assert any("parkingi:" in arg for arg in tip.cmds[0])
+    assert meta["counts"]["parkings"] == 1
+
+    tip2 = FakeTippecanoe()
+    meta2 = build.run(stands(), S, RES, out, tmp_path / "b2", names, tippecanoe=tip2,
+                      now="2026-10-03T12:00:00Z", parkings_path=tmp_path / "brak.geojson")
+    assert not any("parkingi:" in arg for arg in tip2.cmds[0])
+    assert meta2["counts"]["parkings"] == 0

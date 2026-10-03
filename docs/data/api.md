@@ -83,6 +83,12 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
     **brak atrybutu `h_<gatunek>` = 0** (zera nie są zapisywane, żeby zmniejszyć kafelki),
   - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione).
 - `rezerwaty` — obrysy rezerwatów przyrody (GDOŚ), atrybut `name` (opcjonalny).
+- `parkingi` — parkingi z OpenStreetMap (punkty), atrybuty:
+  - `osm` — identyfikator OSM (`"n<id>"`, `"w<id>"` lub `"r<id>"`),
+  - `name` — nazwa parkingu (opcjonalna),
+  - `fee` — `"yes"` (płatny) lub `"no"` (bezpłatny) (opcjonalny);
+  - widoczna od zoomu 11.
+  Źródło: © OpenStreetMap contributors, ODbL.
 
 Przy małych zoomach tippecanoe może pomijać najmniejsze poligony (`--drop-smallest-as-needed`).
 
