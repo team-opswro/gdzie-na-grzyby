@@ -1,9 +1,28 @@
 source: "https://ogcapi.bdl.lasy.gov.pl/collections/RDLP_Katowice_wydzielenia/items?f=json&limit=1000&offset=N&filter=adr_for LIKE '02-40%'&filter-lang=cql-text (OGC API Features BDL; pozostale RDLP: RDLP_Wroclaw_wydzielenia, RDLP_Lodz_wydzielenia, RDLP_Poznan_wydzielenia; adr_for zaczyna sie od region_cd-inspectorate_cd)"
 layer: "RDLP_Katowice_wydzielenia (pole nazwa = BDL_<region>_<nadl>_<NAZWA>_2026, np. BDL_02_40_OPOLE_2026)"
 join: null            # atrybuty drzewostanu sa w tej samej warstwie; jedno wydzielenie = jeden rekord
-fields: {id: a_i_num, sp_main: species_cd, sp_admix: null, age: spec_age, hab: site_type}
+fields: {id: adr_for, sp_main: species_cd, sp_admix: null, age: spec_age, hab: site_type}
+# id = adres lesny; loader MUSI znormalizowac: usunac wszystkie biale znaki (re.sub(r"\s+","",v)) -> "02-40-1-12-363-i-00"; unikalny w probce Opole (6687/6687). a_i_num = alternatywny numeryczny klucz.
 # dodatkowo przydatne: part_cd (udzial gatunku panujacego w dziesiatych, 10 = czysty), sub_area (ha), stand_stru, adr_for (adres lesny)
-forest_filter: {column: area_type, values: ["D-STAN"]}   # dodatkowo wymagac species_cd != null; stand_stru w DRZEW/KO/KDO/"2 PIĘT"
-districts: [Prudnik, Namysłów, Tułowice, Kluczbork, Opole, Strzelce Opolskie, Brzeg, Prószków, Rudy Raciborskie, Olesno, Kup, Kędzierzyn, Turawa, Zawadzkie, Wieluń, Lubliniec, Rudziniec, Kłobuck]
-# Wieluń = RDLP Łódź (region 06, nadl. 20); Kłobuck/Lubliniec/Rudziniec częściowo poza woj. Pozostałe = RDLP Katowice (region 02).
-# Pominiete slivery granicy (<1.1 km2 w woj.): Syców, Henryków, Oława, Bardo Śląskie, Przedborów, Herby, Oleśnica Śląska.
+forest_filter: {column: area_type, values: ["D-STAN"], require_not_null: [species_cd]}
+# prefix = poczatek surowego adr_for (filter=adr_for LIKE '<prefix>%'); name = dokladnie jak inspectorate_name w kolekcji nadlesnictwa
+districts:
+  - {name: "Prudnik", prefix: "02-23", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Namysłów", prefix: "02-20", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Tułowice", prefix: "02-32", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Kluczbork", prefix: "02-11", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Opole", prefix: "02-40", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Strzelce Opolskie", prefix: "02-29", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Brzeg", prefix: "02-04", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Prószków", prefix: "02-24", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Rudy Raciborskie", prefix: "02-26", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Olesno", prefix: "02-21", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Kup", prefix: "02-18", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Kędzierzyn", prefix: "02-10", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Turawa", prefix: "02-33", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Zawadzkie", prefix: "02-14", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Wieluń", prefix: "06-20", layer: "RDLP_Lodz_wydzielenia"}
+  - {name: "Lubliniec", prefix: "02-19", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Rudziniec", prefix: "02-25", layer: "RDLP_Katowice_wydzielenia"}
+  - {name: "Kłobuck", prefix: "02-12", layer: "RDLP_Katowice_wydzielenia"}
+# Wieluń = RDLP Łódź. Pominiete slivery granicy (<1.1 km2 w woj.): Syców, Henryków, Oława, Bardo Śląskie, Przedborów, Herby, Oleśnica Śląska.

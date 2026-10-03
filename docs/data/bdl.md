@@ -33,11 +33,14 @@ Jeden rekord (MultiPolygon, EPSG:4326) = jedno wydzielenie; **atrybuty drzewosta
 - part_cd: 10: 2040, 7: 830, 8: 726, 6: 719, 9: 591, 5: 556, 4: 337, 3: 139, 2: 15.
 - Przyklad: `a_i_num=240026456, area_type=D-STAN, species_cd=SO, spec_age=57, site_type=BMW, part_cd=10, stand_stru=DRZEW, sub_area=2.17`.
 
+## Klucz `id` = adres lesny (adr_for)
+`fields.id` = `adr_for` (spec §5). Surowa wartosc ma wewnetrzne dopelnienie spacjami, np. `02-40-1-12-363   -i   -00` (Lodz: `06-01-2-13-201B  -b   -00`). **Regula normalizacji dla loadera: usunac wszystkie biale znaki** (`re.sub(r"\s+", "", v)`) -> `02-40-1-12-363-i-00`. Po normalizacji (i bez niej) `adr_for` jest unikalny w probce Opole (6687 rekordow, 0 duplikatow). Filtr CQL po nadlesnictwie dziala na surowej wartosci (`LIKE '02-40%'`; prefiks to poczatek bez spacji). `a_i_num` pozostaje alternatywnym kluczem numerycznym. Unikalnosc w calym woj. do potwierdzenia przy pelnym pobraniu (prefiks nadlesnictwa jest w adresie, wiec kolizje miedzy nadlesnictwami sa wykluczone).
+
 ## Domieszki
 **Warstwa udostepniana przez OGC API/WFS nie zawiera gatunkow domieszkowych**: jest tylko gatunek panujacy (`species_cd`) z jego wiekiem i udzialem (`part_cd`; wartosc < 10 oznacza, ze reszta skladu to inne gatunki, ale nieznane). Brak duplikatow a_i_num/adr_for (1 rekord = 1 wydzielenie). Pelny sklad (z domieszkami) jest w opisie taksacyjnym paczki z wniosku interaktywnego — nie sprawdzono. Dla spec. v1 (gatunek panujacy + wiek + siedlisko) dane wystarczaja; `sp_admix: null`.
 
 ## Odroznianie nie-lasu
-`area_type`: `D-STAN` (5952 w Opolu) = drzewostan; reszta to grunty nieleśne/niezalesione, m.in. `ZRĄB` 144 (zreb, brak gatunku), `L ENERG` 89 (linie energet.), `R` 69, `Ł` 58, `SUKCESJA` 56, `INNE WYL`, `DROGI I`, `BAGNO`, `PS`, `POL ŁOW`, `STAW R-R`, `URZ WOD`, itd. Dla nie-D-STAN `species_cd` jest null, `spec_age`=0, `stand_stru`/`part_cd` null. Filtr: `area_type == 'D-STAN'` i `species_cd` niepusty (jedyny wyjatek: `PLANT NAS` z gatunkiem — pomijamy). Uwaga: D-STAN obejmuje tez mlode uprawy (wiek 1-10) i `KO`/`KDO` (kultury) — decyzja o minimalnym wieku nalezy do modelu.
+`area_type`: `D-STAN` (5952 w Opolu) = drzewostan; reszta to grunty nieleśne/niezalesione, m.in. `ZRĄB` 144 (zreb, brak gatunku), `L ENERG` 89 (linie energet.), `R` 69, `Ł` 58, `SUKCESJA` 56, `INNE WYL`, `DROGI I`, `BAGNO`, `PS`, `POL ŁOW`, `STAW R-R`, `URZ WOD`, itd. Dla nie-D-STAN `species_cd` jest null, `spec_age`=0, `stand_stru`/`part_cd` null. Filtr (w YAML: `values: ["D-STAN"]`, `require_not_null: [species_cd]`): `area_type == 'D-STAN'` i `species_cd` niepusty (jedyny wyjatek: `PLANT NAS` z gatunkiem — pomijamy). Uwaga: D-STAN obejmuje tez mlode uprawy (wiek 1-10) i `KO`/`KDO` (kultury) — decyzja o minimalnym wieku nalezy do modelu.
 
 ## Granice nadlesnictw i nadlesnictwa przecinajace woj. opolskie
 Kolekcja `nadlesnictwa` (429 obiektow; pola `inspectorate_name`, `region_cd`, `inspectorate_cd`). Przeciecie z granica woj. (OSM relacja 224460), km2 w woj. / calosc: Prudnik 1806/1809, Namyslow 810/811, Tulowice 717/717, Kluczbork 698/698, Opole 695/695, Strzelce Opolskie 673/673, Brzeg 664/665, Proszkow 586/586, Rudy Raciborskie 495/1022, Olesno 459/471, Kup 406/406, Kedzierzyn 345/358, Turawa 302/302, Zawadzkie 245/286, Wielun 189/1462, Lubliniec 186/521, Rudziniec 104/582, Klobuk 14/862. Wszystkie oprocz Wielunia (RDLP Lodz, region 06) naleza do RDLP Katowice (region 02) — czyli **RDLP Wroclaw nie wnosi nic istotnego** (tylko slivery <1.1 km2: Syców, Henryków, Oława, Bardo Śląskie, Przedborów, Herby, Oleśnica Śląska). Obszar: lasy PGL LP; lasy prywatne/inne poza zakresem tej warstwy.
@@ -48,3 +51,6 @@ Kolekcja `nadlesnictwa` (429 obiektow; pola `inspectorate_name`, `region_cd`, `i
 ## Ostrzezenia
 - Dane BDL sa poglądowe (regulamin); wiek/gatunek ze stanu 2026.
 - Pobranie calego woj.: ok. 18 nadlesnictw x ~5-8 tys. rekordow; stronicowac po 1000 z filtrem `adr_for LIKE 'RR-NN%'`. Pole `numberMatched` w odpowiedziach z filtrem bywa nierzetelne — stronicowac do pustej/niepelnej strony.
+
+## Mapowanie nadlesnictw (bdl_fields.yaml `districts`)
+Kazdy wpis: `name` (jak `inspectorate_name`), `prefix` (`region_cd-inspectorate_cd`, kody z kolekcji `nadlesnictwa`), `layer`. 17 nadlesnictw w RDLP Katowice (region 02), Wieluń 06-20 w `RDLP_Lodz_wydzielenia`.
