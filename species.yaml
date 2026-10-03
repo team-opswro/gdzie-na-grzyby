@@ -11,8 +11,22 @@ factors_default:
   damage: {full: 40, zero_at: 100, min: 0.6}
   density: [[0.4, 0.8], [0.9, 1.0], [1.0, 0.9]]
 
+# Zestawy siedlisk (spec K): element listy preferred/adjacent "@nazwa" rozwija się do kodów zestawu.
+habitat_sets:
+  bory_ubogie: [BS, BSW, BGSW]
+  bory_wilgotne: [BW, BWG, BGW]
+  bory_bagienne: [BB, BGB]
+  bory_mieszane_swieze: [BMSW, BMGSW]
+  bory_mieszane_wilgotne: [BMW, BMWYZ, BMWYZSW, BMWYZW, BMGW]
+  bory_mieszane_bagienne: [BMB, BMGB]
+  lasy_mieszane_swieze: [LMSW, LMGSW, LMWYZ, LMWYZSW, LMG]
+  lasy_mieszane_wilgotne: [LMW, LMGW, LMWYZW]
+  lasy_swieze: [LSW, LWYZS, LWYZSW, LWYZ, LGSW, LG]
+  lasy_wilgotne: [LW, LWYZW, LGW]
+
 species:
   borowik:
+    group: borowiki
     name: "Borowik szlachetny"
     partners: [SO, SW, BK, DB]
     age: {min: 30, opt: 50, max: null}
@@ -25,6 +39,7 @@ species:
     factors:
       soil: {G: 0.85, OG: 0.85, MD: 0.85}
   podgrzybek:
+    group: podgrzybki
     name: "Podgrzybek brunatny"
     partners: [SO, SW]
     age: {min: 20, opt: 30, max: null}
@@ -50,6 +65,7 @@ species:
       moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6, WW: 0.85, WSW: 0.85}
       soil: {BR: 0.85, G: 0.85, OG: 0.85, MD: 0.85}
   kozlarz:
+    group: kozlarze
     name: "Koźlarz babka"
     partners: [BRZ]
     age: {min: 10, opt: 15, max: null}
@@ -63,6 +79,7 @@ species:
       moist: {BO: 0.8, BM: 0.8, BBM: 0.8, BSO: 0.9}
       soil: {B: 0.9, RD: 0.9}
   maslak:
+    group: maslaki
     name: "Maślak zwyczajny"
     partners: [SO]
     age: {min: 5, opt: 10, max: 40}
@@ -76,8 +93,9 @@ species:
       moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6, WW: 0.85, WSW: 0.85}
       degr: {}
   rydz:
-    name: "Rydz"
-    partners: [SO, SW]
+    group: rydze
+    name: "Rydz mleczaj"
+    partners: [SO]
     age: {min: 5, opt: 10, max: 40}
     habitat: {preferred: [LMSW, LSW, LMWYZ, LMWYZSW, LMGSW, LMG, LWYZS, LWYZSW, LWYZ, LGSW, LG], adjacent: [BMSW, LMW, LMGW, LW, BMGSW, LMWYZW, LWYZW, LGW]}
     season: {start: "08-01", end: "10-31"}
@@ -85,5 +103,110 @@ species:
     rain_min: 10
     rain_full: 40
     soil_moisture_min: 0.15
+    factors:
+      degr: {}
+  # --- gatunki dodane w specu K (parametry eksperckie, do strojenia walidacją) ---
+  kozlarz_czerwony:
+    group: kozlarze
+    name: "Koźlarz czerwony"
+    partners: [OS, TP]
+    age: {min: 10, opt: 20, max: null}
+    habitat: {preferred: ["@lasy_mieszane_swieze", "@lasy_swieze", "@bory_mieszane_swieze", "@lasy_mieszane_wilgotne"], adjacent: ["@lasy_wilgotne", "@bory_mieszane_wilgotne"]}
+    season: {start: "06-15", end: "10-31"}
+    temp: [6, 12, 20, 26]
+  kozlarz_pomaranczowy:
+    group: kozlarze
+    name: "Koźlarz pomarańczowożółty"
+    partners: [BRZ]
+    age: {min: 10, opt: 15, max: null}
+    habitat: {preferred: ["@bory_wilgotne", "@bory_mieszane_wilgotne", "@bory_bagienne", "@bory_mieszane_bagienne"], adjacent: ["@bory_ubogie", "@bory_mieszane_swieze", "@lasy_mieszane_wilgotne"]}
+    season: {start: "07-01", end: "10-31"}
+    temp: [6, 12, 20, 26]
+    factors:
+      moist: {BO: 0.8, BM: 0.8, BBM: 0.8, BSO: 0.9}
+      soil: {B: 0.9, RD: 0.9}
+  kozlarz_grabowy:
+    group: kozlarze
+    name: "Koźlarz grabowy"
+    partners: [GB]
+    age: {min: 15, opt: 25, max: null}
+    habitat: {preferred: ["@lasy_swieze", "@lasy_mieszane_swieze", "@lasy_wilgotne"], adjacent: ["@lasy_mieszane_wilgotne", "@bory_mieszane_swieze"]}
+    season: {start: "06-15", end: "10-15"}
+    temp: [8, 13, 21, 27]
+  kozlarz_debowy:
+    group: kozlarze
+    name: "Koźlarz dębowy"
+    partners: [DB]
+    age: {min: 20, opt: 40, max: null}
+    habitat: {preferred: ["@lasy_swieze", "@lasy_mieszane_swieze", "@bory_mieszane_swieze"], adjacent: ["@lasy_wilgotne", "@lasy_mieszane_wilgotne"]}
+    season: {start: "07-01", end: "09-30"}
+    temp: [8, 13, 21, 27]
+  borowik_sosnowy:
+    group: borowiki
+    name: "Borowik sosnowy"
+    partners: [SO]
+    age: {min: 30, opt: 50, max: null}
+    habitat: {preferred: ["@bory_ubogie", "@bory_mieszane_swieze"], adjacent: ["@bory_wilgotne", "@bory_mieszane_wilgotne"]}
+    season: {start: "06-15", end: "10-31"}
+    temp: [6, 12, 20, 26]
+  borowik_usiatkowany:
+    group: borowiki
+    name: "Borowik usiatkowany"
+    partners: [DB, BK, GB]
+    age: {min: 40, opt: 60, max: null}
+    habitat: {preferred: ["@lasy_swieze", "@lasy_mieszane_swieze"], adjacent: ["@bory_mieszane_swieze"]}
+    season: {start: "05-15", end: "09-15"}
+    temp: [10, 15, 23, 28]
+  podgrzybek_zajaczek:
+    group: podgrzybki
+    name: "Podgrzybek zajączek"
+    partners: [DB, BK, SO, SW]
+    age: {min: 20, opt: 30, max: null}
+    habitat: {preferred: ["@bory_mieszane_swieze", "@lasy_mieszane_swieze", "@lasy_swieze"], adjacent: ["@bory_ubogie", "@bory_mieszane_wilgotne", "@lasy_mieszane_wilgotne"]}
+    season: {start: "06-15", end: "10-31"}
+    temp: [6, 12, 20, 26]
+  podgrzybek_zlotawy:
+    group: podgrzybki
+    name: "Podgrzybek złotawy"
+    partners: [DB, BK, SO, SW, BRZ]
+    age: {min: 15, opt: 25, max: null}
+    habitat: {preferred: ["@bory_mieszane_swieze", "@lasy_mieszane_swieze", "@lasy_swieze", "@bory_ubogie"], adjacent: ["@bory_wilgotne", "@bory_mieszane_wilgotne", "@lasy_mieszane_wilgotne", "@lasy_wilgotne"]}
+    season: {start: "06-15", end: "11-15"}
+    temp: [5, 10, 19, 25]
+  podgrzybek_czerwonawy:
+    group: podgrzybki
+    name: "Podgrzybek czerwonawy"
+    partners: [DB]
+    age: {min: 20, opt: 40, max: null}
+    habitat: {preferred: ["@lasy_swieze", "@lasy_mieszane_swieze"], adjacent: ["@bory_mieszane_swieze"]}
+    season: {start: "07-01", end: "09-30"}
+    temp: [10, 15, 23, 28]
+  maslak_zolty:
+    group: maslaki
+    name: "Maślak żółty"
+    partners: [MD]
+    age: {min: 5, opt: 10, max: null}
+    habitat: {preferred: ["@lasy_mieszane_swieze", "@bory_mieszane_swieze", "@lasy_swieze"], adjacent: ["@bory_ubogie", "@lasy_mieszane_wilgotne", "@bory_mieszane_wilgotne", "@lasy_wilgotne"]}
+    season: {start: "07-01", end: "10-31"}
+    temp: [4, 10, 18, 24]
+  maslak_sitarz:
+    group: maslaki
+    name: "Maślak sitarz"
+    partners: [SO]
+    age: {min: 10, opt: 20, max: 60}
+    habitat: {preferred: ["@bory_ubogie"], adjacent: ["@bory_wilgotne", "@bory_mieszane_swieze"]}
+    season: {start: "08-01", end: "10-31"}
+    temp: [4, 10, 18, 24]
+    factors:
+      moist: {BO: 0.4, BM: 0.4, BBM: 0.4, BSO: 0.6, WW: 0.85, WSW: 0.85}
+      degr: {}
+  rydz_swierkowy:
+    group: rydze
+    name: "Rydz świerkowy"
+    partners: [SW]
+    age: {min: 10, opt: 20, max: 60}
+    habitat: {preferred: ["@bory_mieszane_swieze", "@lasy_mieszane_swieze", "@lasy_swieze"], adjacent: ["@bory_mieszane_wilgotne", "@lasy_mieszane_wilgotne", "@bory_ubogie"]}
+    season: {start: "08-01", end: "10-31"}
+    temp: [5, 10, 18, 24]
     factors:
       degr: {}

@@ -258,3 +258,34 @@ def test_stand_from_row_rounds_damage_and_density():
 def test_kurka_brown_soil_lower_than_podzol():
     k = S["kurka"]
     assert habitat_score(st(soil="BRk"), k) < habitat_score(st(soil="Bw"), k)
+
+
+# --- nowe gatunki (spec K) ---
+
+def test_aspen_on_lmsw_good_for_red_bolete():
+    assert habitat_score(Stand("OS", (), 40, "LMSW"), S["kozlarz_czerwony"]) >= 0.9
+    assert habitat_score(Stand("SO", (), 40, "BSW"), S["kozlarz_czerwony"]) == 0
+
+
+def test_larch_only_for_larch_bolete():
+    assert habitat_score(Stand("MD", (), 30, "LMSW"), S["maslak_zolty"]) > 0
+    assert habitat_score(Stand("SO", (), 30, "LMSW"), S["maslak_zolty"]) == 0
+
+
+def test_spruce_rydz_vs_pine_rydz():
+    st = Stand("SW", (), 30, "BMSW")
+    assert habitat_score(st, S["rydz_swierkowy"]) > 0 and habitat_score(st, S["rydz"]) == 0
+
+
+def test_existing_species_scores_unchanged():
+    cases = [
+        (Stand("SO", (), 80, "BSW"), [1.0, 1.0, 1.0, 0.0, 0.3]),
+        (Stand("SO", ("BRZ",), 40, "BMW", (("BRZ", "3", 40),)), [0.39, 1.0, 0.6, 0.7, 0.2]),
+        (Stand("BK", (), 90, "LSW"), [1.0, 0.0, 0.2, 0.0, 0.0]),
+        (Stand("DB", ("SO",), 60, "LMSW", (("SO", "2", 60),)), [1.0, 0.42, 0.6, 0.0, 0.042]),
+        (Stand("BRZ", (), 25, "BMW", (), moist="WW", veg="ZAD"), [0.0, 0.0, 0.0, 0.7, 0.0]),
+    ]
+    for st, want in cases:
+        got = [round(habitat_score(st, S[k]), 4)
+               for k in ("borowik", "podgrzybek", "kurka", "kozlarz", "maslak")]
+        assert got == want

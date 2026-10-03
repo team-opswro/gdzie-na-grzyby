@@ -16,7 +16,7 @@ SCHEMA = json.loads((ROOT / "schema/pogoda.schema.json").read_text())
 FIXTURES = ROOT / "tests/fixtures"
 TODAY = date(2026, 10, 3)
 NOW = datetime(2026, 10, 3, 5, 0, 12, tzinfo=ZoneInfo("Europe/Warsaw"))
-SPECIES_KEYS = {"borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"}
+SPECIES_KEYS = set(load_species())
 CELLS = [
     {"id": "506_178", "lat": 50.65, "lon": 17.85},
     {"id": "507_178", "lat": 50.75, "lon": 17.85},

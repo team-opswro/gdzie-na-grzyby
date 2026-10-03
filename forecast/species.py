@@ -42,6 +42,7 @@ class Species:
     soil_moisture_min: float
     temp: tuple[float, float, float, float]  # zero_low, opt_low, opt_high, zero_high
     factors: Mapping[str, object] = field(default_factory=dict, hash=False)
+    group: str | None = None  # grupa w aplikacji (np. "kozlarze"); None = bez grupy
 
 
 def _md(text: str) -> tuple[int, int]:
@@ -70,11 +71,29 @@ def _parse_factors(key: str, raw: dict | None) -> dict[str, object]:
     return {name: _parse_factor(key, name, v) for name, v in (raw or {}).items()}
 
 
-def _parse(key: str, d: dict, defaults: Mapping[str, object] | None = None) -> Species:
+def expand_habitats(items: list[str], sets: Mapping[str, list[str]], key: str = "") -> frozenset[str]:
+    """Kody siedlisk; element "@nazwa" -> kody zestawu z `habitat_sets` (spec K §2.3)."""
+    out: set[str] = set()
+    for it in items:
+        if isinstance(it, str) and it.startswith("@"):
+            name = it[1:]
+            if name not in sets:
+                raise ValueError(f"{key}: nieznany zestaw siedlisk {it!r}")
+            out.update(sets[name])
+        else:
+            out.add(it)
+    return frozenset(out)
+
+
+def _parse(key: str, d: dict, defaults: Mapping[str, object] | None = None,
+           sets: Mapping[str, list[str]] | None = None) -> Species:
     temp = tuple(d["temp"])
     if len(temp) != 4:
         raise ValueError(f"{key}: temp musi mieć 4 wartości")
     age, hab, season = d["age"], d["habitat"], d["season"]
+    preferred = expand_habitats(hab["preferred"], sets or {}, key)
+    # kod w obu listach po rozwinięciu zestawów zostaje preferowany
+    adjacent = expand_habitats(hab.get("adjacent", []), sets or {}, key) - preferred
     return Species(
         key=key,
         name=d["name"],
@@ -82,8 +101,8 @@ def _parse(key: str, d: dict, defaults: Mapping[str, object] | None = None) -> S
         age_min=age["min"],
         age_opt=age["opt"],
         age_max=age.get("max"),
-        habitat_preferred=frozenset(hab["preferred"]),
-        habitat_adjacent=frozenset(hab.get("adjacent", [])),
+        habitat_preferred=preferred,
+        habitat_adjacent=adjacent,
         season_start=_md(season["start"]),
         season_end=_md(season["end"]),
         rain_min=d.get("rain_min", DEFAULT_RAIN_MIN),
@@ -92,10 +111,12 @@ def _parse(key: str, d: dict, defaults: Mapping[str, object] | None = None) -> S
         temp=temp,
         # nadpisanie gatunkowe zastępuje całą tabelę czynnika
         factors={**(defaults or {}), **_parse_factors(key, d.get("factors"))},
+        group=d.get("group"),
     )
 
 
 def load_species(path: Path = ROOT / "species.yaml") -> dict[str, Species]:
     data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     defaults = _parse_factors("factors_default", data.get("factors_default"))
-    return {key: _parse(key, d, defaults) for key, d in data["species"].items()}
+    sets = data.get("habitat_sets") or {}
+    return {key: _parse(key, d, defaults, sets) for key, d in data["species"].items()}

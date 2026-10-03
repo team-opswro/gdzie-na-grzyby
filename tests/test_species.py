@@ -2,7 +2,12 @@ from forecast.species import load_species
 
 
 def test_load_species_keys_in_order():
-    assert list(load_species()) == ["borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"]
+    keys = list(load_species())
+    assert keys[:6] == ["borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"]
+    assert keys[6:] == ["kozlarz_czerwony", "kozlarz_pomaranczowy", "kozlarz_grabowy", "kozlarz_debowy",
+                        "borowik_sosnowy", "borowik_usiatkowany", "podgrzybek_zajaczek",
+                        "podgrzybek_zlotawy", "podgrzybek_czerwonawy", "maslak_zolty", "maslak_sitarz",
+                        "rydz_swierkowy"]
 
 
 def test_borowik_values():
@@ -89,3 +94,57 @@ def test_yaml_factor_values():
     assert s["kurka"].factors["moist"]["WW"] == 0.85
     assert s["borowik"].factors["veg"] == {"ZAD": 0.7, "ZIEL": 0.8, "SZAD": 0.9}
     assert s["borowik"].factors["damage"] == Ramp(40, 100, 0.6)
+
+
+# --- zestawy siedlisk i grupy (spec K) ---
+
+SETS = "habitat_sets:\n  bory_ubogie: [BS, BSW, BGSW]\n  lasy_swieze: [LSW]\n"
+
+
+def test_habitat_set_expansion(tmp_path):
+    extra = """  y:
+    name: Y
+    partners: [SO]
+    age: {min: 10, opt: 20}
+    habitat: {preferred: ["@bory_ubogie", LMSW], adjacent: ["@lasy_swieze", BSW]}
+    season: {start: "07-01", end: "10-31"}
+    temp: [6, 12, 20, 26]
+    group: testowe
+"""
+    s = load_yaml(tmp_path, SETS, extra)
+    assert s["y"].habitat_preferred == {"BS", "BSW", "BGSW", "LMSW"}
+    assert s["y"].habitat_adjacent == {"LSW"}  # BSW zostaje w preferred
+    assert s["y"].group == "testowe" and s["x"].group is None
+
+
+def test_unknown_set_raises(tmp_path):
+    extra = BASE_SP.replace("x:", "z:").replace("[BSW]", '["@nie_ma"]')
+    with pytest.raises(ValueError):
+        load_yaml(tmp_path, SETS, extra)
+
+
+def test_groups_assigned():
+    s = load_species()
+    assert s["kozlarz_czerwony"].group == "kozlarze" and s["kozlarz"].group == "kozlarze"
+    assert s["kurka"].group is None and s["rydz"].group == "rydze"
+    assert {k for k, v in s.items() if v.group == "borowiki"} == {"borowik", "borowik_sosnowy",
+                                                                  "borowik_usiatkowany"}
+
+
+def test_rydz_only_pine():
+    s = load_species()
+    assert s["rydz"].partners == {"SO"} and s["rydz"].name == "Rydz mleczaj"
+    assert s["rydz_swierkowy"].partners == {"SW"}
+
+
+def test_new_species_values_from_spec():
+    s = load_species()
+    c = s["kozlarz_czerwony"]
+    assert c.partners == {"OS", "TP"} and (c.age_min, c.age_opt) == (10, 20)
+    assert c.season_start == (6, 15) and c.temp == (6, 12, 20, 26)
+    assert "LMSW" in c.habitat_preferred and "LW" in c.habitat_adjacent
+    assert s["maslak_sitarz"].age_max == 60 and s["borowik_usiatkowany"].temp == (10, 15, 23, 28)
+    assert s["podgrzybek_zlotawy"].season_end == (11, 15)
+    assert s["kozlarz_pomaranczowy"].factors["moist"] == s["kozlarz"].factors["moist"]
+    assert s["maslak_sitarz"].factors["moist"] == s["maslak"].factors["moist"]
+    assert s["rydz_swierkowy"].factors["degr"] == {}

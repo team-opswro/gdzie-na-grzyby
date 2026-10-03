@@ -49,14 +49,16 @@ habitat_sets:
   bory_ubogie: [BS, BSW, BGSW]
   bory_wilgotne: [BW, BWG, BGW]
   bory_bagienne: [BB, BGB]
-  bory_mieszane_swieze: [BMSW, BMGSW, BMWYZ, BMWYZSW]
-  bory_mieszane_wilgotne: [BMW, BMWYZW, BMGW]
+  bory_mieszane_swieze: [BMSW, BMGSW]
+  bory_mieszane_wilgotne: [BMW, BMWYZ, BMWYZSW, BMWYZW, BMGW]
   bory_mieszane_bagienne: [BMB, BMGB]
   lasy_mieszane_swieze: [LMSW, LMGSW, LMWYZ, LMWYZSW, LMG]
   lasy_mieszane_wilgotne: [LMW, LMGW, LMWYZW]
   lasy_swieze: [LSW, LWYZS, LWYZSW, LWYZ, LGSW, LG]
   lasy_wilgotne: [LW, LWYZW, LGW]
 ```
+
+Przypisanie kodów wyżynnych do zestawów odpowiada odpowiednikom ze specu E (`tests/test_habitat.py::test_upland_habitat_scores_like_lowland_analogue`): `BMWYZ ≙ BMW`, `BMWYZSW ≙ BMWYZ`, więc oba są w borach mieszanych wilgotnych.
 
 `pipeline.species_info` tłumaczy rozwinięte kody (w `gatunki.json` zestawy nie występują).
 
