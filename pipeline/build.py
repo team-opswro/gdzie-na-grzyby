@@ -22,7 +22,7 @@ from pipeline.build_tiles import (compute_features, mark_reserves, tippecanoe_cm
                                   write_reserves_seq)
 from pipeline.fetch_reserves import RESERVES_PATH
 from pipeline.grid import build_grid
-from pipeline.ingest import DATA_DIR, DEFAULT_DB, DEFAULT_PARQUET, load_stands
+from pipeline.ingest import DATA_DIR, DEFAULT_DB, DEFAULT_PARQUET, DEFAULT_TERRAIN, load_stands
 from pipeline.species_info import CONTENT_PATH, SPECIES_PATH, build_info
 
 DEFAULT_OUT = DATA_DIR / "out"
@@ -49,8 +49,7 @@ def h_histogram(feats, keys: list[str]) -> dict[str, list[int]]:
 def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
         names_path: Path, tippecanoe=subprocess.run, now: str | None = None,
         build: str | None = None,
-        parkings_path: Path | None = DATA_DIR / "parkingi.geojson",
-        terrain_path: Path | None = DATA_DIR / "terrain.parquet") -> dict:
+        parkings_path: Path | None = None, terrain_path: Path | None = None) -> dict:
     """Buduje wszystkie pliki w `out`; zwraca zawartość build.json."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -133,7 +132,8 @@ def main(argv=None) -> int:
     stands = load_stands(args.db, args.parquet)
     reserves = gpd.read_file(args.reserves).to_crs(4326)
     run(stands, load_species(), reserves, args.out, args.build_dir, args.names,
-        tippecanoe=subprocess.run)
+        tippecanoe=subprocess.run, parkings_path=DATA_DIR / "parkingi.geojson",
+        terrain_path=DEFAULT_TERRAIN)
     return 0
 
 
