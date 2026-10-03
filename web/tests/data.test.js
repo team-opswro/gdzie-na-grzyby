@@ -11,8 +11,25 @@ test("SPECIES order", () => {
 test("weatherFor returns fixture values", () => {
   const w = weatherFor(P, "506_178", "borowik", 2);
   const src = P.cells["506_178"].borowik;
-  assert.deepEqual(w, { w: src.w[2], rain: src.rain[2], temp: src.temp[2], season: src.season[2] });
+  assert.deepEqual(w, {
+    w: src.w[2], rain: src.rain[2], temp: src.temp[2], season: src.season[2],
+    lim: src.lim[2] ?? null,
+    wx: { rain_mm: P.wx["506_178"].rain_mm[2], soil_t: P.wx["506_178"].soil_t[2], soil_m: P.wx["506_178"].soil_m[2] },
+  });
   assert.equal(weatherFor(P, "507_178", "kurka", 0).w, 0);
+});
+test("weatherFor on v1 fixture: lim and wx null", () => {
+  const V1 = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda_v1.json", import.meta.url), "utf8"));
+  const cell = Object.keys(V1.cells)[0];
+  const src = V1.cells[cell].borowik;
+  assert.deepEqual(weatherFor(V1, cell, "borowik", 0),
+    { w: src.w[0], rain: src.rain[0], temp: src.temp[0], season: src.season[0], lim: null, wx: null });
+});
+test("weatherFor cell absent from wx → wx null", () => {
+  const Q = { ...P, wx: {} };
+  const r = weatherFor(Q, "506_178", "borowik", 2);
+  assert.equal(r.wx, null);
+  assert.notEqual(r.w, null);
 });
 test("weatherFor missing cell → null", () => assert.equal(weatherFor(P, "999_999", "borowik", 0), null));
 test("weatherFor null pogoda → null", () => assert.equal(weatherFor(null, "506_178", "borowik", 0), null));

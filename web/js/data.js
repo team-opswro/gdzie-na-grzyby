@@ -12,7 +12,13 @@ const STALE_HOURS = 36;
 export function weatherFor(pogoda, cell, species, dayIdx) {
   const sp = pogoda?.cells?.[cell]?.[species];
   if (!sp || sp.w?.[dayIdx] == null) return null;
-  return { w: sp.w[dayIdx], rain: sp.rain[dayIdx], temp: sp.temp[dayIdx], season: sp.season[dayIdx] };
+  const x = pogoda.wx?.[cell];
+  const wx = x ? { rain_mm: x.rain_mm?.[dayIdx], soil_t: x.soil_t?.[dayIdx], soil_m: x.soil_m?.[dayIdx] } : null;
+  return {
+    w: sp.w[dayIdx], rain: sp.rain[dayIdx], temp: sp.temp[dayIdx], season: sp.season[dayIdx],
+    lim: sp.lim?.[dayIdx] ?? null,
+    wx: wx && wx.rain_mm != null ? wx : null,
+  };
 }
 
 export function score(hInt, w) {
