@@ -204,3 +204,21 @@ def test_cli_cors_wildcard(out, monkeypatch):
     cors = [kw for name, kw in c.calls if name == "cors"]
     rule = cors[0]["CORSConfiguration"]["CORSRules"][0]
     assert rule["AllowedOrigins"] == ["*"]
+
+
+def test_cli_cors_denied_is_reported_after_publish(out, monkeypatch, capsys):
+    # Token R2 „Object Read & Write” nie może zmieniać CORS bucketu (PutBucketCors -> AccessDenied).
+    for k in ("S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"):
+        monkeypatch.setenv(k, "x")
+
+    class Denied(Stub):
+        def put_bucket_cors(self, **kw):
+            raise RuntimeError("An error occurred (AccessDenied) when calling the PutBucketCors operation")
+
+    c = Denied()
+    monkeypatch.setattr(publish, "_client", lambda: c)
+    assert publish.main(["--out", str(out), "--keep", "0", "--cors", "*"]) == 3
+    assert ("put", "manifest.json") in c.calls
+    assert json.loads((out / "build.json").read_text())["build"] is not None
+    err = capsys.readouterr().err
+    assert "CORS" in err and "AccessDenied" in err

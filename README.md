@@ -26,7 +26,7 @@ python -m pipeline.fetch_names      # nazwy nadleśnictw i leśnictw -> pipeline
 python -m pipeline.species_info     # gatunki.json (build robi to też sam)
 podman build -f pipeline/Dockerfile -t grzyby-pipeline .      # tippecanoe (docker: to samo polecenie)
 podman run --rm -v $PWD:/w:z -w /w grzyby-pipeline python -m pipeline.build   # -> pipeline/data/out/
-python -m pipeline.publish --keep 3 --cors '*'   # -> bucket: v/<build>/… + manifest.json (env S3_*)
+python -m pipeline.publish --keep 3   # -> bucket: v/<build>/… + manifest.json (env S3_*)
 ```
 
 `pipeline.build` wczytuje wszystkie wydzielenia naraz (~340 tys., kilka GB RAM).
@@ -71,25 +71,43 @@ Obraz `web` nie zawiera danych: bez `DATA_BASE_URL` strona szuka ich w `data/`, 
 
    ```sh
    set -a; . ~/.config/gdzie-na-grzyby/r2.env; set +a   # S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
-   python -m pipeline.publish --keep 3 --cors '*'
+   python -m pipeline.publish --keep 3
    ```
 
-   `--cors '*'` ustawia CORS bucketu (GET, HEAD, nagłówek `Range` dla PMTiles) dla każdego originu —
-   dane są publiczne i tylko do odczytu; wystarczy raz (i po zmianie reguł).
-5. **Coolify:** **New Resource -> Docker Compose** z repozytorium git, plik `docker-compose.yml`
+5. **CORS (raz):** strona czyta bucket z innej domeny, więc bucket potrzebuje reguły CORS
+   (GET, HEAD, nagłówek `Range` dla PMTiles) dla każdego originu — dane są publiczne i tylko do odczytu.
+   Token **Object Read & Write nie ma prawa** zmieniać konfiguracji bucketu (`PutBucketCors` →
+   `AccessDenied`; `publish --cors` zgłasza to po wysłaniu danych, kod wyjścia 3). Ustaw regułę w panelu:
+   R2 → bucket → **Settings → CORS Policy → Add/Edit**:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["*"],
+       "AllowedMethods": ["GET", "HEAD"],
+       "AllowedHeaders": ["Range", "If-Match", "If-None-Match"],
+       "ExposeHeaders": ["ETag", "Content-Range", "Content-Length"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+   (albo jednorazowo `publish --cors '*'` z tokenem **Admin Read & Write**). Kolejne publikacje — bez `--cors`.
+6. **Coolify:** **New Resource -> Docker Compose** z repozytorium git, plik `docker-compose.yml`
    (porty nie są publikowane — routing robi Traefik w Coolify). Zmienne środowiskowe usług:
    - `web` — `DATA_BASE_URL`; ustaw domenę (port 80), HTTPS załatwia Coolify.
    - `forecast` — `DATA_BASE_URL` oraz `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
      `S3_SECRET_ACCESS_KEY` (`S3_REGION` domyślnie `auto`); bez domeny.
-6. **Deploy.** `forecast` przy starcie pobiera `manifest.json` i `grid.json` z `DATA_BASE_URL`, liczy
+7. **Deploy.** `forecast` przy starcie pobiera `manifest.json` i `grid.json` z `DATA_BASE_URL`, liczy
    prognozę i wysyła `live/pogoda.json` do bucketu; potem cron o 05:00 i 14:00 (`Europe/Warsaw`).
    Healthcheck: ostatnie udane wysłanie młodsze niż 36 h (znacznik w `/state`, bez wolumenu — po
    restarcie kontener jest niezdrowy do pierwszego wysłania). Brak zmiennych → błąd w logu.
-7. **Nowa wersja danych:** build + `pipeline.publish` — strona i `forecast` same przechodzą na nowy
+8. **Nowa wersja danych:** build + `pipeline.publish` — strona i `forecast` same przechodzą na nowy
    `manifest.json`; redeploy nie jest potrzebny.
 
 Weryfikacja: `curl -sI <DATA_BASE_URL>manifest.json` (`content-encoding: gzip`, `cache-control: no-cache`)
-i `curl -s -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-99' <DATA_BASE_URL>v/<build>/lasy.pmtiles` → `206`.
+i `curl -s -D - -o /dev/null -H 'Origin: https://example.org' -H 'Range: bytes=0-99' <DATA_BASE_URL>v/<build>/lasy.pmtiles`
+→ `206` oraz `access-control-allow-origin` (brak tego nagłówka = brak reguły CORS, mapa się nie wczyta).
 
 ## Dane i licencje
 

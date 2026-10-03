@@ -197,13 +197,23 @@ def main(argv=None):
     client, bucket = _client(), os.environ["S3_BUCKET"]
     cfg = TransferConfig(multipart_threshold=16 * 2**20, multipart_chunksize=16 * 2**20)
     publish(client, bucket, a.out, build, a.keep, now=now, transfer_config=cfg)
-    if a.cors:
-        set_cors(client, bucket, [o.strip() for o in a.cors.split(",") if o.strip()])
     bj = Path(a.out) / "build.json"
     d = json.loads(bj.read_text())
     d["build"] = build
     bj.write_text(json.dumps(d, indent=1))
     print(f"opublikowano {build}")
+    if a.cors:
+        try:
+            set_cors(client, bucket, [o.strip() for o in a.cors.split(",") if o.strip()])
+        except Exception as e:  # dane juz opublikowane; brak uprawnien do konfiguracji bucketu
+            print(
+                f"nie ustawiono CORS bucketu: {e}\n"
+                "Token R2 'Object Read & Write' nie moze zmieniac CORS - ustaw regule w panelu "
+                "Cloudflare (R2 -> bucket -> Settings -> CORS Policy, patrz README) "
+                "albo uzyj tokenu 'Admin Read & Write' tylko do tego kroku.",
+                file=sys.stderr,
+            )
+            return 3
     return 0
 
 
