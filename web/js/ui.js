@@ -108,10 +108,16 @@ export async function init() {
         writeHash(); // zamknięcie popupu usuwa w z hasha
       }
     });
-    // Na telefonie popup ma być w górnej części ekranu, nad zwiniętym panelem.
-    if (pan && window.matchMedia("(max-width: 700px)").matches
-      && map.project([lngLat.lng, lngLat.lat]).y > map.getContainer().clientHeight / 3) {
-      map.easeTo({ center: [lngLat.lng, lngLat.lat], offset: [0, -map.getContainer().clientHeight / 6], duration: 300 });
+    // Na telefonie popup ma się w całości zmieścić nad zwiniętym panelem (zakotwiczony pod punktem).
+    if (pan && window.matchMedia("(max-width: 700px)").matches) {
+      const mapEl = map.getContainer();
+      const panelTop = $("panel").getBoundingClientRect().top - mapEl.getBoundingClientRect().top;
+      const pr = pp.getElement().getBoundingClientRect();
+      const mapTop = mapEl.getBoundingClientRect().top;
+      if (pr.bottom - mapTop > panelTop - 6) {
+        const tipTarget = Math.max(12, panelTop - 6 - pr.height - 4);
+        map.easeTo({ center: [lngLat.lng, lngLat.lat], offset: [0, tipTarget - mapEl.clientHeight / 2], duration: 300 });
+      }
     }
     writeHash();
     return content;
