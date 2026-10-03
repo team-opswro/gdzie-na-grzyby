@@ -43,3 +43,13 @@ def test_main_empty_keeps_existing(tmp_path, monkeypatch, capsys):
     assert fetch_names.main(["--out", str(out)]) == 1
     assert out.read_text(encoding="utf-8") == "stary"
     assert "Błąd" in capsys.readouterr().err
+
+
+def test_main_warns_on_empty_district(tmp_path, monkeypatch, capsys):
+    def fake(session, url, params):
+        prefix = params["filter"].split("'")[1].rstrip("%")
+        return {"features": _feats() if prefix == "02-04" else []}
+    monkeypatch.setattr(fetch_names, "_get_json", fake)
+    assert fetch_names.main(["--out", str(tmp_path / "n.json")]) == 0
+    err = capsys.readouterr().err
+    assert "Ostrzeżenie" in err and "02-40" in err

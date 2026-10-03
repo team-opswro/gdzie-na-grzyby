@@ -63,7 +63,10 @@ def main(argv=None) -> int:
         by_prefix = {}
         for d in cfg["districts"]:
             by_prefix[d["prefix"]] = fetch_ranges(session, base_url, d["prefix"])
-            print(f"{d['name']}: {len(by_prefix[d['prefix']])} leśnictw")
+            n = len(by_prefix[d["prefix"]])
+            if n == 0:
+                print(f"Ostrzeżenie: {d['name']} ({d['prefix']}) — 0 leśnictw", file=sys.stderr)
+            print(f"{d['name']}: {n} leśnictw")
         names = build_names(cfg["districts"], by_prefix)
         if not names["lesn"]:
             raise ValueError("BDL nie zwróciło żadnych nazw leśnictw")

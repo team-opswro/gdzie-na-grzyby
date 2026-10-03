@@ -18,7 +18,7 @@ test("roundtrip + rounding", () => {
   assert.deepEqual(parseHash(formatHash(s)), s);
   assert.equal(formatHash(s), "#s=rydz&d=3&z=10.5&c=50.67,17.93");
   assert.equal(formatHash({ species: "kurka", day: 0, zoom: 11.123456, center: [17.1234567, 50.7654321] }),
-    "#s=kurka&d=0&z=11.12&c=50.76543,17.12346");
+    "#s=kurka&d=0&z=11.12&c=50.765,17.123");
   assert.equal(formatHash({ species: "kurka", day: 1 }), "#s=kurka&d=1");
 });
 test("basemap param", () => {
@@ -43,4 +43,13 @@ test("formatHash radius/place order and roundtrip", () => {
   assert.deepEqual(parseHash(formatHash(s)), s);
   assert.equal(formatHash({ species: "kurka", day: 0, place: "<x>" }), "#s=kurka&d=0");
   assert.equal(formatHash({ species: "kurka", day: 0, radius: 7 }), "#s=kurka&d=0");
+});
+test("c precision by zoom band and coarse flag", () => {
+  const center = [17.1234567, 50.7654321];
+  const f = (extra) => formatHash({ species: "kurka", day: 0, center, ...extra });
+  assert.ok(f({ zoom: 12.9 }).endsWith("c=50.765,17.123"));
+  assert.ok(f({ zoom: 13 }).endsWith("c=50.7654,17.1235"));
+  assert.ok(f({ zoom: 14.9 }).endsWith("c=50.7654,17.1235"));
+  assert.ok(f({ zoom: 15 }).endsWith("c=50.76543,17.12346"));
+  assert.ok(f({ zoom: 17, coarse: true }).endsWith("c=50.765,17.123"));
 });

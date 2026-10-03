@@ -28,8 +28,11 @@ export function topN(centroids, pogoda, species, dayIdx, origin, radiusKm = 20, 
   const col = 4 + centroids.species.indexOf(species);
   if (col < 4) return [];
   const groups = new Map();
+  const dLat = radiusKm / 111;
+  const dLon = radiusKm / (111 * Math.max(Math.cos(rad(origin.lat)), 0.01));
   for (const row of centroids.rows) {
     const [id, lat, lon, cell] = row;
+    if (Math.abs(lat - origin.lat) > dLat || Math.abs(lon - origin.lon) > dLon) continue;
     if (haversineKm(origin, { lat, lon }) > radiusKm) continue;
     const wx = weatherFor(pogoda, cell, species, dayIdx);
     if (!wx) continue;

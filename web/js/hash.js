@@ -31,10 +31,14 @@ export function parseHash(hash) {
   return { species, day, zoom, center, basemap, radius, place };
 }
 
-export function formatHash({ species, day, zoom, center, basemap, radius, place }) {
+export function formatHash({ species, day, zoom, center, basemap, radius, place, coarse }) {
   const parts = [`s=${species}`, `d=${day}`];
   if (zoom != null) parts.push(`z=${round(zoom, 2)}`);
-  if (center) parts.push(`c=${round(center[1], 5)},${round(center[0], 5)}`);
+  if (center) {
+    const z = zoom ?? 0;
+    const d = coarse || z < 13 ? 3 : z < 15 ? 4 : 5;
+    parts.push(`c=${round(center[1], d)},${round(center[0], d)}`);
+  }
   if (basemap && basemap !== DEFAULT_BASEMAP) parts.push(`b=${basemap}`);
   if (radius != null && radius !== DEFAULT_RADIUS && RADII.includes(radius)) parts.push(`r=${radius}`);
   if (place && PLACE_RE.test(place)) parts.push(`w=${place}`);

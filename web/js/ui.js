@@ -1,6 +1,6 @@
 import { SPECIES, loadData, availableDays, bannerText } from "./data.js";
 import { trend } from "./chart.js";
-import { topN } from "./ranking.js";
+import { topN, haversineKm } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
 import { renderPopup, renderReserve, trendArrow, trendLabel, rankLabel } from "./popup.js";
@@ -79,11 +79,25 @@ export async function init() {
   function openInitialPlace() {
     if (placeTried || !loaded || !mapReady || !state.place) return;
     placeTried = true;
-    const c = map.getCenter();
     const byId = (x) => x.properties.id === state.place;
-    const f = map.queryRenderedFeatures(map.project(c), { layers: ["lasy-fill"] }).find(byId)
-      ?? map.queryRenderedFeatures({ layers: ["lasy-fill"] }).find(byId);
-    if (f) showPopup(f.properties, { lng: c.lng, lat: c.lat }, { pan: false });
+    const row = centroids?.rows.find((r) => r[0] === state.place);
+    const open = (lngLat) => {
+      const f = (lngLat ? map.queryRenderedFeatures(map.project([lngLat.lng, lngLat.lat]), { layers: ["lasy-fill"] }).find(byId) : null)
+        ?? map.queryRenderedFeatures({ layers: ["lasy-fill"] }).find(byId);
+      if (f) showPopup(f.properties, lngLat ?? map.getCenter(), { pan: false });
+      else writeHash(); // martwe w= znika z hasha
+    };
+    if (!row) {
+      const c = map.getCenter();
+      open({ lng: c.lng, lat: c.lat });
+      return;
+    }
+    const lngLat = { lng: row[2], lat: row[1] };
+    if (map.getBounds().contains([lngLat.lng, lngLat.lat])) open(lngLat);
+    else {
+      map.once("idle", () => open(lngLat));
+      map.jumpTo({ center: [lngLat.lng, lngLat.lat] });
+    }
   }
 
   function showPopup(props, lngLat, { pan = true } = {}) {
@@ -133,8 +147,7 @@ export async function init() {
       radius: state.radius,
       place: props.id,
     });
-    history.replaceState(null, "", url);
-    return shareUrl(location.href, document.title, { notify: toast });
+    return shareUrl(url, document.title, { notify: toast });
   }
 
   let toastTimer = 0;
@@ -161,11 +174,13 @@ export async function init() {
 
   function writeHash() {
     const c = map.getCenter();
+    const coarse = !!gps && haversineKm(gps, { lat: c.lat, lon: c.lng }) < 0.2;
     history.replaceState(null, "", formatHash({
       species: state.species,
       day: state.day,
       zoom: map.getZoom(),
       center: [c.lng, c.lat],
+      coarse,
       basemap: state.basemap,
       radius: state.radius,
       place: lastPopup?.props.id,
@@ -208,7 +223,10 @@ export async function init() {
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
-        tr.setAttribute("aria-label", trendLabel(t));
+        const sr = document.createElement("span");
+        sr.className = "sr-only";
+        sr.textContent = trendLabel(t);
+        tr.append(sr);
       }
       const { line1, line2 } = rankLabel(r, nazwy);
       const text = document.createElement("span");
