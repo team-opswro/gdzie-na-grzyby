@@ -85,15 +85,16 @@ def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep
         url = OVERPASS_URLS[attempt % len(OVERPASS_URLS)]
         try:
             r = sess.post(url, data=payload, headers=headers, timeout=120)
-        except requests.Timeout:
-            r = None
-        if r is None or r.status_code in (429, 504):
-            if attempt == _RETRIES - 1:
-                break
-            sleep(_BACKOFF_SECONDS)
+            r.raise_for_status()
+            data = r.json()
+            # przekroczony czas/pamięć: 200 z "remark" i niepełną listą — porażka, nie wynik
+            if "error" in str(data.get("remark", "")).lower():
+                raise ValueError(data["remark"])
+        except (requests.RequestException, ValueError) as exc:
+            print(f"Overpass ({url}): {exc}", file=sys.stderr)
+            if attempt < _RETRIES - 1:
+                sleep(_BACKOFF_SECONDS)
             continue
-        r.raise_for_status()
-        data = r.json()
         cache_path.write_text(json.dumps(data), encoding="utf-8")
         sleep(_PAUSE_SECONDS)
         return data.get("elements", [])

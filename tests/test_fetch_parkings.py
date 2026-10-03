@@ -1,5 +1,7 @@
 """Testy pobierania parkingów z OpenStreetMap."""
 import json
+
+import requests
 from pathlib import Path
 
 import geopandas as gpd
@@ -222,3 +224,27 @@ def test_main_skips_failed_tile_and_continues(tmp_path, monkeypatch, capsys):
     assert fp.main(["--area", str(area_file), "--parquet", str(stands_file), "--out", str(out),
                     "--cache", str(tmp_path / "c")]) == 0
     assert out.exists() and "pominięto 1" in capsys.readouterr().err
+
+
+def test_remark_timeout_not_cached_and_retried(tmp_path):
+    # Overpass przy przekroczeniu czasu zwraca 200 z "remark" i niepełną listą — to porażka, nie wynik
+    bad = {"remark": "runtime error: Query timed out in \"query\" at line 2 after 91 seconds.", "elements": []}
+    good = {"elements": [{"type": "node", "id": 5, "lat": 50.0, "lon": 17.0, "tags": {}}]}
+    sleeps = []
+    with responses.RequestsMock() as rsps:
+        rsps.add(responses.POST, fp.OVERPASS_URLS[0], json=bad)
+        rsps.add(responses.POST, fp.OVERPASS_URLS[1], json=good)
+        els = fp.fetch_tile((50.0, 17.0, 50.5, 17.5), tmp_path, sleep=sleeps.append)
+    assert [e["id"] for e in els] == [5]
+    cached = json.loads(next(tmp_path.glob("parking_*.json")).read_text())
+    assert "remark" not in cached
+
+
+def test_other_errors_retried_then_overpass_error(tmp_path):
+    with responses.RequestsMock() as rsps:
+        rsps.add(responses.POST, fp.OVERPASS_URLS[0], status=502)
+        rsps.add(responses.POST, fp.OVERPASS_URLS[1], body="<html>busy</html>")
+        rsps.add(responses.POST, fp.OVERPASS_URLS[0], body=requests.ConnectionError("reset"))
+        with pytest.raises(fp.OverpassError):
+            fp.fetch_tile((50.0, 17.0, 50.5, 17.5), tmp_path, sleep=lambda s: None)
+    assert not list(tmp_path.glob("parking_*.json"))
