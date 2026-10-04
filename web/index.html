@@ -21,6 +21,12 @@
     <button id="locate" type="button" aria-label="Moja lokalizacja" title="Moja lokalizacja" aria-pressed="false">◎</button>
     <button id="share" type="button" aria-label="Udostępnij" title="Udostępnij">⤴</button>
   </header>
+  <nav class="area-bar" aria-label="Wybór okolicy">
+    <label for="area">Okolica</label>
+    <select id="area">
+      <option value="">Bieżący widok mapy</option>
+    </select>
+  </nav>
   <div id="stale" class="stale" role="alert" hidden></div>
   <main class="mapwrap">
     <div id="map"></div>
@@ -34,9 +40,19 @@
           <option value="10">10 km</option>
           <option value="20" selected>20 km</option>
           <option value="40">40 km</option>
+          <option value="50">50 km</option>
         </select>
       </div>
+      <div class="travel-controls">
+        <select id="travel" aria-label="Sposób liczenia odległości">
+          <option value="air">W linii prostej</option>
+          <option value="car">Samochodem</option>
+        </select>
+        <button id="drive-search" type="button">Oblicz dojazd</button>
+        <button id="drive-start" type="button">Start z mapy</button>
+      </div>
       <div id="ranking-source" class="panel-src">od środka mapy</div>
+      <div id="driving-status" class="panel-src" role="status" hidden></div>
       <ol id="ranking-list" role="list"></ol>
     </section>
     <div id="toast" role="status"></div>
@@ -47,6 +63,8 @@
     Rezerwaty: GDOŚ ·
     Źródło: Bank Danych o Lasach (BDL), PGL Lasy Państwowe, stan 2026 ·
     Pogoda: <a href="https://open-meteo.com/">Open-Meteo</a> ·
+    Dojazd: <a href="https://routing.openstreetmap.de/about.html" target="_blank" rel="noopener">OSRM/FOSSGIS</a> ·
+    <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener">Popraw mapę OSM</a> ·
     <a href="https://zakazywstepu.bdl.lasy.gov.pl/zakazy/" target="_blank" rel="noopener">Sprawdź aktualne zakazy wstępu (BDL)</a> ·
     <a href="#" class="about-link">Jak to działa?</a>
   </footer>

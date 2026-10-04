@@ -1,7 +1,7 @@
 import { SPECIES, ALL } from "./data.js";
 
 export const BASEMAP_KEYS = ["osm", "orto", "topo"];
-export const RADII = [5, 10, 20, 40];
+export const RADII = [5, 10, 20, 40, 50];
 const DEFAULT_RADIUS = 20;
 const PLACE_RE = /^[0-9A-Za-z-]{1,40}$/;
 const DEFAULT_SPECIES = "borowik";
@@ -31,7 +31,7 @@ export function parseHash(hash, keys = [...SPECIES.map((x) => x.key), ALL]) {
   return { species, day, zoom, center, basemap, radius, place };
 }
 
-export function formatHash({ species, day, zoom, center, basemap, radius, place, coarse }) {
+export function formatHash({ species, day, zoom, center, basemap, radius, place, coarse, travel, driveOrigin }) {
   const parts = [`s=${species}`, `d=${day}`];
   if (zoom != null) parts.push(`z=${round(zoom, 2)}`);
   if (center) {
@@ -42,5 +42,9 @@ export function formatHash({ species, day, zoom, center, basemap, radius, place,
   if (basemap && basemap !== DEFAULT_BASEMAP) parts.push(`b=${basemap}`);
   if (radius != null && radius !== DEFAULT_RADIUS && RADII.includes(radius)) parts.push(`r=${radius}`);
   if (place && PLACE_RE.test(place)) parts.push(`w=${place}`);
+  if (travel === "car") {
+    parts.push("t=car");
+    if (driveOrigin) parts.push(`o=${round(driveOrigin.lat, 3)},${round(driveOrigin.lon, 3)}`);
+  }
   return "#" + parts.join("&");
 }

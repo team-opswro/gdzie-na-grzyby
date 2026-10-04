@@ -115,7 +115,9 @@ export function rankLabel(group, nazwy, speciesList = SPECIES) {
   }
   return {
     line1,
-    line2: `${dec(group.distanceKm)} km ${group.bearing} · ${group.count} wydz.`,
+    line2: group.drive
+      ? `${dec(group.drive.meters / 1000)} km autem · ok. ${Math.ceil(group.drive.seconds / 60)} min · parking ${dec(group.drive.parking.forestDistanceKm)} km od miejsca (linia prosta)${group.drive.parking.fee === "yes" ? " · płatny" : ""}`
+      : `${dec(group.distanceKm)} km ${group.bearing} · ${group.count} wydz.`,
   };
 }
 

@@ -11,6 +11,29 @@ Projekt: `docs/superpowers/specs/2026-10-03-grzyby-opolskie-design.md`, dane na 
 node --test web/tests/*.test.js     # JS (podaj pliki jawnie; katalog nie działa na Node 22)
 ```
 
+## Wrocław, Miękinia, Milicz i Twardogóra
+
+Mapa bez parametrów w adresie startuje na Wrocławiu. Lista **Okolica** pozwala przejść
+do Miękini, Obornik Śląskich, Oleśnicy Śląskiej, Oławy, Milicza, Twardogóry lub Opola;
+wybór przenosi także ranking i wyłącza wcześniejszy punkt GPS. Udostępniony link
+z parametrem `c=` nadal otwiera wskazane miejsce — także po nowym wdrożeniu.
+
+Te okolice są obecne w zweryfikowanym zbiorze produkcyjnym
+`20261004-1408-12d72c4`. Zmiana widoku wymaga wdrożenia obrazu `web`, bez ponownego
+publikowania danych. Rozpoznanie i wyniki kontroli: [docs/data/wroclaw.md](docs/data/wroclaw.md).
+Nowe wejście bez parametrów wybiera **Samochodem → 50 km**. Otwórz panel rankingu
+i kliknij **Oblicz dojazd**. Punktem wyjazdu jest środek mapy lub GPS; **Start z mapy**
+ustawia nowy punkt. Po obliczeniu start jest zachowany podczas oglądania miejsc na mapie.
+Linki sprzed tej zmiany zachowują ranking w linii prostej; sposób liczenia można przełączyć.
+
+Ranking samochodowy sprawdza dojazd do parkingów z istniejących PMTiles, w odległości
+do 1,5 km od punktu w lesie (w linii prostej). Długość najszybszej trasy i orientacyjny
+czas pochodzą z OSRM/FOSSGIS; limit dotyczy jazdy w jedną stronę, bez uwzględniania korków.
+Sprawdzane są maksymalnie 200 najwyżej ocenionych oddziałów i po trzy najbliższe parkingi.
+Jeżeli nie znaleziono dziesięciu propozycji w tym zakresie, aplikacja informuje o ograniczeniu.
+Obliczenie dojazdu wysyła współrzędne startu i parkingów do usługi routingu po kliknięciu
+przycisku. Brak potwierdzonej trasy powoduje pominięcie propozycji; awaria pokazuje błąd.
+
 ## Przebudowa danych statycznych (pipeline)
 
 Wykonywana lokalnie; wynik trafia do `pipeline/data/out/` (poza gitem): `lasy.pmtiles`,

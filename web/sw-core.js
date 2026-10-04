@@ -1,6 +1,6 @@
 // Czyste funkcje service workera (klasyczny skrypt, importowany przez sw.js).
 // Łatwe do testowania w Node przez vm.runInNewContext.
-const SHELL_VERSION = 1;
+const SHELL_VERSION = 3;
 const SHELL_CACHE = "grzyby-shell-" + SHELL_VERSION;
 const DATA_CACHE = "grzyby-data";
 const BASE_CACHE = "grzyby-base";
@@ -10,6 +10,9 @@ const NETWORK_TIMEOUT_MS = 4000;
 const SHELL_FILES = [
   "index.html",
   "css/app.css",
+  "js/areas.js",
+  "js/driving.js",
+  "js/parkings.js",
   "js/config.js",
   "js/chart.js",
   "js/data.js",

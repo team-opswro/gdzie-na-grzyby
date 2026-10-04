@@ -9,9 +9,10 @@ import { createMap, addForestLayers, setView, setBasemap, BASEMAPS, COLORS, CLAS
 import { renderPopup, renderReserve, renderParking, trendArrow, trendLabel, rankLabel } from "./popup.js";
 import { shareUrl } from "./share.js";
 import { speciesCardModel, renderSpeciesCard, aboutForecastText } from "./dialogs.js";
+import { AREAS, initialMapView, areaAt } from "./areas.js";
+import { createParkingStore, PARKING_RADIUS_KM } from "./parkings.js";
+import { createDrivePlanner, driveSettings, drivingUrl } from "./driving.js";
 
-const OPOLSKIE_CENTER = [17.9, 50.65];
-const DEFAULT_ZOOM = 9;
 const $ = (id) => document.getElementById(id);
 
 // Lokalna data ISO (toISOString dałby UTC).
@@ -38,8 +39,7 @@ export async function init() {
   const pre = parseHash(location.hash, selectionValues(SPECIES));
   const handlers = {}; // uzupełniane niżej, gdy stan jest gotowy
   const map = createMap($("map"), {
-    center: pre.center ?? OPOLSKIE_CENTER,
-    zoom: pre.zoom ?? DEFAULT_ZOOM,
+    ...initialMapView(pre),
     basemap: pre.basemap,
     onFeatureClick: (props, lngLat) => handlers.feature?.(props, lngLat),
     onReserveClick: (name, lngLat) => handlers.reserve?.(name, lngLat),
@@ -57,7 +57,11 @@ export async function init() {
   setWetGammas(speciesList); // siła efektu wilgotności miejsca per gatunek (spec L)
   const groups = groupsOf(speciesInfo);
   const hash = parseHash(location.hash, selectionValues(speciesList, groups));
-  const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
+  const driveConfig = driveSettings(location.hash);
+  const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: location.hash ? hash.radius : 50, place: hash.place, travel: driveConfig.mode };
+  let driveOrigin = driveConfig.origin;
+  let driveRequested = false;
+  const drivePlanner = pmtilesUrl ? createDrivePlanner(createParkingStore(new pmtiles.PMTiles(new URL(pmtilesUrl, location.href).href))) : null;
   // Gatunki bieżącego wyboru: jeden klucz, grupa albo wszystkie (tryb wielu gatunków, gdy > 1).
   const keys = () => selectionKeys(state.species, speciesList, groups);
   let data = { pogoda: null, centroidIndex: null, nazwy: null };
@@ -70,6 +74,14 @@ export async function init() {
   let mapReady = false;
   let loaded = false;
   let placeTried = false; // jednorazowe otwarcie popupu z parametru w=
+  const areaSelect = $("area");
+  for (const [key, area] of Object.entries(AREAS)) {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = area.name;
+    areaSelect.append(option);
+  }
+  areaSelect.value = areaAt(map.getCenter());
 
   const sel = $("species");
   buildSpeciesOptions(sel, speciesList, groups);
@@ -117,8 +129,9 @@ export async function init() {
     popup = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
   };
   handlers.move = () => {
+    areaSelect.value = areaAt(map.getCenter());
     writeHash();
-    if (!gps) updateRanking();
+    if (!gps && !(state.travel === "car" && driveOrigin)) updateRanking();
   };
   styleLoaded.then(() => {
     if (pmtilesUrl) {
@@ -206,6 +219,8 @@ export async function init() {
       basemap: state.basemap,
       radius: state.radius,
       place: props.id,
+      travel: state.travel,
+      driveOrigin,
     });
     return shareUrl(url, document.title, { notify: toast });
   }
@@ -244,10 +259,13 @@ export async function init() {
       basemap: state.basemap,
       radius: state.radius,
       place: lastPopup?.props.id,
+      travel: state.travel,
+      driveOrigin,
     }));
   }
 
   function origin() {
+    if (state.travel === "car" && driveOrigin) return driveOrigin;
     if (gps) return gps;
     const c = map.getCenter();
     return { lat: c.lat, lon: c.lng };
@@ -262,23 +280,41 @@ export async function init() {
     if (!loaded) return show();
     if (!centroids) return show(li("Nie udało się wczytać danych rankingu.", "empty"));
     if (!effective) return show(li("Brak danych pogodowych", "empty"));
+    if (state.travel === "car" && !driveRequested) {
+      setBusy("false");
+      return show(li("Wybierz start mapą lub GPS i kliknij „Oblicz dojazd”.", "empty"));
+    }
     const o = origin();
     const radius = state.radius;
     renderLoading(list);
     let top;
     try {
-      const rows = await centroids.rowsNear(o, radius);
+      const searchRadius = state.travel === "car" ? radius + PARKING_RADIUS_KM : radius;
+      const rows = await centroids.rowsNear(o, searchRadius);
       if (seq !== rankingSeq) return;
-      top = topN({ species: centroids.species, extra: centroids.extra, rows }, effective, keys(), dayIdx(), o, radius);
+      top = topN({ species: centroids.species, extra: centroids.extra, rows }, effective, keys(), dayIdx(), o, searchRadius, state.travel === "car" ? Infinity : 10);
+      if (state.travel === "car") {
+        if (!drivePlanner) throw new Error("Brak danych parkingów");
+        const current = () => seq === rankingSeq;
+        const result = await drivePlanner.find(top, o, radius, {
+          current,
+          progress: (checked, total) => show(li(`Sprawdzanie dojazdu: ${checked}/${total} miejsc…`, "empty")),
+        });
+        if (!current() || result.cancelled) return;
+        top = result.results;
+        $("driving-status").textContent = result.limited
+          ? `Sprawdzono ${result.checked} najwyżej ocenionych miejsc. Zawęź okolicę, aby sprawdzić kolejne.`
+          : "Dojazd do parkingu; czas orientacyjny, bez korków. Parking do 1,5 km od miejsca w linii prostej.";
+      }
     } catch (e) {
       console.warn("Ranking:", e);
       setBusy("false");
-      return show(li("Nie udało się wczytać danych rankingu.", "empty"));
+      return show(li(state.travel === "car" ? "Nie udało się potwierdzić dojazdu. Spróbuj ponownie lub zmień punkt startu." : "Nie udało się wczytać danych rankingu.", "empty"));
     }
     setBusy("false");
     list.replaceChildren();
     if (!top.length) {
-      list.append(li(`Brak miejsc o dodatnim wyniku w promieniu ${radius} km`, "empty"));
+      list.append(li(state.travel === "car" ? `Brak propozycji z potwierdzonym dojazdem do parkingu do ${radius} km.` : `Brak miejsc o dodatnim wyniku w promieniu ${radius} km`, "empty"));
       return;
     }
     top.forEach((r, i) => {
@@ -314,6 +350,15 @@ export async function init() {
       btn.append(sc, tr, text);
       btn.addEventListener("click", () => flyToRow(r.best));
       item.append(btn);
+      if (r.drive) {
+        const go = document.createElement("a");
+        go.className = "rank-drive";
+        go.textContent = "Dojazd do parkingu";
+        go.href = drivingUrl(r.drive.origin, r.drive.parking);
+        go.target = "_blank";
+        go.rel = "noopener";
+        item.append(go);
+      }
       list.append(item);
     });
   }
@@ -358,15 +403,24 @@ export async function init() {
   function updateSource(gpsError = false) {
     $("ranking-source").textContent = gps
       ? "od Twojej lokalizacji"
+      : state.travel === "car" && driveOrigin
+        ? "od wybranego punktu wyjazdu"
       : gpsError
         ? "Brak zgody na lokalizację — ranking od środka mapy"
         : "od środka mapy";
   }
 
   let locating = false;
+  let locationRequest = 0;
+  function resetDrive() {
+    driveOrigin = null;
+    driveRequested = false;
+    $("driving-status").textContent = "Start wyznacza środek mapy lub GPS. Obliczenie wysyła współrzędne startu i parkingów do usługi OSRM/FOSSGIS.";
+  }
   $("locate").addEventListener("click", () => {
     if (gps) {
       gps = null;
+      resetDrive();
       $("locate").setAttribute("aria-pressed", "false");
       updateSource();
       updateRanking();
@@ -375,18 +429,23 @@ export async function init() {
     if (locating) return;
     if (!navigator.geolocation) { updateSource(true); return; }
     locating = true;
+    const request = ++locationRequest;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (request !== locationRequest) return;
         locating = false;
         gps = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        resetDrive();
         $("locate").setAttribute("aria-pressed", "true");
         updateSource();
         map.flyTo({ center: [gps.lon, gps.lat], zoom: Math.max(map.getZoom(), 12) });
         updateRanking();
       },
       () => {
+        if (request !== locationRequest) return;
         locating = false;
         gps = null;
+        resetDrive();
         $("locate").setAttribute("aria-pressed", "false");
         updateSource(true);
         updateRanking();
@@ -395,12 +454,74 @@ export async function init() {
     );
   });
 
+  areaSelect.addEventListener("change", () => {
+    const area = AREAS[areaSelect.value];
+    if (!area) return;
+    // Wybór okolicy przenosi też ranking; spóźniona odpowiedź GPS nie może cofnąć tego wyboru.
+    locationRequest++;
+    locating = false;
+    gps = null;
+    resetDrive();
+    $("locate").setAttribute("aria-pressed", "false");
+    popup?.remove();
+    lastPopup = null;
+    placeTried = true;
+    updateSource();
+    map.jumpTo({ center: area.center, zoom: area.zoom });
+    setPanelOpen(true);
+    updateRanking();
+    writeHash();
+  });
+
   $("share").addEventListener("click", () => shareUrl(location.href, document.title, { notify: toast }));
 
   const radiusSel = $("radius");
   radiusSel.value = String(state.radius);
   radiusSel.addEventListener("change", () => {
     state.radius = Number(radiusSel.value);
+    updateRanking();
+    writeHash();
+  });
+
+  const travelSel = $("travel");
+  const driveButton = $("drive-search");
+  const driveStart = $("drive-start");
+  function updateTravelControls() {
+    travelSel.value = state.travel;
+    const car = state.travel === "car";
+    driveButton.hidden = !car;
+    driveStart.hidden = !car;
+    $("driving-status").hidden = !car;
+    $("panel-toggle").textContent = car ? "Top 10 z dojazdem" : "Top 10 w promieniu";
+  }
+  updateTravelControls();
+  if (!driveOrigin) resetDrive();
+  else updateSource();
+  travelSel.addEventListener("change", () => {
+    state.travel = travelSel.value;
+    resetDrive();
+    updateTravelControls();
+    updateSource();
+    updateRanking();
+    writeHash();
+  });
+  driveButton.addEventListener("click", () => {
+    if (!driveOrigin) driveOrigin = origin();
+    driveRequested = true;
+    updateSource();
+    setPanelOpen(true);
+    updateRanking();
+    writeHash();
+  });
+  driveStart.addEventListener("click", () => {
+    locationRequest++;
+    locating = false;
+    gps = null;
+    $("locate").setAttribute("aria-pressed", "false");
+    resetDrive();
+    const center = map.getCenter();
+    driveOrigin = { lat: center.lat, lon: center.lng };
+    updateSource();
     updateRanking();
     writeHash();
   });

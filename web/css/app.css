@@ -6,6 +6,9 @@ body { display: flex; flex-direction: column; font: 15px/1.35 system-ui, sans-se
 .topbar select { flex: 1; min-width: 0; min-height: 40px; font: inherit; padding: 8px; border-radius: 6px; border: 0; }
 .topbar button { font: inherit; min-width: 40px; height: 40px; border: 0; border-radius: 6px; background: #fff; cursor: pointer; }
 .topbar button:disabled { opacity: .4; cursor: default; }
+.area-bar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: #f5f5f5; border-bottom: 1px solid #ddd; }
+.area-bar label { font-size: 13px; font-weight: 600; }
+.area-bar select { flex: 1; min-width: 0; max-width: 300px; min-height: 40px; padding: 4px 8px; font: inherit; background: #fff; border: 1px solid #ccc; border-radius: 6px; }
 .day { display: flex; align-items: center; gap: 4px; }
 #day-label { min-width: 6em; text-align: center; font-weight: 600; }
 .stale { background: #ffe082; color: #4e3b00; padding: 8px 12px; font-weight: 600; text-align: center; }
@@ -31,6 +34,11 @@ body { display: flex; flex-direction: column; font: 15px/1.35 system-ui, sans-se
 .panel-head > button::after { content: "▲"; float: right; font-size: 12px; }
 .panel.open .panel-head > button::after { content: "▼"; }
 #radius { font: inherit; min-height: 40px; padding: 0 6px; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
+.travel-controls { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+.travel-controls select, .travel-controls button { min-width: 0; min-height: 40px; padding: 4px 8px; font: inherit; background: #fff; border: 1px solid #ccc; border-radius: 6px; }
+.travel-controls select { flex: 1 1 100%; }
+.panel:not(.open) .travel-controls { display: none; }
+.rank-drive { display: inline-flex; align-items: center; min-height: 40px; margin: 0 12px 8px; padding: 0 10px; background: var(--bar); border-radius: 6px; color: #fff; text-decoration: none; }
 .panel-src { padding: 0 12px 8px; font-size: 12px; color: #555; }
 .panel:not(.open) .panel-src { display: none; }
 .panel ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: none; }
