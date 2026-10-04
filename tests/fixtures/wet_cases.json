@@ -1,0 +1,89 @@
+{
+ "_opis": "Wsp\u00f3lne przypadki wzoru wilgotno\u015bci miejsca (spec L \u00a72): pytest i node --test.",
+ "cases": [
+  {
+   "w": 0.8,
+   "rain": 0.8,
+   "wet": 50,
+   "expected": 0.8
+  },
+  {
+   "w": 0.8,
+   "rain": 0.8,
+   "wet": 0,
+   "expected": 0.512
+  },
+  {
+   "w": 0.8,
+   "rain": 0.8,
+   "wet": 100,
+   "expected": 0.928318
+  },
+  {
+   "w": 0.797,
+   "rain": 0.797,
+   "wet": 18,
+   "expected": 0.632329
+  },
+  {
+   "w": 0.797,
+   "rain": 0.797,
+   "wet": 78,
+   "expected": 0.884578
+  },
+  {
+   "w": 1.0,
+   "rain": 1.0,
+   "wet": 0,
+   "expected": 1.0
+  },
+  {
+   "w": 1.0,
+   "rain": 1.0,
+   "wet": 100,
+   "expected": 1.0
+  },
+  {
+   "w": 0.0,
+   "rain": 0.0,
+   "wet": 100,
+   "expected": 0.0
+  },
+  {
+   "w": 0.3,
+   "rain": 0.5,
+   "wet": 90,
+   "expected": 0.449936
+  },
+  {
+   "w": 0.36,
+   "rain": 0.4,
+   "wet": 10,
+   "expected": 0.099063
+  },
+  {
+   "w": 0.9,
+   "rain": 0.75,
+   "wet": 100,
+   "expected": 1.0
+  },
+  {
+   "w": 0.5,
+   "rain": 0.6,
+   "wet": null,
+   "expected": 0.5
+  },
+  {
+   "w": 0.5,
+   "rain": null,
+   "wet": 80,
+   "expected": 0.5
+  },
+  {
+   "w": 0.05,
+   "rain": 0.05,
+   "wet": 100,
+   "expected": 0.368403
+  }
+ ]
+}

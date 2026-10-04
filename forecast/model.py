@@ -209,3 +209,22 @@ def limiting_factor(
     if name == "temp":
         return "cold" if weather_values(s, i).soil_t < sp.temp[1] else "hot"
     return "dry_soil" if _rain_parts(s, i, sp)[1] else "dry"
+
+
+# --- wilgotność miejsca (spec L): korekta w per wydzielenie, liczona też w kliencie (web/js/data.js) ---
+WET_GAMMA_BASE = 3.0
+WET_NEUTRAL = 50
+
+
+def wet_gamma(wet: float | None) -> float:
+    """γ = 3^(1 − 2·wet/100); brak wet -> 1 (bez korekty)."""
+    if wet is None:
+        return 1.0
+    return WET_GAMMA_BASE ** (1 - 2 * wet / 100)
+
+
+def wet_adjust(w: float, rain: float | None, wet: float | None) -> float:
+    """w_eff = min(1, w · rain^(γ−1)); rain ≤ 0 lub brak rain/wet -> w bez zmian."""
+    if rain is None or wet is None or rain <= 0:
+        return w
+    return min(1.0, w * rain ** (wet_gamma(wet) - 1))
