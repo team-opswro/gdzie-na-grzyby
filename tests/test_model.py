@@ -10,7 +10,7 @@ from forecast.model import (
     FROST_FLOOR,
     FROST_RECOVERY_DAYS,
     LIM_THRESHOLD,
-    MOISTURE_SHALLOW_WEIGHT,
+    MOIST_FLOOR,
     PULSE_DROP_FULL,
     PULSE_MAX,
     RAIN_WINDOW,
@@ -21,7 +21,9 @@ from forecast.model import (
     pulse_factor,
     rain_factor,
     season_factor,
-    soil_moisture_eff,
+    bucket_fraction,
+    dry_days,
+    moist_factor,
     temp_factor,
     water,
     weather_multiplier,
@@ -58,10 +60,6 @@ def test_rain_40mm_at_k5_half_weight():
 
 def test_rain_outside_window_ignored():
     assert rain_factor(*series({3: 100, 25: 100}), B) == 0.0
-
-
-def test_dry_soil_halves_rain():
-    assert rain_factor(*series({10: 40}, moist=0.1), B) == 0.5
 
 
 @pytest.mark.parametrize("t,exp", [(15, 1.0), (9, 0.5), (23, 0.5), (3, 0.0), (30, 0.0)])
@@ -142,9 +140,12 @@ def test_limiting_factor_cold_vs_hot():
 
 
 def test_limiting_factor_dry_vs_dry_soil():
-    s, i = series({}, moist=0.05)
+    # deszcz w oknie impulsu, potem 12 suchych dni z ET0 3 mm -> przesuszone podłoże
+    et0 = [3.0] * 37
+    s, i = series({k: 40 for k in range(13, 22)}, et0=et0)
     assert limiting_factor(weather_multiplier(s, i, B), s, i, B) == "dry_soil"
-    s, i = series({}, moist=0.3)
+    # brak deszczu w oknie, ale podłoże pełne (bez et0) -> za mało deszczu
+    s, i = series({})
     assert limiting_factor(weather_multiplier(s, i, B), s, i, B) == "dry"
 
 
@@ -168,23 +169,75 @@ def test_alpha_zero_reproduces_old_rain(monkeypatch):
     assert rain_factor(*series({10: 40}), B) == 1.0
     assert rain_factor(*series({5: 40}), B) == pytest.approx(1 / 3)
     assert rain_factor(*series({3: 100, 25: 100}), B) == 0.0
-    assert rain_factor(*series({10: 40}, moist=0.1), B) == 0.5
 
 
-def test_high_et0_lowers_rain():
+def test_et0_does_not_change_rain_impulse():
+    # spec M: parowanie liczy wiadro (moist), rain to czysty impuls opadu
     s, i = series({10: 40}, et0=[5.0] * 37)
     with_et0 = rain_factor(s, i, B)
     s.et0 = None
-    without_et0 = rain_factor(s, i, B)
-    assert with_et0 < without_et0
-    assert ET_ALPHA == 0.15
+    assert with_et0 == rain_factor(s, i, B) == 1.0
+    assert ET_ALPHA == 0.0
 
 
-def test_deep_moisture_lifts_penalty():
-    # płytka poniżej progu, głęboka powyżej — średnia ważona 0.5/0.5 nad progiem.
-    s, i = series({10: 40}, moist=0.10, deep=[0.30] * 37)
-    assert soil_moisture_eff(s, i) == pytest.approx(MOISTURE_SHALLOW_WEIGHT * 0.10 + (1 - MOISTURE_SHALLOW_WEIGHT) * 0.30)
-    assert rain_factor(s, i, B) == 1.0  # brak kary
+def test_soil_moisture_from_open_meteo_no_longer_penalizes():
+    assert rain_factor(*series({10: 40}, moist=0.05), B) == 1.0
+
+
+# --- bilans wodny podłoża (spec M) ---
+
+def test_bucket_full_after_rain_and_drains_with_et0():
+    s, i = series({1: 30.0}, et0=[2.5] * 37)
+    assert bucket_fraction(s, i) == pytest.approx(1.0)
+    s, i = series({}, et0=[2.5] * 37)  # 30 dni bez deszczu
+    assert bucket_fraction(s, i) == 0.0
+
+
+def test_bucket_counts_days_before_i_only():
+    s, i = series({0: 30.0}, et0=[0.0] * 37)
+    s.et0[i - 1] = 5.0  # wczoraj ubyło 4 mm (KC 0,8), dzisiejszy deszcz jeszcze się nie liczy
+    assert bucket_fraction(s, i) == pytest.approx(1 - 4 / 25)
+
+
+def test_bucket_start_and_no_et0():
+    s, _ = series({}, et0=[2.5] * 37)
+    assert bucket_fraction(s, 0) == 1.0 and dry_days(s, 0) == 0
+    s, i = series({})
+    assert bucket_fraction(s, i) is None and moist_factor(s, i) == 1.0
+    assert weather_values(s, i).water is None
+
+
+@pytest.mark.parametrize("f,exp", [(0.4, 0.55), (0.05, MOIST_FLOOR), (0.1, MOIST_FLOOR), (0.8, 1.0), (0.7, 1.0)])
+def test_moist_ramp_and_floor(monkeypatch, f, exp):
+    monkeypatch.setattr("forecast.model.bucket_fraction", lambda s, i: f)
+    assert moist_factor(*series({})) == pytest.approx(exp)
+
+
+def test_dry_days():
+    s, i = series({3: 5.0, 1: 0.5}, et0=[2.0] * 37)
+    assert dry_days(s, i) == 2  # ostatni deszcz 3 dni temu: pełne suche dni 2 i 1 (0,5 mm < 1 mm)
+    s, i = series({1: 5.0}, et0=[2.0] * 37)
+    assert dry_days(s, i) == 0
+    s, i = series({}, et0=[2.0] * 37)
+    assert dry_days(s, i) == 30
+    assert weather_values(s, i).dry_days == 30
+
+
+def test_field_case_505_176():
+    raw = json.loads((Path(__file__).parent / "fixtures" / "m_case_505_176.json").read_text())
+    raw["dates"] = [date.fromisoformat(d) for d in raw["dates"]]
+    s = DailySeries(**raw)
+    i = s.dates.index(date(2026, 10, 4))
+    c = weather_multiplier(s, i, B)
+    assert c.w <= 0.5
+    assert c.moist == pytest.approx(0.44, abs=0.02)
+    assert limiting_factor(c, s, i, B) == "dry_soil"
+    assert dry_days(s, i) == 9
+
+
+def test_wet_site_lifts_w_in_deep_drought():
+    assert wet_adjust(0.1, MOIST_FLOOR, 100) > 0.1
+    assert wet_adjust(0.1, MOIST_FLOOR, 0) < 0.1
 
 
 def test_pulse_values():
@@ -246,6 +299,7 @@ def test_series_without_new_fields_unchanged():
     comps = weather_multiplier(s, i, B)
     assert comps.pulse == 1.0
     assert comps.frost == 1.0
+    assert comps.moist == 1.0
     assert comps.rain == rain_factor(s, i, B)
     # bez et0 rain jest liczone tak, jakby ET_ALPHA=0
     s.et0 = [0.0] * len(s.dates)

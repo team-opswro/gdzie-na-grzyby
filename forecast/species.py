@@ -9,7 +9,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_RAIN_MIN = 10.0
 DEFAULT_RAIN_FULL = 40.0
-DEFAULT_SOIL_MOISTURE_MIN = 0.15
 DEFAULT_FROST_MIN = -2.0
 DEFAULT_WET_GAMMA = 3.0  # siła efektu wilgotności miejsca (spec L); 1.0 = brak efektu
 
@@ -41,7 +40,6 @@ class Species:
     season_end: tuple[int, int]
     rain_min: float
     rain_full: float
-    soil_moisture_min: float
     frost_min: float
     temp: tuple[float, float, float, float]  # zero_low, opt_low, opt_high, zero_high
     factors: Mapping[str, object] = field(default_factory=dict, hash=False)
@@ -117,7 +115,6 @@ def _parse(key: str, d: dict, defaults: Mapping[str, object] | None = None,
         season_end=_md(season["end"]),
         rain_min=d.get("rain_min", DEFAULT_RAIN_MIN),
         rain_full=d.get("rain_full", DEFAULT_RAIN_FULL),
-        soil_moisture_min=d.get("soil_moisture_min", DEFAULT_SOIL_MOISTURE_MIN),
         frost_min=d.get("frost_min", DEFAULT_FROST_MIN),
         temp=temp,
         # nadpisanie gatunkowe zastępuje całą tabelę czynnika
