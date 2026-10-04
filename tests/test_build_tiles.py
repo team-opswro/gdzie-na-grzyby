@@ -7,7 +7,7 @@ from shapely.geometry import Point, Polygon, box
 
 from tests.generic_species import generic_species
 from forecast.species import load_species
-from pipeline.build_tiles import (compute_features, mark_reserves, tile_key, tippecanoe_cmd,
+from pipeline.build_tiles import (centroid_rows, compute_features, mark_reserves, tile_key, tippecanoe_cmd,
                                   write_centroid_tiles, write_geojsonseq, write_reserves_seq)
 from pipeline.grid import cell_id
 from pipeline.habitat import Stand
@@ -81,7 +81,7 @@ def test_centroids_threshold(tmp_path):
     d = json.load(open(tmp_path / "50.5_17.5.json"))
     assert len(d["rows"]) == 1 and "species" not in d
     row = d["rows"][0]
-    assert row[0] == "id0" and len(row) == 4 + len(KEYS) and row[4] == 40
+    assert row[0] == "id0" and len(row) == 4 + len(KEYS) + 1 and row[4] == 40 and row[-1] is None
     assert row[1] == round(f.loc[0, "lat"], 5)
 
 
@@ -203,7 +203,7 @@ def test_centroid_tiles_split_and_index(tmp_path):
     old = tmp_path / "49.0_17.0.json"
     old.write_text("{}")
     idx = write_centroid_tiles(f, KEYS, tmp_path)
-    assert idx == {"tile": 0.5, "species": KEYS,
+    assert idx == {"tile": 0.5, "species": KEYS, "extra": ["wet"],
                    "tiles": ["50.0_17.0", "50.5_17.0", "51.0_18.5"]}
     assert json.load(open(tmp_path / "index.json")) == idx
     assert not old.exists()
@@ -213,7 +213,7 @@ def test_centroid_tiles_split_and_index(tmp_path):
     assert [r[0] for r in rows["51.0_18.5"]] == ["id3"]
     for t, rs in rows.items():
         for r in rs:
-            assert tile_key(r[1], r[2]) == t and len(r) == 4 + len(KEYS)
+            assert tile_key(r[1], r[2]) == t and len(r) == 4 + len(KEYS) + 1
 
 
 def test_centroid_tiles_empty(tmp_path):
@@ -291,3 +291,18 @@ def test_hl_ignores_age_of_non_partner_dominant():
     g = gdf_from([sq(50.2, 17.2)], [Stand("BRZ", ("SO",), 5, "BSW", (("SO", "4", 80),))])
     f = compute_features(g, S)
     assert f.loc[0, "h_borowik"] >= 20 and f.loc[0, "hl_borowik"] is None
+
+
+# --- wilgotność miejsca (spec L) ---
+
+def test_wet_in_tiles_and_centroids(tmp_path):
+    f = compute_features(gdf_from([sq(50.7, 17.9), sq(50.7, 17.95)]), S)
+    f["wet"] = pd.array([82, None], dtype="Int64")
+    f["wl"] = pd.Series(["water", None], dtype=object).values
+    rows = centroid_rows(f, list(S))
+    assert rows[0][-1] == 82 and rows[1][-1] is None
+    seq = tmp_path / "l.geojsonseq"
+    write_geojsonseq(f, list(S), seq)
+    props = [json.loads(l)["properties"] for l in seq.read_text().splitlines()]
+    assert props[0]["wet"] == 82 and props[0]["wl"] == "water"
+    assert "wet" not in props[1] and "wl" not in props[1]

@@ -138,7 +138,7 @@ def test_load_stands_columns_filter_and_partners(tmp_path):
     g = load_stands(db, pq)
     assert list(g.columns) == ["id", "sp_main", "sp_admix", "partners", "age", "hab", "fun",
                                "moist", "degr", "soil", "veg", "damage", "density",
-                               "twi_class", "exposure", "prefix", "geometry"]
+                               "twi_class", "exposure", "wet", "wl", "prefix", "geometry"]
     assert g.crs.to_epsg() == 4326
     by = g.set_index("id")
     assert set(by.index) == {"02-99-1-01-1-a-00", "02-99-1-01-2-b-00", "02-99-1-01-4-d-00",
