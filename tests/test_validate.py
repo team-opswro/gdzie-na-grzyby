@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import box
 
+from tests.generic_species import generic_species
 from forecast.species import load_species
 from pipeline.habitat import HABITAT_FACTORS
 from forecast.model import DailySeries
@@ -16,7 +17,7 @@ from pipeline.validate import (
     BG_RATIO, DEFAULT_OUT, TOO_FEW, auc, build_report, habitat_eval, join_stands, main, render_md, weather_eval,
 )
 
-S = load_species()
+S = generic_species()
 GOOD = ("SO", (), 80, "BSW", ())   # borowik/podgrzybek: h = 1
 BAD = ("OL", (), 60, "OL", ())     # h = 0 dla wszystkich
 

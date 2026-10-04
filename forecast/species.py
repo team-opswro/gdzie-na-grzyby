@@ -45,6 +45,8 @@ class Species:
     temp: tuple[float, float, float, float]  # zero_low, opt_low, opt_high, zero_high
     factors: Mapping[str, object] = field(default_factory=dict, hash=False)
     group: str | None = None  # grupa w aplikacji (np. "kozlarze"); None = bez grupy
+    # waga partnera (spec L §1b): kod drzewa -> mnożnik 0–1; brak kodu = 1.0
+    partner_weights: Mapping[str, float] = field(default_factory=dict, hash=False)
 
 
 def _md(text: str) -> tuple[int, int]:
@@ -119,6 +121,8 @@ def _parse(key: str, d: dict, defaults: Mapping[str, object] | None = None,
         # nadpisanie gatunkowe zastępuje całą tabelę czynnika
         factors={**(defaults or {}), **_parse_factors(key, d.get("factors"))},
         group=d.get("group"),
+        partner_weights={str(c).upper(): _mult(key, "partner_weights", v)
+                         for c, v in (d.get("partner_weights") or {}).items()},
     )
 
 

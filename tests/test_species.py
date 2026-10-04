@@ -93,7 +93,12 @@ def test_yaml_factor_values():
     assert all(sp.factors["moist"] == {} for sp in s.values())  # zneutralizowany po walidacji
     assert s["rydz"].factors["degr"] == {} and s["maslak"].factors["degr"] == {}
     assert s["kozlarz"].factors["soil"] == {"B": 0.9, "RD": 0.9}
-    assert s["borowik"].factors["veg"] == {"ZAD": 0.7, "ZIEL": 0.8, "SZAD": 0.9}
+    assert s["podgrzybek"].factors["veg"] == {"ZAD": 0.7, "ZIEL": 0.8, "SZAD": 0.9}
+    # spec L §1b: borowik bez kary za runo i rzadki drzewostan, dąb premiowany
+    assert s["borowik"].factors["veg"] == {}
+    assert s["borowik"].factors["density"] == ((0.9, 1.0), (1.0, 0.9))
+    assert s["borowik"].partner_weights == {"DB": 1.0, "BK": 0.9, "SO": 0.85, "SW": 0.85}
+    assert s["podgrzybek"].partner_weights == {}
     assert s["borowik"].factors["damage"] == Ramp(40, 100, 0.6)
 
 

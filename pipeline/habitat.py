@@ -87,18 +87,19 @@ def habitat_factor(hab: str | None, sp: Species) -> float:
 
 
 def partner_score(st: Stand, sp: Species, use_age: bool = True) -> float:
-    """Ocena partnera: max po gatunku panującym i domieszkach (spec 4.1).
+    """Ocena partnera: max po gatunku panującym i domieszkach (spec 4.1), z wagą partnera (spec L).
     use_age=False: wiek nie gra roli (ablacja czynnika "age" w walidacji)."""
     af = age_factor if use_age else (lambda _age, _sp: 1.0)
+    pw = sp.partner_weights
     best = 0.0
     if st.sp_main in sp.partners:
-        best = af(st.age, sp)
+        best = pw.get(st.sp_main, 1.0) * af(st.age, sp)
     # Legacy: sp_admix bez partners -> kod udziału "" (nieznany, 0.3), wiek None.
     partners = st.partners or tuple((c, "", None) for c in st.sp_admix)
     for code, share, age in partners:
         if code in sp.partners:
             w = SHARE_WEIGHT.get((share or "").strip().upper(), SHARE_UNKNOWN)
-            best = max(best, w * af(age, sp))
+            best = max(best, w * pw.get(code, 1.0) * af(age, sp))
     return best
 
 

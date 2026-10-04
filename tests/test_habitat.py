@@ -3,7 +3,8 @@ import dataclasses
 import pandas as pd
 import pytest
 
-from forecast.species import Ramp, load_species
+from tests.generic_species import generic_species
+from forecast.species import ROOT, Ramp, load_species
 from pipeline.habitat import (
     HABITAT_FACTORS,
     MOD_FLOOR,
@@ -21,7 +22,7 @@ from pipeline.habitat import (
     stand_from_row,
 )
 
-S = load_species()
+S = generic_species()
 
 
 def test_old_pine_fresh_forest_high_for_podgrzybek():
@@ -305,3 +306,37 @@ def test_exposure_factor_all_species():
     assert all(factor_value("exposure", st_s, sp) == 0.85 for sp in S.values())
     assert factor_value("exposure", Stand("SO", (), 60, "BSW", exposure="OTHER"), S["kurka"]) == 1.0
     assert factor_value("exposure", Stand("SO", (), 60, "BSW"), S["kurka"]) == 1.0
+
+
+# --- spec L §1b: borowik — dąb, trawa, słońce ---
+
+REPO = load_species()
+REPO_YAML = ROOT / "species.yaml"
+
+
+def test_borowik_prefers_oak_over_pine():
+    b = REPO["borowik"]
+    assert habitat_score(Stand("DB", (), 80, "LMSW"), b) == 1.0
+    assert habitat_score(Stand("SO", (), 80, "LMSW"), b) == pytest.approx(0.85)
+
+
+def test_partner_weight_applies_to_admixture():
+    b = REPO["borowik"]
+    st = Stand("BRZ", (), 80, "LMSW", partners=(("DB", "3", 80), ("SO", "4", 80)))
+    # dąb 0.7 × 1.0 vs sosna 0.9 × 0.85 -> 0.765
+    assert partner_score(st, b) == pytest.approx(0.765)
+
+
+def test_borowik_no_penalty_for_grass_and_sparse_stand():
+    b = REPO["borowik"]
+    st = Stand("DB", (), 80, "LMSW", veg="ZAD", density=0.4)
+    assert habitat_score(st, b) == 1.0
+    assert habitat_score(st, REPO["podgrzybek"]) < 1.0
+
+
+def test_partner_weights_parsed_and_validated(tmp_path):
+    p = tmp_path / "s.yaml"
+    base = REPO_YAML.read_text(encoding="utf-8")
+    p.write_text(base.replace("partner_weights: {DB: 1.0,", "partner_weights: {DB: 1.5,"), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_species(p)

@@ -62,8 +62,12 @@ def query(bbox: tuple[float, float, float, float]) -> str:
     )
 
 
-def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep) -> list[dict]:
+def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep,
+               query_fn=None, prefix: str = "parking") -> list[dict]:
     """Pobiera jeden kafel z Overpass lub wczytuje go z cache.
+
+    `query_fn(bbox)` i `prefix` (nazwa pliku cache) pozwalają użyć tego samego mechanizmu dla innych
+    obiektów OSM (np. wód w `fetch_water`); domyślnie parkingi.
 
     Przy 429/504/timeoucie czeka 30 s i próbuje ponownie na kolejnym serwerze (maks. 3 próby);
     po pobraniu z sieci pauza 5 s (uprzejmość wobec Overpass), z cache bez pauzy.
@@ -72,13 +76,13 @@ def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep
     cache_dir.mkdir(parents=True, exist_ok=True)
     south, west, *_ = bbox
     north, east = bbox[2], bbox[3]
-    cache_path = cache_dir / f"parking_{south:g}_{west:g}_{north - south:g}.json"
+    cache_path = cache_dir / f"{prefix}_{south:g}_{west:g}_{north - south:g}.json"
 
     if not refresh and cache_path.exists():
         return json.loads(cache_path.read_text(encoding="utf-8")).get("elements", [])
 
     sess = session or requests.Session()
-    payload = {"data": query(bbox)}
+    payload = {"data": (query_fn or query)(bbox)}
     headers = {"User-Agent": _USER_AGENT}
 
     for attempt in range(_RETRIES):
@@ -102,10 +106,11 @@ def fetch_tile(bbox, cache_dir, *, refresh=False, session=None, sleep=time.sleep
     raise OverpassError(f"Overpass nie odpowiedział po {_RETRIES} próbach dla {bbox}")
 
 
-def fetch_area(bbox, cache_dir, *, refresh=False, session=None, depth: int = 0) -> list[dict]:
-    """fetch_tile, a gdy serwer nie wyrabia — rekurencyjnie cztery ćwiartki (do MAX_SPLIT_DEPTH)."""
+def fetch_area(bbox, cache_dir, *, refresh=False, session=None, depth: int = 0, **opts) -> list[dict]:
+    """fetch_tile, a gdy serwer nie wyrabia — rekurencyjnie cztery ćwiartki (do MAX_SPLIT_DEPTH).
+    `opts` (query_fn, prefix) przekazywane do fetch_tile."""
     try:
-        return fetch_tile(bbox, cache_dir, refresh=refresh, session=session)
+        return fetch_tile(bbox, cache_dir, refresh=refresh, session=session, **opts)
     except OverpassError:
         if depth >= MAX_SPLIT_DEPTH:
             raise
@@ -114,7 +119,7 @@ def fetch_area(bbox, cache_dir, *, refresh=False, session=None, depth: int = 0) 
     out: list[dict] = []
     for q in ((south, west, mid_lat, mid_lon), (south, mid_lon, mid_lat, east),
               (mid_lat, west, north, mid_lon), (mid_lat, mid_lon, north, east)):
-        out.extend(fetch_area(q, cache_dir, refresh=refresh, session=session, depth=depth + 1))
+        out.extend(fetch_area(q, cache_dir, refresh=refresh, session=session, depth=depth + 1, **opts))
     return out
 
 

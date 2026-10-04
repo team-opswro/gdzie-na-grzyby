@@ -5,13 +5,14 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point, Polygon, box
 
+from tests.generic_species import generic_species
 from forecast.species import load_species
 from pipeline.build_tiles import (compute_features, mark_reserves, tile_key, tippecanoe_cmd,
                                   write_centroid_tiles, write_geojsonseq, write_reserves_seq)
 from pipeline.grid import cell_id
 from pipeline.habitat import Stand
 
-S = load_species()
+S = generic_species()
 KEYS = list(S)
 
 
