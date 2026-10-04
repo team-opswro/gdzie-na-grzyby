@@ -1,7 +1,10 @@
+import json
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 
+from forecast.model import WET_GAMMA_BASE, wet_adjust, wet_gamma
 from forecast.model import (
     ET_ALPHA,
     FROST_FLOOR,
@@ -247,3 +250,23 @@ def test_series_without_new_fields_unchanged():
     # bez et0 rain jest liczone tak, jakby ET_ALPHA=0
     s.et0 = [0.0] * len(s.dates)
     assert comps.rain == rain_factor(s, i, B)
+
+
+# --- wilgotność miejsca (spec L) ---
+WET_CASES = json.loads((Path(__file__).parent / "fixtures" / "wet_cases.json").read_text())["cases"]
+
+
+@pytest.mark.parametrize("c", WET_CASES)
+def test_wet_adjust_shared_cases(c):
+    base = c.get("base", WET_GAMMA_BASE)
+    assert wet_adjust(c["w"], c["rain"], c["wet"], base) == pytest.approx(c["expected"], abs=1e-6)
+
+
+def test_wet_gamma_range():
+    assert wet_gamma(50) == 1.0 and wet_gamma(0) == 3.0 and wet_gamma(100) == pytest.approx(1 / 3)
+    assert wet_gamma(None) == 1.0
+
+
+def test_wet_adjust_monotonic_in_wet():
+    vals = [wet_adjust(0.6, 0.6, wet) for wet in range(0, 101, 10)]
+    assert vals == sorted(vals)

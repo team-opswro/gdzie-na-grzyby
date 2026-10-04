@@ -1,4 +1,4 @@
-import { score, scoreClass, weatherFor, bestFor, SPECIES, ALL } from "./data.js";
+import { score, scoreClass, weatherFor, bestFor, toWet, SPECIES, ALL } from "./data.js";
 import { chartData, chartDataBy, trend, trendBy, renderChart, DOW } from "./chart.js";
 import { CLASS_LABELS, COLORS } from "./map.js";
 import { formatPlace, navUrls } from "./names.js";
@@ -66,6 +66,33 @@ export const HAB_LIM_TEXT = {
   habitat: "Ogranicza siedlisko: typ siedliskowy mniej korzystny",
   age: "Ogranicza siedlisko: wiek drzewostanu",
 };
+// Wilgotność miejsca (spec L): atrybuty wet (0–100) i wl (powód) w kafelkach.
+export const WET_REASON = {
+  water: "blisko wody", ditch: "przy rowie lub strumieniu", valley: "w obniżeniu terenu",
+  soil: "wilgotna gleba", habitat: "wilgotne siedlisko", twi: "spływ wody z okolicy",
+  hilltop: "wyniesienie, woda spływa", dry: "z dala od wody, suche podłoże",
+};
+const WET_HIGH = 65;
+const WET_LOW = 35;
+const WET_NOTE_MIN = 0.05; // minimalna różnica w_eff − w, przy której popup komentuje suszę
+
+export function wetLabel(wet, wl) {
+  const x = toWet(wet);
+  if (x == null) return null;
+  const level = x >= WET_HIGH ? "wysoka" : x <= WET_LOW ? "niska" : "średnia";
+  const why = WET_REASON[wl];
+  return `Wilgotność miejsca: ${level}${why ? ` (${why})` : ""}`;
+}
+
+// Zdanie o suszy, gdy dzień ogranicza opad, a korekta jest wyraźna; null w pozostałych przypadkach.
+export function droughtNote(weather) {
+  if (!weather || weather.w_raw == null || !["dry", "dry_soil"].includes(weather.lim)) return null;
+  const d = weather.w - weather.w_raw;
+  if (Math.abs(d) < WET_NOTE_MIN) return null;
+  return d > 0 ? "W suszy to miejsce wypada lepiej niż okolica — trzyma wilgoć."
+    : "W suszy to miejsce wypada gorzej niż okolica — szybko przesycha.";
+}
+
 export const SOIL_DRY = 0.15;
 export const SOIL_WET = 0.3;
 
@@ -142,9 +169,10 @@ export function trendLabel(t) {
 
 // Lista gatunków trybu „all”: malejąco po wyniku dnia (bez pogody — po h).
 function speciesBars(props, list, pogoda, dayIdx) {
+  const wet = toWet(props.wet);
   const items = list.map((sp) => {
     const h = Number(props["h_" + sp.key] ?? 0);
-    const wf = pogoda ? weatherFor(pogoda, props.cell, sp.key, dayIdx) : null;
+    const wf = pogoda ? weatherFor(pogoda, props.cell, sp.key, dayIdx, wet) : null;
     const value = pogoda ? (wf ? score(h, wf.w) : null) : h;
     return { sp, value };
   });
@@ -173,12 +201,13 @@ export function renderPopup(props, ctx) {
   const hAll = {};
   // brak atrybutu h_* w kafelku = 0 (zera nie są zapisywane)
   for (const k of keys) hAll[k] = Number(props["h_" + k] ?? 0);
-  const best = isAll && pogoda ? bestFor(pogoda, props.cell, hAll, dayIdx) : null;
+  const wet = toWet(props.wet); // wilgotność miejsca (spec L), brak = bez korekty
+  const best = isAll && pogoda ? bestFor(pogoda, props.cell, hAll, dayIdx, wet) : null;
   let species = keys[0];
   if (isAll) {
     species = best?.species ?? keys.reduce((a, k) => (hAll[k] > hAll[a] ? k : a), keys[0]);
   }
-  const scoreAtAll = (idx) => (idx < 0 ? null : bestFor(pogoda, props.cell, hAll, idx)?.score ?? null);
+  const scoreAtAll = (idx) => (idx < 0 ? null : bestFor(pogoda, props.cell, hAll, idx, wet)?.score ?? null);
   const root = el("div", null, "popup");
   if (props.id) {
     root.append(el("div", formatPlace(props.id, nazwy), "popup-place"));
@@ -188,7 +217,7 @@ export function renderPopup(props, ctx) {
   }
 
   const h = Number(props["h_" + species] ?? 0);
-  const weather = pogoda ? weatherFor(pogoda, props.cell, species, dayIdx) : null;
+  const weather = pogoda ? weatherFor(pogoda, props.cell, species, dayIdx, wet) : null;
   if (props.rez) {
     root.append(renderReserve(props.rez, false)); // link dodaje koniec popupu
   } else {
@@ -198,7 +227,7 @@ export function renderPopup(props, ctx) {
       const who = isAll ? ` · ${shortName(speciesList.find((x) => x.key === species)?.name ?? species)}` : "";
       badge.append(`Wynik: ${s}/100 (${CLASS_LABELS[scoreClass(s)]})${who}`);
       badge.style.borderLeftColor = COLORS.classes[scoreClass(s)];
-      const tr = isAll ? trendBy(pogoda, scoreAtAll, dayIdx) : trend(pogoda, props.cell, species, h, dayIdx);
+      const tr = isAll ? trendBy(pogoda, scoreAtAll, dayIdx) : trend(pogoda, props.cell, species, h, dayIdx, wet);
       if (tr.dir) {
         const arrow = el("span", " " + trendArrow(tr.dir), "popup-trend");
         arrow.title = `${tr.delta > 0 ? "+" : ""}${tr.delta} względem poprzedniego dnia`;
@@ -210,12 +239,14 @@ export function renderPopup(props, ctx) {
       }
       root.append(badge);
       if (weather.lim && LIM_TEXT[weather.lim]) root.append(el("div", LIM_TEXT[weather.lim], "popup-lim"));
+      const note = droughtNote(weather);
+      if (note) root.append(el("div", note, "popup-lim popup-wet"));
     } else {
       root.append(el("div", "Brak danych pogodowych dla tego miejsca", "popup-score popup-nodata"));
     }
     if (isAll) root.append(speciesBars(props, listed, pogoda, dayIdx));
     if (pogoda && todayIso) {
-      const data = isAll ? chartDataBy(pogoda, scoreAtAll, todayIso) : chartData(pogoda, props.cell, species, h, todayIso);
+      const data = isAll ? chartDataBy(pogoda, scoreAtAll, todayIso) : chartData(pogoda, props.cell, species, h, todayIso, wet);
       if (data.length) {
         const box = el("div", null, "popup-chart");
         box.append(renderChart(data, dayIdx, onDaySelect || (() => {})));
@@ -249,6 +280,14 @@ export function renderPopup(props, ctx) {
     tr.append(td);
     t.append(tr);
   }
+  const wetText = !props.rez ? wetLabel(wet, props.wl) : null;
+  if (wetText) {
+    const tr = document.createElement("tr");
+    const td = el("td", wetText, "popup-wetness");
+    td.colSpan = 2;
+    tr.append(td);
+    t.append(tr);
+  }
   if (weather && weather.wx && !props.rez) {
     const f = formatWx(weather.wx);
     for (const line of [f.rain, f.soil, f.et0]) {
@@ -273,6 +312,10 @@ export function renderPopup(props, ctx) {
     }
     if (typeof weather.frost === "number") {
       row(dt, "Przymrozek", pct(weather.frost));
+    }
+    if (weather.w_raw != null) {
+      const d = Math.round((weather.w - weather.w_raw) * 100);
+      row(dt, "Wilgotność miejsca", `${Math.round(weather.wet)}/100 (${d > 0 ? "+" : ""}${d} pkt %)`);
     }
     d.append(dt);
     root.append(d);

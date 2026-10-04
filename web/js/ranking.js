@@ -30,7 +30,8 @@ export function bearing(origin, point) {
   return SECTORS[Math.round(az / 45) % 8];
 }
 
-// centroids.rows: [id, lat, lon, cell, h_<species>...] with h columns in centroids.species order
+// centroids.rows: [id, lat, lon, cell, h_<species>..., extra...] with h columns in centroids.species order;
+// centroids.extra: nazwy kolumn po h (np. ["wet"], spec L)
 // Wynik: grupy po oddziale [{ key, best, count, distanceKm, bearing }].
 // sel: klucz gatunku, "all" albo lista kluczy (grupa). Wiele kolumn: wynik wiersza = bestFor po nich,
 // a grupa ma dodatkowo `species` (klucz najlepszego). Klucze spoza centroids.species są pomijane.
@@ -40,6 +41,9 @@ export function topN(centroids, pogoda, sel, dayIdx, origin, radiusKm = 20, n = 
   if (!cols.length) return [];
   const isAll = cols.length > 1;
   const [species, col] = cols[0];
+  // wilgotność miejsca (spec L): kolumna za h_* według index.json "extra"; brak -> bez korekty
+  const extra = centroids.extra ?? [];
+  const wetCol = extra.includes("wet") ? 4 + centroids.species.length + extra.indexOf("wet") : -1;
   const groups = new Map();
   const dLat = radiusKm / 111;
   const dLon = radiusKm / (111 * Math.max(Math.cos(rad(origin.lat)), 0.01));
@@ -48,20 +52,21 @@ export function topN(centroids, pogoda, sel, dayIdx, origin, radiusKm = 20, n = 
     if (Math.abs(lat - origin.lat) > dLat || Math.abs(lon - origin.lon) > dLon) continue;
     if (haversineKm(origin, { lat, lon }) > radiusKm) continue;
     let s, h, sp, hBy;
+    const wet = wetCol >= 0 ? row[wetCol] ?? null : null;
     if (isAll) {
       hBy = {};
       for (const [k, c] of cols) hBy[k] = row[c];
-      const b = bestFor(pogoda, cell, hBy, dayIdx);
+      const b = bestFor(pogoda, cell, hBy, dayIdx, wet);
       if (!b) continue;
       s = b.score; sp = b.species; h = hBy[sp];
     } else {
-      const wx = weatherFor(pogoda, cell, species, dayIdx);
+      const wx = weatherFor(pogoda, cell, species, dayIdx, wet);
       if (!wx) continue;
       s = score(row[col], wx.w); h = row[col];
     }
     if (!s) continue;
     const key = oddzKey(id) ?? id;
-    const cand = { id, lat, lon, cell, h, score: s };
+    const cand = { id, lat, lon, cell, h, wet, score: s };
     if (isAll) { cand.species = sp; cand.hBy = hBy; }
     const g = groups.get(key);
     if (!g) groups.set(key, { key, best: cand, count: 1 });

@@ -5,12 +5,13 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import box
 
+from tests.generic_species import generic_species
 from forecast.species import load_species
 from pipeline import build
 from pipeline.build_tiles import tile_key
 from pipeline.species_info import CONTENT_PATH, SPECIES_PATH, build_info
 
-S = load_species()
+S = generic_species()
 KEYS = list(S)
 
 

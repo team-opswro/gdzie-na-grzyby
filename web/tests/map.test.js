@@ -197,3 +197,94 @@ test("klik: parking ma pierwszeństwo przed wydzieleniem", () => {
   delete globalThis.pmtiles;
   delete globalThis.maplibregl;
 });
+
+// --- wilgotność miejsca (spec L): mały ewaluator wyrażeń MapLibre (tylko używane operatory) ---
+import { adjustW, score, scoreClass } from "../js/data.js";
+
+function evalExpr(e, props, env = {}) {
+  if (!Array.isArray(e)) return e;
+  const [op, ...a] = e;
+  const ev = (x, en = env) => evalExpr(x, props, en);
+  switch (op) {
+    case "literal": return a[0];
+    case "get": return props[a[0]];
+    case "has": return a[0] in props;
+    case "var": return env[a[0]];
+    case "let": {
+      const en = { ...env };
+      for (let i = 0; i < a.length - 1; i += 2) en[a[i]] = ev(a[i + 1], en);
+      return ev(a[a.length - 1], en);
+    }
+    // jak w MapLibre: null -> 0 (nie kolejny argument)
+    case "to-number": { const v = ev(a[0]); return v == null ? 0 : Number(v); }
+    case "coalesce": { for (const x of a) { const v = ev(x); if (v != null) return v; } return null; }
+    case "at": return ev(a[1])[a[0]];
+    case "match": {
+      const v = ev(a[0]);
+      for (let i = 1; i < a.length - 1; i += 2) if (a[i] === v) return ev(a[i + 1]);
+      return ev(a[a.length - 1]);
+    }
+    case "case": {
+      for (let i = 0; i < a.length - 1; i += 2) if (ev(a[i])) return ev(a[i + 1]);
+      return ev(a[a.length - 1]);
+    }
+    case "step": {
+      const x = ev(a[0]);
+      let out = ev(a[1]);
+      for (let i = 2; i < a.length; i += 2) if (x >= a[i]) out = ev(a[i + 1]);
+      return out;
+    }
+    case "<": return ev(a[0]) < ev(a[1]);
+    case ">": return ev(a[0]) > ev(a[1]);
+    case "min": return Math.min(...a.map((x) => ev(x)));
+    case "max": return Math.max(...a.map((x) => ev(x)));
+    case "*": return a.reduce((p, x) => p * ev(x), 1);
+    case "-": return ev(a[0]) - ev(a[1]);
+    case "/": return ev(a[0]) / ev(a[1]);
+    case "^": return ev(a[0]) ** ev(a[1]);
+    case "round": { const v = ev(a[0]); return Math.sign(v) * Math.round(Math.abs(v)); }
+    default: throw new Error("nieobsługiwany operator " + op);
+  }
+}
+
+const WET_P = { days: ["2026-10-04"], cells: { c1: { borowik: { w: [0.797], rain: [0.797] }, podgrzybek: { w: [0.6], rain: [0.9] } } } };
+
+test("mapa: kolor wydzielenia zgodny z adjustW dla różnych wet", () => {
+  const expr = fillColorExpression(WET_P, "borowik", 0);
+  for (const wet of [undefined, 0, 8, 50, 92, 100]) {
+    for (const h of [40, 63, 85]) {
+      const props = { cell: "c1", h_borowik: h, ...(wet != null && { wet }) };
+      const s = score(h, adjustW(0.797, 0.797, wet ?? null));
+      assert.equal(evalExpr(expr, props), COLORS.classes[scoreClass(s)], `wet=${wet} h=${h}`);
+    }
+  }
+});
+
+test("mapa: tryb wszystkich gatunków — max po skorygowanych wynikach, brak komórki = noData", () => {
+  const expr = fillColorExpression(WET_P, ["borowik", "podgrzybek"], 0);
+  const props = { cell: "c1", h_borowik: 85, h_podgrzybek: 80, wet: 8 };
+  const best = Math.max(score(85, adjustW(0.797, 0.797, 8)), score(80, adjustW(0.6, 0.9, 8)));
+  assert.equal(evalExpr(expr, props), COLORS.classes[scoreClass(best)]);
+  assert.equal(evalExpr(expr, { cell: "zzz", h_borowik: 85, wet: 8 }), COLORS.noData);
+});
+
+test("mapa: pogoda bez rain (stary format) — bez korekty", () => {
+  const p = { days: ["d"], cells: { c1: { borowik: { w: [0.5] } } } };
+  const expr = fillColorExpression(p, "borowik", 0);
+  assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 90, wet: 0 }), COLORS.classes[scoreClass(45)]);
+});
+
+import { setWetGammas } from "../js/data.js";
+
+test("mapa: wet_gamma gatunku w wyrażeniu", () => {
+  setWetGammas([{ key: "borowik", wet_gamma: 1.5 }]);
+  try {
+    const expr = fillColorExpression(WET_P, "borowik", 0);
+    for (const wet of [0, 30, 100]) {
+      const s = score(85, adjustW(0.797, 0.797, wet, 1.5));
+      assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 85, wet }), COLORS.classes[scoreClass(s)]);
+    }
+  } finally {
+    setWetGammas([]);
+  }
+});

@@ -22,7 +22,8 @@ from pipeline.build_tiles import (compute_features, mark_reserves, tippecanoe_cm
                                   write_reserves_seq)
 from pipeline.fetch_reserves import RESERVES_PATH
 from pipeline.grid import build_grid
-from pipeline.ingest import DATA_DIR, DEFAULT_DB, DEFAULT_PARQUET, DEFAULT_TERRAIN, load_stands
+from pipeline.ingest import (DATA_DIR, DEFAULT_DB, DEFAULT_PARQUET, DEFAULT_TERRAIN, DEFAULT_WETNESS,
+                             load_stands)
 from pipeline.species_info import CONTENT_PATH, SPECIES_PATH, build_info
 
 DEFAULT_OUT = DATA_DIR / "out"
@@ -49,7 +50,8 @@ def h_histogram(feats, keys: list[str]) -> dict[str, list[int]]:
 def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
         names_path: Path, tippecanoe=subprocess.run, now: str | None = None,
         build: str | None = None,
-        parkings_path: Path | None = None, terrain_path: Path | None = None) -> dict:
+        parkings_path: Path | None = None, terrain_path: Path | None = None,
+        wetness_path: Path | None = None) -> dict:
     """Buduje wszystkie pliki w `out`; zwraca zawartość build.json."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -104,6 +106,11 @@ def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
         tm = pq.read_schema(terrain_path).metadata or {}
         meta["terrain"] = {"twi_terciles": json.loads(tm.get(b"twi_terciles", b"null")),
                            "dem": tm.get(b"dem", b"").decode() or None}
+    if "wet" in feats.columns and feats["wet"].notna().any():
+        meta["wetness"] = {"stands": int(feats["wet"].notna().sum())}
+        if wetness_path is not None and Path(wetness_path).exists():
+            wm = pq.read_schema(wetness_path).metadata or {}
+            meta["wetness"]["weights"] = json.loads(wm.get(b"weights", b"null"))
     _write_json(out / "build.json", meta, indent=1)
     print(f"centroidy: {n_centroids} w {len(index['tiles'])} kafelkach, "
           f"komorki siatki: {len(grid['cells'])}")
@@ -133,7 +140,7 @@ def main(argv=None) -> int:
     reserves = gpd.read_file(args.reserves).to_crs(4326)
     run(stands, load_species(), reserves, args.out, args.build_dir, args.names,
         tippecanoe=subprocess.run, parkings_path=DATA_DIR / "parkingi.geojson",
-        terrain_path=DEFAULT_TERRAIN)
+        terrain_path=DEFAULT_TERRAIN, wetness_path=DEFAULT_WETNESS)
     return 0
 
 

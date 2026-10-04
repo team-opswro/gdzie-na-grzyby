@@ -1,5 +1,5 @@
 import { BASEMAP_KEYS } from "./hash.js";
-import { SPECIES, ALL } from "./data.js";
+import { SPECIES, ALL, wetGammaFor } from "./data.js";
 
 // MapLibre + PMTiles. Globalne `maplibregl` i `pmtiles` są używane wyłącznie w createMap,
 // dzięki czemu fillColorExpression da się testować w Node.
@@ -17,15 +17,27 @@ const STEPS = [10, 25, 45, 66];
 
 const hExpr = (species) => ["to-number", ["get", "h_" + species], 0];
 
+// Mnożnik pogody wydzielenia (−1 = brak pogody w komórce), z korektą o wilgotność miejsca (spec L,
+// ten sam wzór co adjustW w data.js): w_eff = min(1, w · rain^(γ−1)), γ = G^(1 − 2·wet/100), G = wet_gamma gatunku;
+// brak atrybutu wet → 50 (γ = 1; coalesce, bo to-number(null) w MapLibre daje 0), brak rain → bez korekty.
 function weatherMatch(pogoda, species, dayIdx) {
   const args = [];
   for (const [cell, sp] of Object.entries(pogoda.cells ?? {})) {
     const w = sp?.[species]?.w?.[dayIdx];
-    if (w != null) args.push(cell, w);
+    if (w == null) continue;
+    const rain = sp[species].rain?.[dayIdx];
+    args.push(cell, ["literal", [w, rain == null ? 0 : rain]]);
   }
   // match wymaga co najmniej jednej pary; bez niej wszystko jest „brak danych”
   if (args.length === 0) return -1;
-  return ["match", ["get", "cell"], ...args, -1];
+  const w = ["at", 0, ["var", "wr"]];
+  const rain = ["at", 1, ["var", "wr"]];
+  const gamma = ["^", wetGammaFor(species), ["-", 1, ["/", ["to-number", ["coalesce", ["get", "wet"], 50]], 50]]];
+  return ["let", "wr", ["match", ["get", "cell"], ...args, ["literal", [-1, 0]]],
+    ["case",
+      ["<", w, 0], -1,
+      [">", rain, 0], ["min", 1, ["*", w, ["^", rain, ["-", gamma, 1]]]],
+      w]];
 }
 
 // Wyrażenie wyniku (0–100) dla wydzielenia; gdy brak pogody → samo h.

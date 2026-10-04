@@ -255,3 +255,47 @@ test("groupsOf: brak gatunki.json -> brak grup", () => {
   assert.deepEqual(groupsOf(null), []);
   assert.deepEqual(groupsOf({ groups: GROUPS }), GROUPS);
 });
+
+// --- wilgotność miejsca (spec L): te same przypadki co pytest ---
+import { adjustW, toWet } from "../js/data.js";
+const WET = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/wet_cases.json", import.meta.url), "utf8")).cases;
+
+test("adjustW: wspólne przypadki z wet_cases.json", () => {
+  for (const c of WET) {
+    const got = c.base == null ? adjustW(c.w, c.rain, c.wet) : adjustW(c.w, c.rain, c.wet, c.base);
+    assert.ok(Math.abs(got - c.expected) < 1e-6, `${JSON.stringify(c)} -> ${got}`);
+  }
+});
+
+test("toWet: liczby, napisy, braki", () => {
+  assert.equal(toWet(82), 82); assert.equal(toWet("8"), 8);
+  assert.equal(toWet(null), null); assert.equal(toWet(""), null); assert.equal(toWet("x"), null);
+});
+
+test("weatherFor z wet: w skorygowane, w_raw z pliku; bez wet — jak dotąd", () => {
+  const src = P.cells["506_178"].borowik;
+  const a = weatherFor(P, "506_178", "borowik", 2, 10);
+  assert.equal(a.w_raw, src.w[2]);
+  assert.equal(a.w, adjustW(src.w[2], src.rain[2], 10));
+  assert.equal(a.wet, 10);
+  assert.ok(!("w_raw" in weatherFor(P, "506_178", "borowik", 2)));
+});
+
+test("bestFor przekazuje wet", () => {
+  const b = bestFor(P, "506_178", { borowik: 80 }, 2, 0);
+  assert.equal(b.score, score(80, weatherFor(P, "506_178", "borowik", 2, 0).w));
+});
+
+import { setWetGammas, wetGammaFor, WET_GAMMA_BASE } from "../js/data.js";
+
+test("wet_gamma per gatunek z gatunki.json; brak → domyślne", () => {
+  setWetGammas([{ key: "borowik", wet_gamma: 1.5 }, { key: "kurka" }]);
+  try {
+    assert.equal(wetGammaFor("borowik"), 1.5);
+    assert.equal(wetGammaFor("kurka"), WET_GAMMA_BASE);
+    const src = P.cells["506_178"].borowik;
+    assert.equal(weatherFor(P, "506_178", "borowik", 2, 10).w, adjustW(src.w[2], src.rain[2], 10, 1.5));
+  } finally {
+    setWetGammas([]);
+  }
+});

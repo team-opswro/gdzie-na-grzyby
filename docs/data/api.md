@@ -86,7 +86,14 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
   - `hl_<gatunek>` — „słaba strona siedliska”: nazwa najsłabszego modyfikatora (`veg`, `moist`, `degr`,
     `soil`, `damage`, `density`, `twi`, `exposure`, `habitat`, `age`), gdy jego mnożnik < 0,8, a
     `h_<gatunek>` ≥ 20; opcjonalny (brak = brak wyraźnej słabej strony),
-  - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione).
+  - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione),
+  - `wet` — wilgotność miejsca 0–100 (percentyl w obszarze, mediana 50; spec L): bufor wodny wydzielenia
+    z bliskości wód stojących, rzek i mokradeł (OSM) oraz położenia w rzeźbie (TPI z GLO-30); opcjonalny.
+    Gdy jest, klient koryguje mnożnik pogody: `w_eff = min(1, w · rain^(γ−1))`, `γ = G^(1 − 2·wet/100)`,
+    `G` = `wet_gamma` gatunku z `gatunki.json` (brak = 3), `rain` z `pogoda.json`; `rain` = 0 lub brak
+    `wet`/`rain` → `w` bez zmian; wynik dnia = `round(h × w_eff)`,
+  - `wl` — powód wartości `wet` (tylko przy `wet` ≥ 65 lub ≤ 35): `water` (blisko wody), `valley` (obniżenie),
+    `hilltop` (wyniesienie), `dry` (z dala od wody); opcjonalny; w przyszłości mogą dojść inne kody.
 - `rezerwaty` — obrysy rezerwatów przyrody (GDOŚ), atrybut `name` (opcjonalny).
 - `parkingi` — parkingi z OpenStreetMap (punkty), atrybuty:
   - `osm` — identyfikator OSM (`"n<id>"`, `"w<id>"` lub `"r<id>"`),
@@ -103,7 +110,7 @@ Przy małych zoomach tippecanoe może pomijać najmniejsze poligony (`--drop-sma
 
 ```json
 {"tile": 0.5, "species": ["borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"],
- "tiles": ["49.0_18.5", "49.0_19.0", "…"]}
+ "extra": ["wet"], "tiles": ["49.0_18.5", "49.0_19.0", "…"]}
 ```
 
 Kafelek `centroidy/<lat0>_<lon0>.json`, gdzie `lat0 = floor(lat / 0.5) × 0.5`,
@@ -111,13 +118,16 @@ Kafelek `centroidy/<lat0>_<lon0>.json`, gdzie `lat0 = floor(lat / 0.5) × 0.5`,
 wymienione w `tiles` (pozostałe → 404, klient ich nie pobiera):
 
 ```json
-{"rows": [["02-34-1-15-542-f-00", 49.43326, 18.98704, "494_189", 12, 0, 18, 0, 0, 100], …]}
+{"rows": [["02-34-1-15-542-f-00", 49.43326, 18.98704, "494_189", 12, 0, 18, 0, 0, 100, 63], …]}
 ```
 
-Wiersz = `[id, lat, lon, cell, h_<species[0]>, h_<species[1]>, …]` — oceny siedliska w kolejności
-`index.species`. Zawiera tylko wydzielenia z maksymalną oceną siedliska ≥ 40, bez rezerwatów; punkt to
+Wiersz = `[id, lat, lon, cell, h_<species[0]>, h_<species[1]>, …, <extra[0]>, …]` — oceny siedliska
+w kolejności `index.species`, potem kolumny wymienione w `index.extra` (opcjonalne; dziś `wet` — wilgotność
+miejsca jak w kafelkach, `null` gdy brak). Klient czyta `h` po indeksach, więc kolumny `extra` na końcu nie
+zmieniają ich położenia. Zawiera tylko wydzielenia z maksymalną oceną siedliska ≥ 40, bez rezerwatów; punkt to
 punkt reprezentatywny poligonu (leży wewnątrz). Ranking w promieniu R: pobierz kafelki przecinające
-bbox koła, przefiltruj wiersze po odległości, policz `round(h × w)` z pogodą komórki `cell`.
+bbox koła, przefiltruj wiersze po odległości, policz `round(h × w)` z pogodą komórki `cell` (z `wet` —
+`round(h × w_eff)`, jak w kafelkach).
 
 ## `grid.json`
 
@@ -141,8 +151,9 @@ Klucze to prefiksy adresu leśnego `id`: nadleśnictwo `RR-NN`, leśnictwo `RR-N
 `{"reviewed": bool, "species": [...]}` — lista gatunków w kolejności wyświetlania. Element:
 `key` (np. `borowik`, ten sam co w `h_<key>` i `pogoda.json`), `name`, `latin`,
 `season` (`{"start": "MM-DD", "end": "MM-DD"}`), `partners` (nazwy drzew), `habitats_preferred`,
-`habitats_adjacent` (nazwy siedlisk), `age_min`, `description` i pozostałe pola treści z
-`content/gatunki.yaml` (nowe pola mogą dochodzić). `reviewed: false` — treści niezweryfikowane przez
+`habitats_adjacent` (nazwy siedlisk), `age_min`, `wet_gamma` (siła efektu wilgotności miejsca `G`, ≥ 1;
+1 = brak efektu; spec L), `description` i pozostałe pola treści z `content/gatunki.yaml` (nowe pola mogą
+dochodzić). `reviewed: false` — treści niezweryfikowane przez
 mykologa.
 
 ## `live/pogoda.json`
@@ -197,7 +208,7 @@ kontener `forecast` nie liczy pogody dla 12 nowych gatunków.
 ## Źródła i licencje
 
 - Bank Danych o Lasach (BDL), PGL Lasy Państwowe — wydzielenia i opisy taksacyjne.
-- Rezerwaty przyrody: GDOŚ. Parkingi: © OpenStreetMap (ODbL).
+- Rezerwaty przyrody: GDOŚ. Parkingi i wody (wilgotność miejsca): © OpenStreetMap (ODbL), wycinki Geofabrik.
 - Pogoda: Open-Meteo (CC BY 4.0).
 - Model terenu: Copernicus DEM GLO-30 © DLR e.V. 2010–2014 i © Airbus Defence and Space GmbH
   2014–2018, dostarczone w ramach programu Copernicus.

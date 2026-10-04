@@ -14,6 +14,27 @@ factors_default:
   twi: {}
   exposure: {S_STEEP: 0.85, OTHER: 1.0}
 
+# Wilgotność miejsca (spec L): surowa wartość = suma ważona składników 0–1, potem percentyl w obszarze
+# (wet 0–100, mediana 50). Klient: w_eff = min(1, w · rain^(γ−1)), γ = G^(1 − 2·wet/100), G = wet_gamma
+# gatunku (domyślnie 3). Walidacja GBIF (spec L §4): siedlisko, gleba, rowy i TWI obniżały AUC (dublują h),
+# więc mają wagę 0 — liczone tylko diagnostycznie; zostaje bufor fizyczny: woda i obniżenie terenu.
+water:
+  weights: {water: 0.6, ditch: 0.0, valley: 0.4, habitat: 0.0, soil: 0.0, twi: 0.0}
+  water_dist: [50, 500]   # m od krawędzi wydzielenia: 1.0 do pierwszej, liniowo do 0 przy drugiej
+  ditch_dist: [20, 150]
+  habitat_types:  # typ siedliskowy -> wartość (prefiks "@" = zestaw z habitat_sets); brak = default
+    default: 0.2
+    values:
+      1.0: [OL, OLJ, OLJWYZ, OLJG, OLG, BB, BGB, BMB, BMGB, LMB, "@bory_bagienne", "@bory_mieszane_bagienne"]
+      0.8: [LL, LLG, LLWYZ]
+      0.6: ["@bory_wilgotne", "@bory_mieszane_wilgotne", "@lasy_mieszane_wilgotne", "@lasy_wilgotne"]
+      0.1: [BSW, BGSW]
+      0.0: [BS]
+  moist_codes: {SU: 0.0, S: 0.2, SS: 0.2, WSW: 0.5, WW: 0.6, WO: 0.6, LN: 0.7, LP: 0.7, LZ: 0.9,
+                BO: 1.0, BM: 1.0, BSO: 1.0, BBM: 1.0}
+  soil_groups: {G: 1.0, OG: 1.0, OGS: 1.0, MR: 1.0, T: 1.0, M: 1.0, CZ: 1.0, MD: 0.7, AU: 0.7}
+  soil_gleyed: 0.5   # "g" w podtypie gleby (oglejona, np. Bgms)
+
 # Zestawy siedlisk (spec K): element listy preferred/adjacent "@nazwa" rozwija się do kodów zestawu.
 habitat_sets:
   bory_ubogie: [BS, BSW, BGSW]
@@ -39,8 +60,13 @@ species:
     rain_min: 10
     rain_full: 40
     soil_moisture_min: 0.15
+    # spec L §1b: dąb, trawa, słońce — dąb premiowany, bez kary za zadarnienie i rzadki drzewostan
+    partner_weights: {DB: 1.0, BK: 0.9, SO: 0.85, SW: 0.85}
+    wet_gamma: 1.5  # spec L: słabszy efekt wilgotności miejsca (walidacja GBIF: G > 1.5 obniża AUC)
     factors:
       soil: {G: 0.85, OG: 0.85, MD: 0.85}
+      veg: {}
+      density: [[0.9, 1.0], [1.0, 0.9]]
   podgrzybek:
     group: podgrzybki
     name: "Podgrzybek brunatny"

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from forecast.species import expand_habitat_list
+from forecast.species import DEFAULT_WET_GAMMA, expand_habitat_list
 
 ROOT = Path(__file__).resolve().parent.parent
 SPECIES_PATH = ROOT / "species.yaml"
@@ -81,6 +81,7 @@ def build_info(species_yaml: dict, content: dict) -> dict:
                            for lk in text["lookalikes"]],
             "wiki": text["wiki"],
             "group": sp.get("group"),
+            "wet_gamma": float(sp.get("wet_gamma", DEFAULT_WET_GAMMA)),
         })
     return {"reviewed": bool(content["reviewed"]), "species": out,
             "groups": _groups(species_yaml, content)}

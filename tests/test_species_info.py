@@ -47,7 +47,7 @@ def test_build_info_translates_and_keeps_order():
         "age_min": 30, "description": "Db.",
         "lookalikes": [{"name": "X", "latin": "Lx", "risk": "trujący", "how": "H."}],
         "wiki": "https://pl.wikipedia.org/wiki/B",
-        "group": None,
+        "group": None, "wet_gamma": 3.0,
     }
     assert out["groups"] == []
 

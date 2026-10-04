@@ -1,4 +1,4 @@
-"""Teren z Copernicus DEM GLO-30 (spec I): TWI, nachylenie i wystawa dla wydzieleń -> terrain.parquet.
+"""Teren z Copernicus DEM GLO-30 (spec I, L): TWI, nachylenie, wystawa i TPI dla wydzieleń -> terrain.parquet.
 
 Część pierwsza: czyste funkcje rastrowe (numpy + pysheds), testowane na syntetycznych DEM.
 """
@@ -17,6 +17,7 @@ MIN_SLOPE_DEG = 0.1
 STEEP_DEG = 10.0
 SOUTH = (135.0, 225.0)
 NODATA = -9999.0
+TPI_WINDOW_M = 1000.0  # okno TPI ~ promień 500 m
 
 
 def _masked(dem: np.ndarray, nodata: float | None) -> np.ndarray:
@@ -59,6 +60,22 @@ def twi(acc: np.ndarray, slope_deg: np.ndarray, pixel: float = PIXEL_M) -> np.nd
     tanb = np.maximum(np.tan(np.radians(slope_deg)), np.tan(np.radians(MIN_SLOPE_DEG)))
     with np.errstate(invalid="ignore"):
         return np.log(a / tanb)
+
+
+def tpi(dem: np.ndarray, window_m: float = TPI_WINDOW_M, pixel: float = PIXEL_M,
+        nodata: float | None = None) -> np.ndarray:
+    """Wyniesienie nad otoczenie (spec L): wysokość − średnia w kwadratowym oknie `window_m`;
+    piksele bez danych pomijane w średniej, same dostają nan."""
+    from scipy.ndimage import uniform_filter
+    z = _masked(dem, nodata)
+    valid = np.isfinite(z)
+    size = max(3, int(round(window_m / pixel)) | 1)  # nieparzysty rozmiar okna
+    total = uniform_filter(np.where(valid, z, 0.0), size=size, mode="nearest")
+    count = uniform_filter(valid.astype(np.float64), size=size, mode="nearest")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out = z - total / count
+    out[~valid] = np.nan
+    return out
 
 
 def circular_mean_deg(sin_mean: float, cos_mean: float) -> float:
@@ -155,8 +172,8 @@ def window_dem(paths: list[Path], bounds_2180: tuple[float, float, float, float]
 
 
 def zonal(stands_2180: gpd.GeoDataFrame, twi: np.ndarray, slope: np.ndarray, aspect: np.ndarray,
-          transform) -> pd.DataFrame:
-    """Mediana TWI, średnie nachylenie i kołowa średnia wystawy dla wydzieleń.
+          transform, tpi: np.ndarray | None = None) -> pd.DataFrame:
+    """Mediana TWI, średnie nachylenie i kołowa średnia wystawy dla wydzieleń (opcjonalnie średnie TPI).
 
     Raster etykiet (piksel należy do wydzielenia, którego poligon zawiera środek piksela);
     wydzielenie bez własnego piksela (mniejsze niż 30 m) dostaje wartości piksela pod swoim
@@ -167,11 +184,12 @@ def zonal(stands_2180: gpd.GeoDataFrame, twi: np.ndarray, slope: np.ndarray, asp
                                 out_shape=shape, transform=transform, fill=0, dtype="int32")
     rad = np.radians(aspect)
     valid = (labels > 0) & np.isfinite(twi) & np.isfinite(slope) & np.isfinite(aspect)
+    tpi_arr = np.full(shape, np.nan) if tpi is None else tpi
     df = pd.DataFrame({"l": labels[valid], "twi": twi[valid], "slope": slope[valid],
-                       "sin": np.sin(rad[valid]), "cos": np.cos(rad[valid])})
+                       "sin": np.sin(rad[valid]), "cos": np.cos(rad[valid]), "tpi": tpi_arr[valid]})
     g = df.groupby("l")
     stats = pd.DataFrame({"twi": g["twi"].median(), "slope": g["slope"].mean(),
-                          "sin": g["sin"].mean(), "cos": g["cos"].mean()})
+                          "sin": g["sin"].mean(), "cos": g["cos"].mean(), "tpi": g["tpi"].mean()})
     missing = [i for i in range(1, n + 1) if i not in stats.index]
     if missing:
         rows = []
@@ -180,18 +198,21 @@ def zonal(stands_2180: gpd.GeoDataFrame, twi: np.ndarray, slope: np.ndarray, asp
             r, c = rowcol(transform, p.x, p.y)
             if 0 <= r < shape[0] and 0 <= c < shape[1] and np.isfinite(twi[r, c]):
                 a = math.radians(aspect[r, c])
-                rows.append((i, twi[r, c], slope[r, c], math.sin(a), math.cos(a)))
+                rows.append((i, twi[r, c], slope[r, c], math.sin(a), math.cos(a), tpi_arr[r, c]))
         if rows:
-            extra = pd.DataFrame(rows, columns=["l", "twi", "slope", "sin", "cos"]).set_index("l")
+            extra = pd.DataFrame(rows, columns=["l", "twi", "slope", "sin", "cos", "tpi"]).set_index("l")
             stats = pd.concat([stats, extra])
     idx = stats.index.to_numpy() - 1
-    return pd.DataFrame({
+    out = pd.DataFrame({
         "prefix": stands_2180["prefix"].to_numpy()[idx],
         "a_i_num": stands_2180["a_i_num"].to_numpy()[idx],
         "twi": stats["twi"].to_numpy(),
         "slope": stats["slope"].to_numpy(),
         "aspect": [circular_mean_deg(s, c) for s, c in zip(stats["sin"], stats["cos"])],
-    }).sort_values(["prefix", "a_i_num"]).reset_index(drop=True)
+    })
+    if tpi is not None:
+        out["tpi"] = stats["tpi"].to_numpy()
+    return out.sort_values(["prefix", "a_i_num"]).reset_index(drop=True)
 
 
 def terrain_for_tile(paths, core_2180, stands_2180: gpd.GeoDataFrame) -> pd.DataFrame:
@@ -202,7 +223,7 @@ def terrain_for_tile(paths, core_2180, stands_2180: gpd.GeoDataFrame) -> pd.Data
     dem, tr = window_dem(paths, bounds)
     slope, aspect = slope_aspect(dem, nodata=NODATA)
     t = twi(flow_accumulation(dem, nodata=NODATA), slope)
-    return zonal(stands_2180, t, slope, aspect, tr)
+    return zonal(stands_2180, t, slope, aspect, tr, tpi=tpi(dem, nodata=NODATA))
 
 
 def main(argv=None) -> int:
@@ -238,7 +259,7 @@ def main(argv=None) -> int:
         print(f"teren: kafel N{lat} E{lon}, wydzieleń {int(sel.sum())}", file=sys.stderr)
         parts.append(terrain_for_tile(paths, core_2180, stands_2180[sel.to_numpy()].reset_index(drop=True)))
     df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
-        columns=["prefix", "a_i_num", "twi", "slope", "aspect"])
+        columns=["prefix", "a_i_num", "twi", "slope", "aspect", "tpi"])
     classes, terciles = twi_classes(df["twi"].to_numpy()) if len(df) else ([], (math.nan, math.nan))
     df["twi_class"] = classes
     df["exposure"] = [exposure_class(s, a) for s, a in zip(df["slope"], df["aspect"])]

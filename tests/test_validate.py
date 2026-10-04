@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import box
 
+from tests.generic_species import generic_species
 from forecast.species import load_species
 from pipeline.habitat import HABITAT_FACTORS
 from forecast.model import DailySeries
@@ -16,7 +17,7 @@ from pipeline.validate import (
     BG_RATIO, DEFAULT_OUT, TOO_FEW, auc, build_report, habitat_eval, join_stands, main, render_md, weather_eval,
 )
 
-S = load_species()
+S = generic_species()
 GOOD = ("SO", (), 80, "BSW", ())   # borowik/podgrzybek: h = 1
 BAD = ("OL", (), 60, "OL", ())     # h = 0 dla wszystkich
 
@@ -236,3 +237,27 @@ def test_habitat_eval_uses_bdl_modifier_columns():
     st["veg"] = ["MSZ"] * 30 + ["ZAD"] * 30
     r = habitat_eval("borowik", S["borowik"], st, set(range(30)), set(range(30, 60)))
     assert r["habitat"]["factors"]["veg"]["auc"] == 1.0
+
+
+# --- wilgotność miejsca (spec L) ---
+
+def test_wet_eval_rewards_wet_presence_on_dry_day():
+    from pipeline.validate import stand_cells, wet_eval
+    # 30 jednakowych wydzieleń w jednej kratce; obserwacje na 3 najwilgotniejszych, dzień suchy
+    st = stands_gdf([GOOD] * 30, size=0.002)
+    st["wet"] = pd.array([90, 95, 99] + [20] * 27, dtype="Int64")
+    pres = pd.DataFrame({"species": "borowik", "gbif_id": [0, 1, 2], "stand": [0, 1, 2],
+                         "date": [PRES_DAY - timedelta(days=6)] * 3})  # opad poza oknem rdzenia -> rain < 0.8
+    cells = stand_cells(st)
+    assert len(set(cells)) == 1
+    r = wet_eval("borowik", S["borowik"], pres, st, cells, series_for(wet_series()))
+    assert r["n"] == 3 and r["n_dry"] == 3
+    assert r["all"]["auc"] == pytest.approx(0.5) and r["all"]["auc_wet"] > 0.9
+
+
+def test_wet_eval_without_wet_column_is_neutral():
+    from pipeline.validate import stand_cells, wet_eval
+    st = stands_gdf([GOOD] * 5, size=0.002)
+    pres = pd.DataFrame({"species": "borowik", "gbif_id": [0], "stand": [0], "date": [PRES_DAY]})
+    r = wet_eval("borowik", S["borowik"], pres, st, stand_cells(st), series_for(wet_series()))
+    assert r["all"]["auc"] == r["all"]["auc_wet"]

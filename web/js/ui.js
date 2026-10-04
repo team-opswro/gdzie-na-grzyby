@@ -1,4 +1,4 @@
-import { SPECIES, bestFor, loadData, loadSpecies, availableDays, bannerText, groupsOf, selectionValues, selectionKeys, isMulti } from "./data.js";
+import { SPECIES, bestFor, loadData, loadSpecies, setWetGammas, availableDays, bannerText, groupsOf, selectionValues, selectionKeys, isMulti } from "./data.js";
 import { buildSpeciesOptions } from "./select.js";
 import { loadConfig, loadManifest, fileUrl } from "./config.js";
 import { createCentroidStore } from "./tiles.js";
@@ -54,6 +54,7 @@ export async function init() {
   const mapDataError = manifest.missing || !pmtilesUrl;
   if (mapDataError) showBanner();
   const { list: speciesList, info: speciesInfo } = await loadSpecies(fileUrl(dataBase, manifest, "gatunki"));
+  setWetGammas(speciesList); // siła efektu wilgotności miejsca per gatunek (spec L)
   const groups = groupsOf(speciesInfo);
   const hash = parseHash(location.hash, selectionValues(speciesList, groups));
   const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
@@ -268,7 +269,7 @@ export async function init() {
     try {
       const rows = await centroids.rowsNear(o, radius);
       if (seq !== rankingSeq) return;
-      top = topN({ species: centroids.species, rows }, effective, keys(), dayIdx(), o, radius);
+      top = topN({ species: centroids.species, extra: centroids.extra, rows }, effective, keys(), dayIdx(), o, radius);
     } catch (e) {
       console.warn("Ranking:", e);
       setBusy("false");
@@ -290,8 +291,8 @@ export async function init() {
       const tr = document.createElement("span");
       tr.className = "rank-trend";
       const t = r.best.hBy
-        ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, r.best.hBy, i)?.score ?? null), dayIdx())
-        : trend(effective, r.best.cell, keys()[0], r.best.h, dayIdx());
+        ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, r.best.hBy, i, r.best.wet)?.score ?? null), dayIdx())
+        : trend(effective, r.best.cell, keys()[0], r.best.h, dayIdx(), r.best.wet);
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;

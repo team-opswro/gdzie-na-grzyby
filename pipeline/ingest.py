@@ -29,6 +29,7 @@ DEFAULT_PACKAGES = ROOT / "Nadlesnictwa"
 DEFAULT_DB = DATA_DIR / "bdl.duckdb"
 DEFAULT_PARQUET = DATA_DIR / "stands.parquet"
 DEFAULT_TERRAIN = DATA_DIR / "terrain.parquet"  # pipeline.terrain (spec I), opcjonalny
+DEFAULT_WETNESS = DATA_DIR / "wetness.parquet"  # pipeline.wetness (spec L), opcjonalny
 DEFAULT_OUTLINE = DATA_DIR / "nadlesnictwa.geojson"
 DEFAULT_RAW = DATA_DIR / "raw"
 FIELDS_YAML = Path(__file__).resolve().parent / "bdl_fields.yaml"
@@ -494,7 +495,8 @@ def _partners(items) -> tuple:
 
 
 def load_stands(db_path: Path, parquet_path: Path,
-                terrain_path: Path | None = DEFAULT_TERRAIN) -> gpd.GeoDataFrame:
+                terrain_path: Path | None = DEFAULT_TERRAIN,
+                wetness_path: Path | None = DEFAULT_WETNESS) -> gpd.GeoDataFrame:
     """Drzewostany (D-STAN z gatunkiem panującym) z bazy + geometrie; EPSG:4326.
 
     Kolumny: id, sp_main, sp_admix (kody partnerów bez panującego), partners
@@ -513,6 +515,12 @@ def load_stands(db_path: Path, parquet_path: Path,
     else:
         df["twi_class"] = None
         df["exposure"] = None
+    if wetness_path is not None and Path(wetness_path).exists():
+        wet = pd.read_parquet(wetness_path, columns=["prefix", "a_i_num", "wet", "wl"])
+        df = df.merge(wet.drop_duplicates(["prefix", "a_i_num"]), on=["prefix", "a_i_num"], how="left")
+    else:
+        df["wet"] = None
+        df["wl"] = None
 
     sp_main = df["sp_main"].map(normalize_species_code)
     # partnerzy bez żadnego wiersza gatunku panującego (w dowolnym piętrze)
@@ -540,6 +548,9 @@ def load_stands(db_path: Path, parquet_path: Path,
             "density": pd.to_numeric(df["density"], errors="coerce").astype(float).values,
             "twi_class": _codes(df["twi_class"], str),
             "exposure": _codes(df["exposure"], str),
+            # wilgotność miejsca (spec L): 0–100 lub brak; kod powodu
+            "wet": pd.array(pd.to_numeric(df["wet"], errors="coerce"), dtype="Int64"),
+            "wl": _codes(df["wl"], str),
             "prefix": df["prefix"].values,
         },
         geometry=df.geometry.values,

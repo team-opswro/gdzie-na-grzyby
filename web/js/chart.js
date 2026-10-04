@@ -7,10 +7,10 @@ const MAX_DAYS = 7;
 const TREND_THRESHOLD = 5;
 const PEAK_MARGIN = 5;
 
-function scoreAtFor(pogoda, cell, species, h) {
+function scoreAtFor(pogoda, cell, species, h, wet = null) {
   return (idx) => {
     if (idx < 0) return null;
-    const wf = weatherFor(pogoda, cell, species, idx);
+    const wf = weatherFor(pogoda, cell, species, idx, wet);
     return wf ? score(h, wf.w) : null;
   };
 }
@@ -45,11 +45,12 @@ export function trendBy(pogoda, scoreAt, dayIdx) {
   return { dir, delta, peak };
 }
 
-export const chartData = (pogoda, cell, species, h, todayIso) =>
-  chartDataBy(pogoda, scoreAtFor(pogoda, cell, species, h), todayIso);
+// wet: wilgotność miejsca wydzielenia (spec L), opcjonalna.
+export const chartData = (pogoda, cell, species, h, todayIso, wet = null) =>
+  chartDataBy(pogoda, scoreAtFor(pogoda, cell, species, h, wet), todayIso);
 
-export const trend = (pogoda, cell, species, h, dayIdx) =>
-  trendBy(pogoda, scoreAtFor(pogoda, cell, species, h), dayIdx);
+export const trend = (pogoda, cell, species, h, dayIdx, wet = null) =>
+  trendBy(pogoda, scoreAtFor(pogoda, cell, species, h, wet), dayIdx);
 
 function dayParts(iso) {
   const d = new Date(`${iso}T00:00:00Z`);

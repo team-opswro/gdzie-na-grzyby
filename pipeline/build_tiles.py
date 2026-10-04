@@ -140,16 +140,25 @@ def tile_key(lat: float, lon: float) -> str:
     return f"{lo(lat):.1f}_{lo(lon):.1f}"
 
 
+# kolumny wiersza centroidu po h_* (spec L): stary klient czyta h po indeksach i je ignoruje
+CENTROID_EXTRA = ["wet"]
+
+
+def _int_or_none(v):
+    return None if v is None or pd.isna(v) else int(v)
+
+
 def centroid_rows(gdf, keys: list[str], threshold: int = CENTROID_THRESHOLD) -> list[list]:
-    """Wiersze [id, lat, lon, cell, h_...] wydzieleń z max h >= threshold, bez rezerwatów."""
+    """Wiersze [id, lat, lon, cell, h_..., wet] wydzieleń z max h >= threshold, bez rezerwatów."""
     cols = [f"h_{k}" for k in keys]
     sel = gdf[gdf[cols].max(axis=1) >= threshold]
     if "rez" in sel.columns:
         sel = sel[sel["rez"].isna()]
+    wet = sel["wet"].tolist() if "wet" in sel.columns else [None] * len(sel)
     return [
-        [i, round(float(la), 5), round(float(lo), 5), c, *[int(v) for v in hs]]
-        for i, la, lo, c, hs in zip(sel["id"], sel["lat"], sel["lon"], sel["cell"],
-                                    sel[cols].to_numpy())
+        [i, round(float(la), 5), round(float(lo), 5), c, *[int(v) for v in hs], _int_or_none(w)]
+        for i, la, lo, c, hs, w in zip(sel["id"], sel["lat"], sel["lon"], sel["cell"],
+                                       sel[cols].to_numpy(), wet)
     ]
 
 
@@ -167,7 +176,7 @@ def write_centroid_tiles(gdf, keys: list[str], out_dir: Path,
     for key, rows in tiles.items():
         (out_dir / f"{key}.json").write_text(json.dumps({"rows": rows}, separators=(",", ":")),
                                              encoding="utf-8")
-    index = {"tile": CENTROID_TILE, "species": list(keys), "tiles": sorted(tiles)}
+    index = {"tile": CENTROID_TILE, "species": list(keys), "extra": CENTROID_EXTRA, "tiles": sorted(tiles)}
     (out_dir / "index.json").write_text(json.dumps(index, separators=(",", ":")),
                                         encoding="utf-8")
     return index
@@ -191,6 +200,12 @@ def write_geojsonseq(gdf, keys: list[str], path: Path) -> None:
             rez = getattr(rec, "rez", None)
             if isinstance(rez, str) and rez:
                 props["rez"] = rez
+            wet = _int_or_none(getattr(rec, "wet", None))  # wilgotność miejsca (spec L)
+            if wet is not None:
+                props["wet"] = wet
+                wl = getattr(rec, "wl", None)
+                if isinstance(wl, str) and wl:
+                    props["wl"] = wl
             props = {k: v for k, v in props.items() if v is not None}
             fh.write(json.dumps({"type": "Feature", "properties": props,
                                  "geometry": json.loads(shapely.to_geojson(geom))},
