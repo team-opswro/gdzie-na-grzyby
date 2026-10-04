@@ -108,8 +108,11 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
             comps = [weather_multiplier(s, i, sp) for i in idx]
             per_species[key] = {
                 name: [round(getattr(c, name), DIGITS) for c in comps]
-                for name in ("w", "rain", "temp", "season", "pulse", "frost")
+                for name in ("w", "rain", "moist", "temp", "season", "pulse", "frost")
             }
+            # bez et0 nie ma bilansu wody: moist pomijane, klient liczy korektę wilgotności miejsca z rain
+            if s.et0 is None:
+                del per_species[key]["moist"]
             # neutralne składowe (same 1.0: brak ochłodzenia / przymrozku) pomijane — brak = 1.0
             for name in ("pulse", "frost"):
                 if all(v == 1.0 for v in per_species[key][name]):
@@ -123,7 +126,10 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
             "rain_mm": [round(v.rain_mm, 1) for v in vals],
             "soil_t": [round(v.soil_t, 1) for v in vals],
             "soil_m": [round(v.soil_m, 3) for v in vals],
+            "dry_days": [v.dry_days for v in vals],
         }
+        if all(v.water is not None for v in vals):
+            wx[cid]["water"] = [round(v.water, 2) for v in vals]
         if all(v.et0_mm is not None for v in vals):
             wx[cid]["et0_mm"] = [round(v.et0_mm, 1) for v in vals]
         if all(v.soil_m_deep is not None for v in vals):

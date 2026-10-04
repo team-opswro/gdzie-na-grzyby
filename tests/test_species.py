@@ -14,7 +14,8 @@ def test_borowik_values():
     b = load_species()["borowik"]
     assert b.partners == {"SO", "SW", "BK", "DB"} and b.age_max is None
     assert b.temp == (6, 12, 20, 26) and b.season_start == (7, 1) and b.season_end == (10, 31)
-    assert b.rain_min == 10 and b.rain_full == 40 and b.soil_moisture_min == 0.15
+    assert b.rain_min == 10 and b.rain_full == 40
+    assert not hasattr(b, "soil_moisture_min")
     assert b.frost_min == -2.0
 
 

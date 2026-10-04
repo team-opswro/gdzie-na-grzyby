@@ -46,7 +46,9 @@
         "soil_m": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}},
         "et0_mm": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0}},
         "soil_m_deep": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}},
-        "t2m_min": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number"}}
+        "t2m_min": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number"}},
+        "water": {"$ref": "#/$defs/series"},
+        "dry_days": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "integer", "minimum": 0}}
       }
     },
     "species": {
@@ -56,6 +58,7 @@
       "properties": {
         "w": {"$ref": "#/$defs/series"},
         "rain": {"$ref": "#/$defs/series"},
+        "moist": {"$ref": "#/$defs/series"},
         "temp": {"$ref": "#/$defs/series"},
         "season": {"$ref": "#/$defs/series"},
         "pulse": {"$ref": "#/$defs/series_pulse"},

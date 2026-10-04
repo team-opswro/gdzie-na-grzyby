@@ -89,9 +89,9 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
   - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione),
   - `wet` — wilgotność miejsca 0–100 (percentyl w obszarze, mediana 50; spec L): bufor wodny wydzielenia
     z bliskości wód stojących, rzek i mokradeł (OSM) oraz położenia w rzeźbie (TPI z GLO-30); opcjonalny.
-    Gdy jest, klient koryguje mnożnik pogody: `w_eff = min(1, w · rain^(γ−1))`, `γ = G^(1 − 2·wet/100)`,
-    `G` = `wet_gamma` gatunku z `gatunki.json` (brak = 3), `rain` z `pogoda.json`; `rain` = 0 lub brak
-    `wet`/`rain` → `w` bez zmian; wynik dnia = `round(h × w_eff)`,
+    Gdy jest, klient koryguje mnożnik pogody: `w_eff = min(1, w · m^(γ−1))`, `γ = G^(1 − 2·wet/100)`,
+    `G` = `wet_gamma` gatunku z `gatunki.json` (brak = 3), `m` = `moist` z `pogoda.json` (spec M), a gdy go
+    brak (plik sprzed specu M) — `rain`; `m` = 0 lub brak `wet`/`m` → `w` bez zmian; wynik dnia = `round(h × w_eff)`,
   - `wl` — powód wartości `wet` (tylko przy `wet` ≥ 65 lub ≤ 35): `water` (blisko wody), `valley` (obniżenie),
     `hilltop` (wyniesienie), `dry` (z dala od wody); opcjonalny; w przyszłości mogą dojść inne kody.
 - `rezerwaty` — obrysy rezerwatów przyrody (GDOŚ), atrybut `name` (opcjonalny).
@@ -165,10 +165,10 @@ schemat: `schema/pogoda.schema.json`.
 {
  "generated_at": "2026-10-03T14:00:12+02:00",
  "days": ["2026-10-02", "2026-10-03", "…", "2026-10-09"],
- "wx": {"493_189": {"rain_mm": [0.0, …], "soil_t": [9.8, …], "soil_m": [0.312, …]}},
+ "wx": {"493_189": {"rain_mm": [0.0, …], "soil_t": [9.8, …], "soil_m": [0.312, …], "dry_days": [9, …]}},
  "cells": {
   "493_189": {
-   "borowik": {"w": [0.41, …], "rain": [0.8, …], "temp": [0.9, …], "season": [1.0, …],
+   "borowik": {"w": [0.41, …], "rain": [0.8, …], "moist": [0.6, …], "temp": [0.9, …], "season": [1.0, …],
                "lim": ["dry", null, …]}
   }
  }
@@ -176,17 +176,22 @@ schemat: `schema/pogoda.schema.json`.
 ```
 
 - `days` — 8 dni: wczoraj, dziś i 6 kolejnych; każda tablica dzienna ma 8 elementów w tej kolejności.
-- `cells[cell][gatunek]` — mnożnik pogodowy `w` (0–1) i jego składowe `rain`, `temp`, `season` (0–1);
+- `cells[cell][gatunek]` — mnożnik pogodowy `w` (0–1) i jego składowe `rain` (impuls: ważony opad sprzed
+  5–21 dni), `moist` (wilgotność podłoża teraz z bilansu wody: opad − 0,8·ET0, wiadro 25 mm; od spec M,
+  w starszych plikach i przy braku ET0 w prognozie brak), `temp`, `season` (0–1); `w = rain × moist × temp × season × pulse × frost` (≤ 1);
   opcjonalnie `pulse` (1.0–1.2, premia za ochłodzenie gleby) i `frost` (0–1, kara za niedawny przymrozek) —
   pomijane, gdy przez wszystkie dni wynoszą 1.0 (brak = 1.0); plik zapisywany bez zbędnych spacji;
-  `lim` — czynnik ograniczający dnia: `dry` (za mało opadu), `dry_soil` (sucha gleba), `cold`, `hot`,
+  `lim` — czynnik ograniczający dnia: `dry` (za mało opadu w oknie impulsu), `dry_soil`
+  (przesuszone podłoże — od spec M liczone z `moist`, wcześniej z wilgotności gleby Open-Meteo), `cold`, `hot`,
   `season` (poza sezonem), `frost` (niedawny przymrozek) albo `null`.
 - `wx[cell]` — wartości, z których liczony jest mnożnik dnia: `rain_mm` (suma
   opadu w oknie poprzedzających dni, mm), `soil_t` (średnia temperatura gleby na 6 cm z ostatnich dni,
   °C), `soil_m` (średnia wilgotność gleby 3–9 cm z ostatnich dni, m³/m³). Gdy prognoza zawiera nowe
   zmienne Open-Meteo, opcjonalnie dodawane są: `et0_mm` (suma parowania odniesienia ET0 w tym samym
   oknie, mm), `soil_m_deep` (średnia wilgotność gleby 9–27 cm, m³/m³), `t2m_min` (minimum temperatury
-  powietrza z ostatnich 7 dni, °C).
+  powietrza z ostatnich 7 dni, °C), `water` (zapas wody w podłożu na początek dnia, 0–1; spec M).
+  Zawsze (od spec M; w starszych plikach brak): `dry_days` — pełne dni bez opadu ≥ 1 mm przed danym dniem
+  (liczba całkowita; maksymalnie długość historii serii, ok. 30).
 - Prognoza starsza niż 36 h jest nieaktualna (strona pokazuje wtedy baner i samą ocenę siedliska).
 
 ## Wersjonowanie i zgodność

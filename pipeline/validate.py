@@ -39,7 +39,7 @@ DEFAULT_CACHE = DATA_DIR / "raw"
 CONTENT_PATH = ROOT / "content" / "gatunki.yaml"
 WX_COMPONENTS = [f.name for f in dataclasses.fields(WeatherComponents) if f.name != "w"]
 WET_BG_PER_PRESENCE = 20
-DRY_RAIN = 0.8  # dzień „suchy” w raporcie wilgotności miejsca: składowa opadu < DRY_RAIN
+DRY_MOIST = 0.8  # dzień „suchy” w raporcie wilgotności miejsca: wilgotność podłoża (moist, spec M) < DRY_MOIST
 
 
 def auc(pos: Sequence[float], neg: Sequence[float]) -> float | None:
@@ -188,15 +188,15 @@ def wet_eval(key: str, sp: Species, pres_j: pd.DataFrame, stands: gpd.GeoDataFra
         if not others:
             continue
         neg = rng.sample(others, min(WET_BG_PER_PRESENCE, len(others)))
-        groups = ["all"] + (["dry"] if c.rain < DRY_RAIN else [])
+        groups = ["all"] + (["dry"] if c.moist < DRY_MOIST else [])
         n += 1
-        n_dry += c.rain < DRY_RAIN
+        n_dry += c.moist < DRY_MOIST
         for g in groups:
             ph, nh, pe, ne = acc[g]
             ph.append(h(i) * c.w)
-            pe.append(h(i) * adjust(c.w, c.rain, wv(i)))
+            pe.append(h(i) * adjust(c.w, c.moist, wv(i)))
             nh.extend(h(j) * c.w for j in neg)
-            ne.extend(h(j) * adjust(c.w, c.rain, wv(j)) for j in neg)
+            ne.extend(h(j) * adjust(c.w, c.moist, wv(j)) for j in neg)
     out = {"n": n, "n_dry": n_dry}
     for g, (ph, nh, pe, ne) in acc.items():
         out[g] = {"auc": auc(ph, nh), "auc_wet": auc(pe, ne)}

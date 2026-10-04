@@ -59,7 +59,7 @@ def test_wx_values_and_lim():
     p = payload()
     for cid in ("506_178", "507_178"):
         wx = p["wx"][cid]
-        assert set(wx) == {"rain_mm", "soil_t", "soil_m"}
+        assert set(wx) == {"rain_mm", "soil_t", "soil_m", "dry_days"}
         assert all(len(v) == 8 for v in wx.values())
     assert p["wx"]["506_178"]["rain_mm"][1] == 51.0  # 17 dni * 3,0 mm
     assert p["wx"]["507_178"]["rain_mm"][1] == 0.0
@@ -92,8 +92,11 @@ def test_current_format_without_new_fields_validates():
         for sp in cell.values():
             sp.pop("pulse", None), sp.pop("frost", None)
     for w in p["wx"].values():
-        for k in ("et0_mm", "soil_m_deep", "t2m_min"):
+        for k in ("et0_mm", "soil_m_deep", "t2m_min", "water", "dry_days"):
             w.pop(k, None)
+    for cell in p["cells"].values():
+        for sp in cell.values():
+            sp.pop("moist", None)  # sprzed specu M
     jsonschema.validate(p, SCHEMA)
 
 
@@ -129,6 +132,21 @@ def test_payload_has_pulse_frost_and_wx_extras():
     jsonschema.validate(p, SCHEMA)
 
 
+def test_payload_has_moist_water_and_dry_days():
+    series = {"506_178": make_series(3.0, et0=1.5), "507_178": make_series(0.0, et0=3.0)}
+    p = build_payload(CELLS, series, load_species(), TODAY, NOW)
+    for sp in SPECIES_KEYS:
+        assert len(p["cells"]["506_178"][sp]["moist"]) == 8
+    assert p["cells"]["506_178"]["borowik"]["moist"][1] == 1.0   # codzienny deszcz > parowanie
+    assert p["cells"]["507_178"]["borowik"]["moist"][1] == 0.1   # 30 dni bez deszczu -> podłoga
+    assert p["wx"]["506_178"]["water"][1] == 1.0
+    assert p["wx"]["507_178"]["water"][1] == 0.0
+    assert p["wx"]["506_178"]["dry_days"][1] == 0
+    assert p["wx"]["507_178"]["dry_days"][1] == 30
+    assert all(isinstance(v, int) for v in p["wx"]["507_178"]["dry_days"])
+    jsonschema.validate(p, SCHEMA)
+
+
 def test_payload_frost_lim_appears_for_recent_frost():
     t2m = [5.0] * 37
     t2m[30] = -5.0  # przymrozek w dniu i
@@ -153,6 +171,8 @@ def test_payload_without_new_series_omits_wx_extras():
         assert "et0_mm" not in wx
         assert "soil_m_deep" not in wx
         assert "t2m_min" not in wx
+        assert "water" not in wx
+    assert "moist" not in p["cells"]["506_178"]["borowik"]  # bez et0 brak bilansu -> klient użyje rain
     jsonschema.validate(p, SCHEMA)
 
 

@@ -15,7 +15,7 @@ test("weatherFor returns fixture values", () => {
   const w = weatherFor(P, "506_178", "borowik", 2);
   const src = P.cells["506_178"].borowik;
   assert.deepEqual(w, {
-    w: src.w[2], rain: src.rain[2], temp: src.temp[2], season: src.season[2],
+    w: src.w[2], rain: src.rain[2], moist: null, temp: src.temp[2], season: src.season[2],
     pulse: src.pulse?.[2] ?? null,
     frost: src.frost?.[2] ?? null,
     lim: src.lim[2] ?? null,
@@ -41,7 +41,7 @@ test("weatherFor on v1 fixture: lim and wx null", () => {
   const cell = Object.keys(V1.cells)[0];
   const src = V1.cells[cell].borowik;
   assert.deepEqual(weatherFor(V1, cell, "borowik", 0),
-    { w: src.w[0], rain: src.rain[0], temp: src.temp[0], season: src.season[0], pulse: null, frost: null, lim: null, wx: null });
+    { w: src.w[0], rain: src.rain[0], moist: null, temp: src.temp[0], season: src.season[0], pulse: null, frost: null, lim: null, wx: null });
 });
 test("weatherFor cell absent from wx → wx null", () => {
   const Q = { ...P, wx: {} };
@@ -298,4 +298,24 @@ test("wet_gamma per gatunek z gatunki.json; brak → domyślne", () => {
   } finally {
     setWetGammas([]);
   }
+});
+
+test("weatherFor: moist, zapas wody i dni bez deszczu (spec M)", () => {
+  const Q = JSON.parse(JSON.stringify(P));
+  Q.cells["506_178"].borowik.moist = [1, 1, 0.44];
+  Q.wx["506_178"].water = [1, 1, 0.33];
+  Q.wx["506_178"].dry_days = [0, 0, 9];
+  const r = weatherFor(Q, "506_178", "borowik", 2);
+  assert.equal(r.moist, 0.44);
+  assert.equal(r.wx.water, 0.33);
+  assert.equal(r.wx.dry_days, 9);
+});
+
+test("weatherFor: korekta wilgotności miejsca z moist, a bez moist z rain", () => {
+  const mk = (sp) => ({ days: ["d"], cells: { c: { borowik: { w: [0.4], temp: [1], season: [1], lim: [null], ...sp } } } });
+  const withMoist = weatherFor(mk({ rain: [1], moist: [0.5] }), "c", "borowik", 0, 100);
+  assert.equal(withMoist.w, adjustW(0.4, 0.5, 100));
+  assert.ok(withMoist.w > 0.4);
+  const old = weatherFor(mk({ rain: [0.8] }), "c", "borowik", 0, 100);
+  assert.equal(old.w, adjustW(0.4, 0.8, 100));
 });

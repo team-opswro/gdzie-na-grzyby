@@ -1,4 +1,4 @@
-"""Model pogodowy: dzienny mnożnik w = deszcz × temperatura gleby × sezon."""
+"""Model pogodowy: dzienny mnożnik w = impuls deszczu × wilgotność podłoża × temperatura gleby × sezon."""
 from dataclasses import dataclass
 from datetime import date
 
@@ -9,13 +9,18 @@ RAIN_CORE_WINDOW = (7, 14)
 RAIN_CORE_WEIGHT = 1.0
 RAIN_EDGE_WEIGHT = 0.5
 MOISTURE_LOOKBACK = (1, 3)
-MOISTURE_PENALTY = 0.5
-MOISTURE_SHALLOW_WEIGHT = 0.5
 TEMP_LOOKBACK = (1, 5)
 SEASON_RAMP_DAYS = 14
 SEASON_FLOOR = 0.1
 LIM_THRESHOLD = 0.8
-ET_ALPHA = 0.15  # dobrane walidacją GBIF (plan G, Task 5)
+ET_ALPHA = 0.0  # spec M: parowanie liczy wiadro (moist); rain = czysty impuls opadu
+# Wiadro wody podłoża (spec M, FAO-56): pojemność warstwy ~25 cm piasków, ET drzewostanu ≈ 0,8·ET0.
+BUCKET_MM = 25.0
+BUCKET_KC = 0.8
+MOIST_LOW = 0.1  # poniżej: podłoże przesuszone
+MOIST_HIGH = 0.7  # od tego zapasu bez ograniczeń (owocnikowanie wymaga podłoża bliskiego pojemności polowej)
+MOIST_FLOOR = 0.1  # > 0, żeby korekta wilgotności miejsca (spec L) mogła podnieść wynik w suszy
+DRY_DAY_MM = 1.0  # opad dobowy, od którego dzień nie liczy się do „dni bez deszczu”
 PULSE_MAX = 0.2
 PULSE_DROP_FULL = 3.0
 FROST_FLOOR = 0.2
@@ -41,6 +46,7 @@ class WeatherComponents:
     season: float
     pulse: float
     frost: float
+    moist: float = 1.0
 
 
 def trapezoid(x: float, a: float, b: float, c: float, d: float) -> float:
@@ -68,6 +74,8 @@ class WeatherValues:
     et0_mm: float | None = None
     soil_m_deep: float | None = None
     t2m_min: float | None = None
+    water: float | None = None  # zapas względny wiadra (0–1); None bez et0
+    dry_days: int = 0
 
 
 def weather_values(s: DailySeries, i: int) -> WeatherValues:
@@ -90,7 +98,8 @@ def weather_values(s: DailySeries, i: int) -> WeatherValues:
     t2m_min = None
     if s.t2m_min is not None:
         t2m_min = min(s.t2m_min[i - k] for k in range(FROST_RECOVERY_DAYS + 1) if i - k >= 0)
-    return WeatherValues(rain_mm=rain_mm, soil_t=soil_t, soil_m=soil_m, et0_mm=et0_mm, soil_m_deep=soil_m_deep, t2m_min=t2m_min)
+    return WeatherValues(rain_mm=rain_mm, soil_t=soil_t, soil_m=soil_m, et0_mm=et0_mm, soil_m_deep=soil_m_deep,
+                         t2m_min=t2m_min, water=bucket_fraction(s, i), dry_days=dry_days(s, i))
 
 
 def water(s: DailySeries, i: int) -> float:
@@ -108,33 +117,37 @@ def water(s: DailySeries, i: int) -> float:
     return total_precip - ET_ALPHA * total_et0
 
 
-def soil_moisture_eff(s: DailySeries, i: int) -> float | None:
-    """Efektywna wilgotność gleby: ważona średnia z płytkiej i głębokiej warstwy."""
-    shallow = _mean_back(s.soil_moisture, i, MOISTURE_LOOKBACK)
-    if shallow is None:
+def bucket_fraction(s: DailySeries, i: int) -> float | None:
+    """Zapas wody podłoża na początek dnia i (0–1): wiadro BUCKET_MM od pełnego na starcie serii; None bez et0."""
+    if s.et0 is None:
         return None
-    if s.soil_moisture_deep is None:
-        return shallow
-    deep = _mean_back(s.soil_moisture_deep, i, MOISTURE_LOOKBACK)
-    if deep is None:
-        return shallow
-    return MOISTURE_SHALLOW_WEIGHT * shallow + (1 - MOISTURE_SHALLOW_WEIGHT) * deep
+    store = BUCKET_MM
+    for j in range(i):
+        store = min(BUCKET_MM, max(0.0, store + s.precip[j] - BUCKET_KC * s.et0[j]))
+    return store / BUCKET_MM
 
 
-def _rain_parts(s: DailySeries, i: int, sp: Species) -> tuple[float, bool]:
-    """(czynnik opadu, czy zadziałała kara za suchą glebę)."""
-    total = water(s, i)
-    rain = (total - sp.rain_min) / (sp.rain_full - sp.rain_min)
-    rain = min(1.0, max(0.0, rain))
-    moisture = soil_moisture_eff(s, i)
-    penalized = moisture is not None and moisture < sp.soil_moisture_min
-    if penalized:
-        rain *= MOISTURE_PENALTY
-    return rain, penalized
+def moist_factor(s: DailySeries, i: int) -> float:
+    """Wilgotność podłoża teraz: MOIST_FLOOR przy zapasie ≤ MOIST_LOW, liniowo do 1 przy MOIST_HIGH; bez et0 1.0."""
+    f = bucket_fraction(s, i)
+    if f is None:
+        return 1.0
+    x = min(1.0, max(0.0, (f - MOIST_LOW) / (MOIST_HIGH - MOIST_LOW)))
+    return MOIST_FLOOR + (1 - MOIST_FLOOR) * x
+
+
+def dry_days(s: DailySeries, i: int) -> int:
+    """Liczba pełnych dni od ostatniego dnia z opadem ≥ DRY_DAY_MM (przed dniem i); cała historia, gdy nie padało."""
+    for k in range(1, i + 1):
+        if s.precip[i - k] >= DRY_DAY_MM:
+            return k - 1
+    return i
 
 
 def rain_factor(s: DailySeries, i: int, sp: Species) -> float:
-    return _rain_parts(s, i, sp)[0]
+    """Impuls opadu: ważona suma opadu w oknie RAIN_WINDOW między progami gatunku."""
+    rain = (water(s, i) - sp.rain_min) / (sp.rain_full - sp.rain_min)
+    return min(1.0, max(0.0, rain))
 
 
 def temp_factor(s: DailySeries, i: int, sp: Species) -> float:
@@ -180,22 +193,24 @@ def frost_factor(s: DailySeries, i: int, sp: Species) -> float:
 
 def weather_multiplier(s: DailySeries, i: int, sp: Species) -> WeatherComponents:
     rain = rain_factor(s, i, sp)
+    moist = moist_factor(s, i)
     temp = temp_factor(s, i, sp)
     season = season_factor(s.dates[i], sp)
     pulse = pulse_factor(s, i)
     frost = frost_factor(s, i, sp)
-    w = min(1.0, rain * temp * season * pulse * frost)
-    return WeatherComponents(w=w, rain=rain, temp=temp, season=season, pulse=pulse, frost=frost)
+    w = min(1.0, rain * moist * temp * season * pulse * frost)
+    return WeatherComponents(w=w, rain=rain, temp=temp, season=season, pulse=pulse, frost=frost, moist=moist)
 
 
 def limiting_factor(
     comps: WeatherComponents, s: DailySeries, i: int, sp: Species
 ) -> str | None:
-    """Kod najsłabszej składowej < LIM_THRESHOLD; remis: season, frost, temp, rain."""
+    """Kod najsłabszej składowej < LIM_THRESHOLD; remis: season, frost, temp, moist, rain."""
     ordered = [
         ("season", comps.season),
         ("frost", comps.frost),
         ("temp", comps.temp),
+        ("moist", comps.moist),
         ("rain", comps.rain),
     ]
     candidates = [(name, v) for name, v in ordered if v < LIM_THRESHOLD]
@@ -208,7 +223,9 @@ def limiting_factor(
         return "frost"
     if name == "temp":
         return "cold" if weather_values(s, i).soil_t < sp.temp[1] else "hot"
-    return "dry_soil" if _rain_parts(s, i, sp)[1] else "dry"
+    if name == "moist":
+        return "dry_soil"
+    return "dry"
 
 
 # --- wilgotność miejsca (spec L): korekta w per wydzielenie, liczona też w kliencie (web/js/data.js) ---

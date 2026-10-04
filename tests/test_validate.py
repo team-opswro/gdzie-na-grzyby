@@ -96,14 +96,15 @@ def test_factor_ablation_keys():
 PRES_DAY = date(2023, 9, 15)
 
 
-def wet_series():
+def wet_series(et0=None):
     """2023-04-10..2023-11-30; 5 mm/dzień tylko 1–8 września -> pełny opad (8×5 = 40) wyłącznie
-    w dniu PRES_DAY (dni 7–14 wstecz); temperatura i wilgotność gleby optymalne."""
+    w dniu PRES_DAY (dni 7–14 wstecz); temperatura i wilgotność gleby optymalne; et0 (mm/dzień) opcjonalne."""
     start, end = date(2023, 4, 10), date(2023, 11, 30)
     dates = [start + timedelta(days=k) for k in range((end - start).days + 1)]
     precip = [5.0 if date(2023, 9, 1) <= d <= date(2023, 9, 8) else 0.0 for d in dates]
     return DailySeries(dates=dates, precip=precip, soil_temp=[15.0] * len(dates),
-                       soil_moisture=[0.3] * len(dates))
+                       soil_moisture=[0.3] * len(dates),
+                       et0=None if et0 is None else [float(et0)] * len(dates))
 
 
 def obs_df(n, day=PRES_DAY, lat0=50.05):
@@ -247,10 +248,10 @@ def test_wet_eval_rewards_wet_presence_on_dry_day():
     st = stands_gdf([GOOD] * 30, size=0.002)
     st["wet"] = pd.array([90, 95, 99] + [20] * 27, dtype="Int64")
     pres = pd.DataFrame({"species": "borowik", "gbif_id": [0, 1, 2], "stand": [0, 1, 2],
-                         "date": [PRES_DAY - timedelta(days=6)] * 3})  # opad poza oknem rdzenia -> rain < 0.8
+                         "date": [PRES_DAY + timedelta(days=5)] * 3})  # 12 dni po deszczu, ET0 3 mm -> podłoże suche
     cells = stand_cells(st)
     assert len(set(cells)) == 1
-    r = wet_eval("borowik", S["borowik"], pres, st, cells, series_for(wet_series()))
+    r = wet_eval("borowik", S["borowik"], pres, st, cells, series_for(wet_series(et0=3.0)))
     assert r["n"] == 3 and r["n_dry"] == 3
     assert r["all"]["auc"] == pytest.approx(0.5) and r["all"]["auc_wet"] > 0.9
 
@@ -260,4 +261,16 @@ def test_wet_eval_without_wet_column_is_neutral():
     st = stands_gdf([GOOD] * 5, size=0.002)
     pres = pd.DataFrame({"species": "borowik", "gbif_id": [0], "stand": [0], "date": [PRES_DAY]})
     r = wet_eval("borowik", S["borowik"], pres, st, stand_cells(st), series_for(wet_series()))
+    assert r["all"]["auc"] == r["all"]["auc_wet"]
+
+
+def test_wet_eval_uses_moist_not_rain():
+    # dzień zaraz po deszczu, podłoże pełne (moist = 1): brak suchych dni i brak korekty, nawet przy niskim rain
+    from pipeline.validate import stand_cells, wet_eval
+    st = stands_gdf([GOOD] * 30, size=0.002)
+    st["wet"] = pd.array([90, 95, 99] + [20] * 27, dtype="Int64")
+    pres = pd.DataFrame({"species": "borowik", "gbif_id": [0, 1, 2], "stand": [0, 1, 2],
+                         "date": [PRES_DAY - timedelta(days=6)] * 3})
+    r = wet_eval("borowik", S["borowik"], pres, st, stand_cells(st), series_for(wet_series(et0=3.0)))
+    assert r["n_dry"] == 0
     assert r["all"]["auc"] == r["all"]["auc_wet"]

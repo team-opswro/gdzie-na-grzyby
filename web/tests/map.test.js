@@ -288,3 +288,12 @@ test("mapa: wet_gamma gatunku w wyrażeniu", () => {
     setWetGammas([]);
   }
 });
+
+test("mapa: korekta wilgotności miejsca z moist (spec M), nie z rain", () => {
+  const p = { days: ["d"], cells: { c1: { borowik: { w: [0.4], rain: [1], moist: [0.5] } } } };
+  const expr = fillColorExpression(p, "borowik", 0);
+  for (const wet of [0, 50, 100]) {
+    const s = score(85, adjustW(0.4, 0.5, wet));
+    assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 85, wet }), COLORS.classes[scoreClass(s)], `wet=${wet}`);
+  }
+});

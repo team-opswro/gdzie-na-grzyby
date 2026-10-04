@@ -52,8 +52,8 @@ export function selectionValues(speciesList, groups = []) {
 const STALE_HOURS = 36;
 
 // Wilgotność miejsca (spec L, wzór jak forecast/model.py: wet_adjust; przypadki: tests/fixtures/wet_cases.json):
-// w_eff = min(1, w · rain^(γ−1)), γ = G^(1 − 2·wet/100), G = wet_gamma gatunku z gatunki.json (domyślnie 3).
-// Brak wet/rain lub rain ≤ 0 → w bez zmian.
+// w_eff = min(1, w · m^(γ−1)), γ = G^(1 − 2·wet/100), G = wet_gamma gatunku z gatunki.json (domyślnie 3);
+// m = moist (wilgotność podłoża, spec M), w plikach sprzed specu M — rain. Brak wet/m lub m ≤ 0 → w bez zmian.
 export const WET_GAMMA_BASE = 3;
 const wetGammas = new Map();
 
@@ -92,15 +92,18 @@ export function weatherFor(pogoda, cell, species, dayIdx, wet = null) {
     ...(x.et0_mm && { et0_mm: x.et0_mm[dayIdx] }),
     ...(x.soil_m_deep && { soil_m_deep: x.soil_m_deep[dayIdx] }),
     ...(x.t2m_min && { t2m_min: x.t2m_min[dayIdx] }),
+    ...(x.water && { water: x.water[dayIdx] }),
+    ...(x.dry_days && { dry_days: x.dry_days[dayIdx] }),
   } : null;
   const hasBaseWx = wx && wx.rain_mm != null && wx.soil_t != null && wx.soil_m != null;
   const w = sp.w[dayIdx];
   const rain = sp.rain?.[dayIdx] ?? null;
+  const moist = sp.moist?.[dayIdx] ?? null;
   const wetN = toWet(wet);
   return {
-    w: wetN == null ? w : adjustW(w, rain, wetN, wetGammaFor(species)),
+    w: wetN == null ? w : adjustW(w, moist ?? rain, wetN, wetGammaFor(species)),
     ...(wetN != null && { w_raw: w, wet: wetN }),
-    rain, temp: sp.temp[dayIdx], season: sp.season[dayIdx],
+    rain, moist, temp: sp.temp[dayIdx], season: sp.season[dayIdx],
     pulse: sp.pulse?.[dayIdx] ?? null,
     frost: sp.frost?.[dayIdx] ?? null,
     lim: sp.lim?.[dayIdx] ?? null,
