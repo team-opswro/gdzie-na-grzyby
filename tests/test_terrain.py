@@ -148,6 +148,35 @@ def test_main_writes_parquet_with_metadata(tmp_path, monkeypatch):
                  "--cache", str(tmp_path / "c")]) == 0
     df = pq.read_table(out).to_pandas()
     assert set(df["a_i_num"]) == {1, 2, 3}
+    assert "tpi" in df.columns and df["tpi"].notna().all()
     assert set(df["twi_class"]) <= {"DRY", "MID", "WET"} and set(df["exposure"]) <= {"S_STEEP", "OTHER"}
     meta = pq.read_schema(out).metadata
     assert b"twi_terciles" in meta and meta[b"dem"] == b"GLO-30"
+
+
+# --- TPI (spec L) ---
+
+def test_tpi_hill_positive_valley_negative():
+    from pipeline.terrain import tpi
+    y, x = np.mgrid[0:61, 0:61]
+    r = np.hypot(x - 30, y - 30)
+    hill = 100 - r          # stożek: szczyt wyżej niż średnia otoczenia
+    t = tpi(hill, window_m=900)
+    assert t[30, 30] > 5 and abs(t[30, 0]) < abs(t[30, 30])
+    assert tpi(-hill, window_m=900)[30, 30] < -5
+
+
+def test_tpi_flat_zero_and_nodata():
+    from pipeline.terrain import tpi
+    z = np.full((20, 20), 200.0)
+    z[0, 0] = -9999.0
+    t = tpi(z, window_m=300, nodata=-9999.0)
+    assert np.isnan(t[0, 0]) and np.nanmax(np.abs(t)) == pytest.approx(0.0)
+
+
+def test_zonal_tpi_mean():
+    tr, vals = _grid()
+    st = gpd.GeoDataFrame({"prefix": ["p"], "a_i_num": [1]},
+                          geometry=[box(500000, 300300, 500150, 300600)], crs=2180)  # kolumny 0–4
+    df = zonal(st, twi=vals, slope=vals, aspect=np.zeros((20, 20)), transform=tr, tpi=vals - 10)
+    assert df.iloc[0]["tpi"] == pytest.approx(-8.0)
