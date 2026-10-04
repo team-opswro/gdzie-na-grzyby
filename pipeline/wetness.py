@@ -74,9 +74,9 @@ def dist_value(d, full: float, zero: float) -> np.ndarray:
 def habitat_value(hab: str | None, moist: str | None, cfg: WaterConfig) -> float:
     """max(wartość typu siedliskowego, wartość kodu wilgotności); oba puste -> NEUTRAL."""
     vals = []
-    if hab:
+    if isinstance(hab, str) and hab:
         vals.append(cfg.habitat_types.get(hab, cfg.habitat_default))
-    if moist:
+    if isinstance(moist, str) and moist:
         m = cfg.moist_codes.get(moist)
         if m is not None:
             vals.append(m)
@@ -85,7 +85,7 @@ def habitat_value(hab: str | None, moist: str | None, cfg: WaterConfig) -> float
 
 def soil_value(code: str | None, cfg: WaterConfig) -> float:
     """Grupa gleby z tabeli; inaczej „g” w podtypie (oglejona) -> soil_gleyed; brak kodu -> NEUTRAL."""
-    if not code:
+    if not isinstance(code, str) or not code.strip():
         return NEUTRAL
     g = soil_group(code)
     if g in cfg.soil_groups:

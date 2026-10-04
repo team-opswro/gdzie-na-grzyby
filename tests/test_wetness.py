@@ -66,3 +66,8 @@ def test_nearest_dist_edge_to_edge():
     feats = gpd.GeoDataFrame(geometry=[LineString([(130, 0), (130, 100)])], crs=2180)
     d = wt.nearest_dist(st, feats, 500)
     assert d[0] == pytest.approx(30) and np.isnan(d[1])
+
+
+def test_nan_codes_are_missing():
+    assert wt.soil_value(float("nan"), CFG) == wt.NEUTRAL
+    assert wt.habitat_value(float("nan"), float("nan"), CFG) == wt.NEUTRAL

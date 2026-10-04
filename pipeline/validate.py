@@ -4,6 +4,7 @@ Raport offline: pipeline/data/walidacja/ (nie out/ — publish wysyła cały kat
 """
 import argparse
 import dataclasses
+import functools
 import json
 import random
 import sys
@@ -16,7 +17,7 @@ import geopandas as gpd
 import pandas as pd
 import yaml
 
-from forecast.model import DailySeries, WeatherComponents, weather_multiplier
+from forecast.model import DailySeries, WeatherComponents, wet_adjust, weather_multiplier
 from forecast.species import ROOT, Species, load_species
 from pipeline.build_tiles import STAND_EXTRA
 from pipeline.gbif import load_observations
@@ -37,6 +38,8 @@ DEFAULT_AREA = DATA_DIR / "obszar.geojson"
 DEFAULT_CACHE = DATA_DIR / "raw"
 CONTENT_PATH = ROOT / "content" / "gatunki.yaml"
 WX_COMPONENTS = [f.name for f in dataclasses.fields(WeatherComponents) if f.name != "w"]
+WET_BG_PER_PRESENCE = 20
+DRY_RAIN = 0.8  # dzień „suchy” w raporcie wilgotności miejsca: składowa opadu < DRY_RAIN
 
 
 def auc(pos: Sequence[float], neg: Sequence[float]) -> float | None:
@@ -143,6 +146,62 @@ def weather_eval(key: str, sp: Species, obs: pd.DataFrame,
                            for name in WX_COMPONENTS}}
 
 
+def stand_cells(stands: gpd.GeoDataFrame) -> list[str]:
+    pts = stands.geometry.to_crs(4326).representative_point()
+    return [cell_id(la, lo) for la, lo in zip(pts.y, pts.x)]
+
+
+def wet_eval(key: str, sp: Species, pres_j: pd.DataFrame, stands: gpd.GeoDataFrame, cells: list[str],
+             series: Callable[[str, int], DailySeries | None], adjust=wet_adjust) -> dict:
+    """Wilgotność miejsca (spec L): obserwacja vs do WET_BG_PER_PRESENCE losowych wydzieleń z tej samej
+    kratki i dnia (ten sam w); AUC h·w (= samo h w kratce) i h·w_eff, wszystkie dni i dni suche."""
+    rng = rng_for(key + ":wet")
+    by_cell: dict[str, list[int]] = defaultdict(list)
+    for i, c in enumerate(cells):
+        by_cell[c].append(i)
+    wet = stands["wet"] if "wet" in stands.columns else pd.Series([None] * len(stands))
+    hcache: dict[int, float] = {}
+
+    def h(i: int) -> float:
+        if i not in hcache:
+            hcache[i] = habitat_score(_stand(stands, i), sp)
+        return hcache[i]
+
+    def wv(i: int):
+        v = wet.iloc[i]
+        return None if v is None or pd.isna(v) else float(v)
+
+    acc = {"all": ([], [], [], []), "dry": ([], [], [], [])}  # pos_h, neg_h, pos_eff, neg_eff
+    n_dry = n = 0
+    seen = set()
+    for i, d in zip(pres_j["stand"], pres_j["date"]):
+        if (i, d) in seen:
+            continue
+        seen.add((i, d))
+        cell = cells[i]
+        s = series(cell, d.year) if d >= HIST_START else None
+        if s is None or d not in s.dates:
+            continue
+        c = weather_multiplier(s, s.dates.index(d), sp)
+        others = [j for j in by_cell[cell] if j != i]
+        if not others:
+            continue
+        neg = rng.sample(others, min(WET_BG_PER_PRESENCE, len(others)))
+        groups = ["all"] + (["dry"] if c.rain < DRY_RAIN else [])
+        n += 1
+        n_dry += c.rain < DRY_RAIN
+        for g in groups:
+            ph, nh, pe, ne = acc[g]
+            ph.append(h(i) * c.w)
+            pe.append(h(i) * adjust(c.w, c.rain, wv(i)))
+            nh.extend(h(j) * c.w for j in neg)
+            ne.extend(h(j) * adjust(c.w, c.rain, wv(j)) for j in neg)
+    out = {"n": n, "n_dry": n_dry}
+    for g, (ph, nh, pe, ne) in acc.items():
+        out[g] = {"auc": auc(ph, nh), "auc_wet": auc(pe, ne)}
+    return out
+
+
 # --- raport ---
 
 def build_report(per_species: dict[str, dict], *, build: str | None, generated_at: str, outside: int,
@@ -191,6 +250,14 @@ def render_md(report: dict, baseline: dict | None = None) -> str:
         else:
             comps = ", ".join(f"{k} {_f(v)}" for k, v in wx["components"].items())
             out.append(f"| {key} | {wx['n']} | {wx['n_skipped']} | {_f(wx['auc'])} | {comps} |")
+    wet_rows = [(k, r["wet"]) for k, r in report["species"].items() if r.get("wet")]
+    if wet_rows:
+        out += ["", "## Wilgotność miejsca (obserwacja vs wydzielenia z tej samej kratki i dnia)", "",
+                "| Gatunek | Dni | AUC h·w | AUC h·w_eff | Dni suche | AUC h·w (suche) | AUC h·w_eff (suche) |",
+                "|---|---|---|---|---|---|---|"]
+        for key, w in wet_rows:
+            out.append(f"| {key} | {w['n']} | {_f(w['all']['auc'])} | {_f(w['all']['auc_wet'])} | {w['n_dry']} | "
+                       f"{_f(w['dry']['auc'])} | {_f(w['dry']['auc_wet'])} |")
     return "\n".join(out) + "\n"
 
 
@@ -216,6 +283,8 @@ def main(argv=None) -> int:
     ap.add_argument("--species", help="klucze po przecinku (domyślnie wszystkie)")
     ap.add_argument("--refresh", action="store_true", help="pobierz ponownie zamiast z cache")
     ap.add_argument("--no-weather", action="store_true")
+    ap.add_argument("--wet", action="store_true", help="raport wilgotności miejsca (spec L)")
+    ap.add_argument("--wet-gamma", type=float, help="podstawa G wzoru wilgotności (porównanie wariantów)")
     ap.add_argument("--compare", type=Path, help="poprzedni walidacja.json (kolumna Δ AUC)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--db", type=Path, default=DEFAULT_DB)
@@ -247,6 +316,8 @@ def main(argv=None) -> int:
                                              refresh=args.refresh)
         return cache[(cell, year)]
 
+    cells = stand_cells(stands) if args.wet else []
+    adjust = functools.partial(wet_adjust, base=args.wet_gamma) if args.wet_gamma else wet_adjust
     per_species = {}
     for key in keys:
         presence = set(pres_j.loc[pres_j["species"] == key, "stand"])
@@ -257,6 +328,10 @@ def main(argv=None) -> int:
             obs = pres[pres["species"] == key]
             print(f"pogoda: {key} ({len(obs)} obserwacji)", file=sys.stderr)
             r["weather"] = weather_eval(key, species[key], obs, series)
+        if args.wet:
+            print(f"wilgotność miejsca: {key}", file=sys.stderr)
+            r["wet"] = wet_eval(key, species[key], pres_j[pres_j["species"] == key], stands, cells, series,
+                                adjust=adjust)
         per_species[key] = r
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
