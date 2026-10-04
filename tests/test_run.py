@@ -172,7 +172,7 @@ def test_payload_without_new_series_omits_wx_extras():
         assert "soil_m_deep" not in wx
         assert "t2m_min" not in wx
         assert "water" not in wx
-    assert p["cells"]["506_178"]["borowik"]["moist"] == [1.0] * 8  # bez et0 neutralnie
+    assert "moist" not in p["cells"]["506_178"]["borowik"]  # bez et0 brak bilansu -> klient użyje rain
     jsonschema.validate(p, SCHEMA)
 
 

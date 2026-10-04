@@ -110,6 +110,9 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
                 name: [round(getattr(c, name), DIGITS) for c in comps]
                 for name in ("w", "rain", "moist", "temp", "season", "pulse", "frost")
             }
+            # bez et0 nie ma bilansu wody: moist pomijane, klient liczy korektę wilgotności miejsca z rain
+            if s.et0 is None:
+                del per_species[key]["moist"]
             # neutralne składowe (same 1.0: brak ochłodzenia / przymrozku) pomijane — brak = 1.0
             for name in ("pulse", "frost"):
                 if all(v == 1.0 for v in per_species[key][name]):

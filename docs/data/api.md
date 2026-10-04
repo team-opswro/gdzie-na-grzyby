@@ -178,7 +178,7 @@ schemat: `schema/pogoda.schema.json`.
 - `days` — 8 dni: wczoraj, dziś i 6 kolejnych; każda tablica dzienna ma 8 elementów w tej kolejności.
 - `cells[cell][gatunek]` — mnożnik pogodowy `w` (0–1) i jego składowe `rain` (impuls: ważony opad sprzed
   5–21 dni), `moist` (wilgotność podłoża teraz z bilansu wody: opad − 0,8·ET0, wiadro 25 mm; od spec M,
-  w starszych plikach brak), `temp`, `season` (0–1); `w = rain × moist × temp × season × pulse × frost` (≤ 1);
+  w starszych plikach i przy braku ET0 w prognozie brak), `temp`, `season` (0–1); `w = rain × moist × temp × season × pulse × frost` (≤ 1);
   opcjonalnie `pulse` (1.0–1.2, premia za ochłodzenie gleby) i `frost` (0–1, kara za niedawny przymrozek) —
   pomijane, gdy przez wszystkie dni wynoszą 1.0 (brak = 1.0); plik zapisywany bez zbędnych spacji;
   `lim` — czynnik ograniczający dnia: `dry` (za mało opadu w oknie impulsu), `dry_soil`
