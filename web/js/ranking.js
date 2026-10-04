@@ -66,7 +66,7 @@ export function topN(centroids, pogoda, sel, dayIdx, origin, radiusKm = 20, n = 
     }
     if (!s) continue;
     const key = oddzKey(id) ?? id;
-    const cand = { id, lat, lon, cell, h, score: s };
+    const cand = { id, lat, lon, cell, h, wet, score: s };
     if (isAll) { cand.species = sp; cand.hBy = hBy; }
     const g = groups.get(key);
     if (!g) groups.set(key, { key, best: cand, count: 1 });

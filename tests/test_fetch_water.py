@@ -64,3 +64,10 @@ def test_regions_for_uses_cached_poly(tmp_path, monkeypatch):
     for name in fw.REGIONS:
         (tmp_path / f"{name}.poly").write_text(POLY if name == "opolskie" else POLY.replace("17.0", "27.0").replace("18.0", "28.0"))
     assert fw.regions_for(box(17.1, 50.1, 17.2, 50.2), tmp_path, session=None) == ["opolskie"]
+
+
+def test_main_no_regions_returns_error(tmp_path, monkeypatch):
+    area = tmp_path / "a.geojson"
+    gpd.GeoDataFrame(geometry=[box(100, 10, 101, 11)], crs=4326).to_file(area)
+    monkeypatch.setattr(fw, "regions_for", lambda *a, **k: [])
+    assert fw.main(["--area", str(area), "--out", str(tmp_path / "w.parquet"), "--cache", str(tmp_path)]) == 1

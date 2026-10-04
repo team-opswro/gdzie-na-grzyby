@@ -125,11 +125,14 @@ def main(argv=None) -> int:
     session.headers["User-Agent"] = "gdzie-na-grzyby"
     try:
         names = regions_for(shape.buffer(0.03), args.cache, session)
+        if not names:
+            print("Błąd: żadne województwo Geofabrik nie przecina obszaru", file=sys.stderr)
+            return 1
         parts = []
         for name in names:
             print(f"woda: {name}", file=sys.stderr)
             parts.append(read_pbf(download_pbf(name, args.cache, session, args.refresh), bbox))
-    except (OSError, requests.RequestException) as exc:
+    except (OSError, RuntimeError, requests.RequestException) as exc:  # RuntimeError: błędy GDAL (pyogrio)
         print(f"Błąd: {exc}", file=sys.stderr)
         return 1
     gdf = gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), geometry="geometry", crs=4326)

@@ -33,7 +33,7 @@ test("topN radius, order, ties, skips missing/zero", () => {
   assert.equal(r[0].best.score, score(90, wWet));
   assert.equal(r[1].best.score, score(50, wWet));
   assert.deepEqual(Object.keys(r[0]).sort(), ["bearing", "best", "count", "distanceKm", "key"]);
-  assert.deepEqual(Object.keys(r[0].best).sort(), ["cell", "h", "id", "lat", "lon", "score"]);
+  assert.deepEqual(Object.keys(r[0].best).sort(), ["cell", "h", "id", "lat", "lon", "score", "wet"]);
   assert.equal(r[0].distanceKm, Math.round(r[0].distanceKm * 10) / 10);
   assert.equal(r[0].key, "09");
   assert.equal(r[0].count, 1);
@@ -144,4 +144,10 @@ test("topN uwzględnia wet z kolumny extra; bez extra — po staremu", () => {
   assert.equal(withWet[0].best.score, score(60, weatherFor(P, "506_178", "borowik", 0, 100).w));
   const legacy = topN({ species: SP, rows }, P, "borowik", 0, origin);
   assert.deepEqual(legacy.map((g) => g.best.id), ["b", "a"]);
+});
+
+test("topN: najlepszy kandydat niesie wet (trend w rankingu liczony jak wynik)", () => {
+  const rows = [[...row("a", 50.68, 17.92, "506_178", 60), 77]];
+  assert.equal(topN({ species: SP, extra: ["wet"], rows }, P, "borowik", 0, origin)[0].best.wet, 77);
+  assert.equal(topN({ species: SP, rows }, P, "borowik", 0, origin)[0].best.wet, null);
 });

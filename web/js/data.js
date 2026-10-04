@@ -2,7 +2,7 @@ import { loadConfig, loadManifest, fileUrl, pogodaUrl, getJson } from "./config.
 
 // Awaryjna lista (brak gatunki.json) — kolejność jak w species.yaml.
 export const SPECIES = [
-  { key: "borowik", name: "Borowik szlachetny" },
+  { key: "borowik", name: "Borowik szlachetny", wet_gamma: 1.5 }, // wet_gamma jak w species.yaml (spec L)
   { key: "podgrzybek", name: "Podgrzybek brunatny" },
   { key: "kurka", name: "Kurka" },
   { key: "kozlarz", name: "Koźlarz babka" },

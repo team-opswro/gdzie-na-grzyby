@@ -291,8 +291,8 @@ export async function init() {
       const tr = document.createElement("span");
       tr.className = "rank-trend";
       const t = r.best.hBy
-        ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, r.best.hBy, i)?.score ?? null), dayIdx())
-        : trend(effective, r.best.cell, keys()[0], r.best.h, dayIdx());
+        ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, r.best.hBy, i, r.best.wet)?.score ?? null), dayIdx())
+        : trend(effective, r.best.cell, keys()[0], r.best.h, dayIdx(), r.best.wet);
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
