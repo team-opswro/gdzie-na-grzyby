@@ -130,3 +130,31 @@ gdy podłoże przesycha, a nie gdy po prostu dawno nie padało. Po stronie klien
 
 Tylko `forecast` + `web` (bez przebudowy danych). Kolejność nieistotna: nowy klient obsługuje stary plik, stary klient
 nowy plik. Coolify wdraża z `main`; nowy `pogoda.json` pojawi się po najbliższym przebiegu crona (05:00/14:00).
+
+## Decyzje po walidacji
+
+Walidacja GBIF (`pipeline/data/walidacja-m`, porównanie z `walidacja-m-baza`; borowik n = 90 dni, podgrzybek n = 52):
+
+| | przed (L) | po (M) |
+|---|---|---|
+| AUC `w` borowik | 0,569 | 0,565 (−0,004 — w granicy bezpiecznika 0,01) |
+| AUC `w` podgrzybek | 0,594 | 0,627 (+0,033); sama składowa `moist` 0,622 |
+| AUC h·w_eff (wilgotność miejsca) borowik / podgrzybek | 0,539 / 0,614 | 0,552 / 0,619 |
+
+Wrażliwość AUC `w` (borowik / podgrzybek) w zakresie z literatury — bez strojenia, tylko sprawdzenie odporności:
+`C` 20 → 0,552 / 0,629; `C` 30 → 0,573 / 0,629; `KC` 0,7 → 0,570 / 0,626; `KC` 0,9 → 0,558 / 0,623.
+Zysk podgrzybka stały, borowik ±0,01 wokół bazy — zostają wartości z literatury (`C` 25 mm, `KC` 0,8).
+
+Przypadek 4.10 (`scripts/check_wet_case.py`, wynik dnia bez → z wilgotnością miejsca):
+
+| | przed (L) | po (M) |
+|---|---|---|
+| podgrzybek, 379-b (suchy pagórek, pusto) | 56 → 40 | 28 → 8 |
+| podgrzybek, 370-a (brzeg stawu, pełny koszyk) | 50 → 58 | 25 → 41 |
+| borowik, 379-b / 370-a | 51 / 54 | 24 / 39 |
+
+`w` = 0,40 (`rain` 0,91, `moist` 0,44, 9 dni bez deszczu), czynnik ograniczający `dry_soil`. Kolejność miejsc
+zgodna z terenem i wyraźnie rozdzielona; pagórek spada do „słabo/brak”.
+
+Uwaga: `MOIST_HIGH` = 0,7 wybrano przy znajomości przypadku 4.10 (przy 0,5 `w` = 0,56) — uzasadnienie fizyczne
+w §1, ale to jedyny parametr, przy którym przypadek wpłynął na wybór.
