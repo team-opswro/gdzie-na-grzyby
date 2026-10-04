@@ -47,7 +47,7 @@ export function renderReserve(name, withLink = true) {
 
 export const LIM_TEXT = {
   dry: "Ogranicza: za mało deszczu",
-  dry_soil: "Ogranicza: przesuszona gleba",
+  dry_soil: "Ogranicza: przesuszone podłoże",
   cold: "Ogranicza: za zimna gleba",
   hot: "Ogranicza: za ciepła gleba",
   season: "Ogranicza: poza sezonem",
@@ -146,11 +146,19 @@ export function renderParking(props, lngLat) {
   return root;
 }
 
+const DRY_DAYS_NOTE = 3; // od tylu dni bez deszczu popup dopisuje „bez deszczu od N dni”
+
 export function formatWx(wx) {
+  // Z bilansem wody (spec M) wilgotność opisuje wiersz zapasu; etykieta z wilgotności Open-Meteo by mu przeczyła.
+  const hasWater = wx.water != null;
   const out = {
     rain: `Deszcz (5–21 dni wcześniej): ${dec(wx.rain_mm)} mm`,
-    soil: `Gleba: ${dec(wx.soil_t)} °C, ${moistureLabel(wx.soil_m)}`,
+    soil: hasWater ? `Gleba: ${dec(wx.soil_t)} °C` : `Gleba: ${dec(wx.soil_t)} °C, ${moistureLabel(wx.soil_m)}`,
   };
+  if (hasWater) {
+    const dry = wx.dry_days >= DRY_DAYS_NOTE ? ` · bez deszczu od ${wx.dry_days} dni` : "";
+    out.water = `Zapas wody w podłożu: ${Math.round(wx.water * 100)}%${dry}`;
+  }
   if (wx.et0_mm != null) {
     out.et0 = `Parowanie (5–21 dni): ${dec(wx.et0_mm)} mm`;
   }
@@ -290,7 +298,7 @@ export function renderPopup(props, ctx) {
   }
   if (weather && weather.wx && !props.rez) {
     const f = formatWx(weather.wx);
-    for (const line of [f.rain, f.soil, f.et0]) {
+    for (const line of [f.rain, f.water, f.soil, f.et0]) {
       if (line == null) continue;
       const r = document.createElement("tr");
       const c = el("td", line);
@@ -305,6 +313,7 @@ export function renderPopup(props, ctx) {
     d.append(el("summary", "Szczegóły modelu"));
     const dt = document.createElement("table");
     row(dt, "Opad", pct(weather.rain));
+    if (typeof weather.moist === "number") row(dt, "Wilgotność podłoża", pct(weather.moist));
     row(dt, "Temperatura", pct(weather.temp));
     row(dt, "Sezon", pct(weather.season));
     if (typeof weather.pulse === "number") {

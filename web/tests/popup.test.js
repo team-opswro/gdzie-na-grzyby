@@ -35,7 +35,7 @@ import { LIM_TEXT, moistureLabel, formatWx, trendArrow, trendLabel } from "../js
 
 test("LIM_TEXT exact", () => assert.deepEqual(LIM_TEXT, {
   dry: "Ogranicza: za mało deszczu",
-  dry_soil: "Ogranicza: przesuszona gleba",
+  dry_soil: "Ogranicza: przesuszone podłoże",
   cold: "Ogranicza: za zimna gleba",
   hot: "Ogranicza: za ciepła gleba",
   season: "Ogranicza: poza sezonem",
@@ -58,6 +58,15 @@ test("formatWx z et0_mm dodaje parowanie", () => assert.deepEqual(
     et0: "Parowanie (5–21 dni): 23,4 mm",
   }
 ));
+test("formatWx z zapasem wody (spec M): wiersz zapasu, gleba bez etykiety wilgotności", () => {
+  assert.deepEqual(formatWx({ rain_mm: 41.3, soil_t: 12.5, soil_m: 0.232, water: 0.33, dry_days: 9 }), {
+    rain: "Deszcz (5–21 dni wcześniej): 41,3 mm",
+    soil: "Gleba: 12,5 °C",
+    water: "Zapas wody w podłożu: 33% · bez deszczu od 9 dni",
+  });
+  assert.equal(formatWx({ rain_mm: 1, soil_t: 1, soil_m: 0.3, water: 1, dry_days: 2 }).water,
+    "Zapas wody w podłożu: 100%");
+});
 test("trendArrow", () => {
   assert.equal(trendArrow("up"), "↑");
   assert.equal(trendArrow("down"), "↓");
