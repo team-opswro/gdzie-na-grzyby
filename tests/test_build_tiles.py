@@ -3,7 +3,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Polygon, box
+from shapely.geometry import Point, Polygon, box
 
 from forecast.species import load_species
 from pipeline.build_tiles import (compute_features, mark_reserves, tile_key, tippecanoe_cmd,
@@ -219,3 +219,74 @@ def test_centroid_tiles_empty(tmp_path):
     f = compute_features(gdf_from([sq(50.2, 17.2)], [Stand("OL", (), 60, "OL")]), S)
     idx = write_centroid_tiles(f, KEYS, tmp_path)
     assert idx["tiles"] == [] and sorted(p.name for p in tmp_path.iterdir()) == ["index.json"]
+
+
+def test_compute_features_passes_new_fields():
+    import dataclasses
+    from forecast.species import Ramp
+    sp = {"kurka": dataclasses.replace(S["kurka"], factors={"veg": {"ZAD": 0.7}})}
+    g = gdf_from([sq(50.2, 17.2), sq(50.3, 17.3)], [Stand("SO", (), 60, "BSW")] * 2)
+    g["veg"] = ["ZAD", None]
+    f = compute_features(g, sp)
+    assert list(f["h_kurka"]) == [70, 100]
+
+
+def test_geojsonseq_omits_zero_h(tmp_path):
+    g = compute_features(gdf_from([sq(50.2, 17.2)], [Stand("BRZ", (), 30, "BMW")]), S)
+    path = tmp_path / "x.geojsonseq"
+    write_geojsonseq(g, KEYS, path)
+    props = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["properties"]
+    assert props.get("h_kozlarz", 0) > 0
+    assert "h_borowik" not in props  # brzoza: borowik 0 -> atrybut pominięty
+
+
+def test_parkings_seq_minzoom(tmp_path):
+    from pipeline.build_tiles import write_parkings_seq
+    gdf = gpd.GeoDataFrame(
+        {"osm": ["n1", "n2", "w3"], "name": ["Leśny", None, "Droga"],
+         "fee": ["yes", "no", None]},
+        geometry=[Point(17.0, 50.0), Point(17.1, 50.1), Point(17.2, 50.2)],
+        crs=4326,
+    )
+    p = tmp_path / "parkingi.seq"
+    write_parkings_seq(gdf, p)
+    lines = p.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 3
+    for i, line in enumerate(lines):
+        obj = json.loads(line)
+        assert obj["tippecanoe"] == {"minzoom": 11}
+        assert obj["properties"]["osm"] == gdf.iloc[i]["osm"]
+        assert ("name" in obj["properties"]) == (not pd.isna(gdf.iloc[i]["name"]))
+        assert ("fee" in obj["properties"]) == (not pd.isna(gdf.iloc[i]["fee"]))
+
+
+from pipeline.build_tiles import weakest_factor
+
+
+def test_weakest_factor():
+    assert weakest_factor({"partner": 0.2, "habitat": 1.0, "veg": 0.7, "age": 0.9}) == "veg"
+    assert weakest_factor({"partner": 0.2, "habitat": 1.0, "veg": 0.8}) is None
+    assert weakest_factor({"habitat": 1.0, "moist": 0.7, "veg": 0.7}) == "veg"  # remis: kolejność HABITAT_FACTORS
+
+
+def test_hl_written_only_above_min_h(tmp_path):
+    import dataclasses
+    sp = {"kurka": dataclasses.replace(S["kurka"], factors={"veg": {"ZAD": 0.7}})}
+    g = gdf_from([sq(50.2, 17.2), sq(50.3, 17.3), sq(50.4, 17.4)],
+                 [Stand("SO", (), 60, "BSW"), Stand("SO", (), 60, "BSW"), Stand("BRZ", ("SO",), 60, "BSW",
+                                                                            (("SO", "PJD", 60),))])
+    g["veg"] = ["ZAD", None, "ZAD"]
+    f = compute_features(g, sp)
+    path = tmp_path / "x.geojsonseq"
+    write_geojsonseq(f, ["kurka"], path)
+    props = [json.loads(l)["properties"] for l in path.read_text(encoding="utf-8").splitlines()]
+    assert props[0]["h_kurka"] == 70 and props[0]["hl_kurka"] == "veg"
+    assert "hl_kurka" not in props[1]                       # brak słabej strony
+    assert props[2]["h_kurka"] == 14 and "hl_kurka" not in props[2]  # h < 20 -> bez hl_
+
+
+def test_hl_ignores_age_of_non_partner_dominant():
+    # borowik przez domieszkę sosny; panująca brzoza 5 lat nie jest partnerem -> wiek nie jest „słabą stroną”
+    g = gdf_from([sq(50.2, 17.2)], [Stand("BRZ", ("SO",), 5, "BSW", (("SO", "4", 80),))])
+    f = compute_features(g, S)
+    assert f.loc[0, "h_borowik"] >= 20 and f.loc[0, "hl_borowik"] is None

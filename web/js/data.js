@@ -1,15 +1,53 @@
 import { loadConfig, loadManifest, fileUrl, pogodaUrl, getJson } from "./config.js";
 
+// Awaryjna lista (brak gatunki.json) — kolejność jak w species.yaml.
 export const SPECIES = [
   { key: "borowik", name: "Borowik szlachetny" },
   { key: "podgrzybek", name: "Podgrzybek brunatny" },
   { key: "kurka", name: "Kurka" },
   { key: "kozlarz", name: "Koźlarz babka" },
   { key: "maslak", name: "Maślak zwyczajny" },
-  { key: "rydz", name: "Rydz" },
+  { key: "rydz", name: "Rydz mleczaj" },
+  { key: "kozlarz_czerwony", name: "Koźlarz czerwony" },
+  { key: "kozlarz_pomaranczowy", name: "Koźlarz pomarańczowożółty" },
+  { key: "kozlarz_grabowy", name: "Koźlarz grabowy" },
+  { key: "kozlarz_debowy", name: "Koźlarz dębowy" },
+  { key: "borowik_sosnowy", name: "Borowik sosnowy" },
+  { key: "borowik_usiatkowany", name: "Borowik usiatkowany" },
+  { key: "podgrzybek_zajaczek", name: "Podgrzybek zajączek" },
+  { key: "podgrzybek_zlotawy", name: "Podgrzybek złotawy" },
+  { key: "podgrzybek_czerwonawy", name: "Podgrzybek czerwonawy" },
+  { key: "maslak_zolty", name: "Maślak żółty" },
+  { key: "maslak_sitarz", name: "Maślak sitarz" },
+  { key: "rydz_swierkowy", name: "Rydz świerkowy" },
 ];
 
 export const ALL = "all";
+export const GROUP_PREFIX = "g-";
+
+export function groupsOf(info) {
+  return info?.groups ?? [];
+}
+
+// Wybór z listy (gatunek / "g-<grupa>" / "all") -> klucze gatunków; nieznane -> [].
+export function selectionKeys(sel, speciesList, groups = []) {
+  const keys = speciesList.map((s) => s.key);
+  if (sel === ALL) return keys;
+  if (typeof sel === "string" && sel.startsWith(GROUP_PREFIX)) {
+    const g = groups.find((x) => GROUP_PREFIX + x.key === sel);
+    return g ? g.species.filter((k) => keys.includes(k)) : [];
+  }
+  return keys.includes(sel) ? [sel] : [];
+}
+
+export function isMulti(sel) {
+  return sel === ALL || (typeof sel === "string" && sel.startsWith(GROUP_PREFIX));
+}
+
+// Dozwolone wartości wyboru (dla parseHash).
+export function selectionValues(speciesList, groups = []) {
+  return [ALL, ...groups.map((g) => GROUP_PREFIX + g.key), ...speciesList.map((s) => s.key)];
+}
 
 const STALE_HOURS = 36;
 
@@ -17,11 +55,21 @@ export function weatherFor(pogoda, cell, species, dayIdx) {
   const sp = pogoda?.cells?.[cell]?.[species];
   if (!sp || sp.w?.[dayIdx] == null) return null;
   const x = pogoda.wx?.[cell];
-  const wx = x ? { rain_mm: x.rain_mm?.[dayIdx], soil_t: x.soil_t?.[dayIdx], soil_m: x.soil_m?.[dayIdx] } : null;
+  const wx = x ? {
+    rain_mm: x.rain_mm?.[dayIdx],
+    soil_t: x.soil_t?.[dayIdx],
+    soil_m: x.soil_m?.[dayIdx],
+    ...(x.et0_mm && { et0_mm: x.et0_mm[dayIdx] }),
+    ...(x.soil_m_deep && { soil_m_deep: x.soil_m_deep[dayIdx] }),
+    ...(x.t2m_min && { t2m_min: x.t2m_min[dayIdx] }),
+  } : null;
+  const hasBaseWx = wx && wx.rain_mm != null && wx.soil_t != null && wx.soil_m != null;
   return {
     w: sp.w[dayIdx], rain: sp.rain[dayIdx], temp: sp.temp[dayIdx], season: sp.season[dayIdx],
+    pulse: sp.pulse?.[dayIdx] ?? null,
+    frost: sp.frost?.[dayIdx] ?? null,
     lim: sp.lim?.[dayIdx] ?? null,
-    wx: wx && wx.rain_mm != null && wx.soil_t != null && wx.soil_m != null ? wx : null,
+    wx: hasBaseWx ? wx : null,
   };
 }
 

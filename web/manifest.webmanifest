@@ -1,0 +1,11 @@
+{
+  "name": "Gdzie na grzyby?",
+  "short_name": "Grzyby",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#2e7d32",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

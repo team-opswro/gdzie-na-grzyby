@@ -51,6 +51,20 @@ export const LIM_TEXT = {
   cold: "Ogranicza: za zimna gleba",
   hot: "Ogranicza: za ciepła gleba",
   season: "Ogranicza: poza sezonem",
+  frost: "Ogranicza: niedawny przymrozek",
+};
+// „Słabe strony siedliska” (atrybut hl_<gatunek> w kafelkach, spec J §3).
+export const HAB_LIM_TEXT = {
+  veg: "Ogranicza siedlisko: gęste runo/zadarnienie",
+  moist: "Ogranicza siedlisko: zbyt mokre (bagienne)",
+  degr: "Ogranicza siedlisko: siedlisko zniekształcone",
+  soil: "Ogranicza siedlisko: mniej korzystna gleba",
+  damage: "Ogranicza siedlisko: uszkodzony drzewostan",
+  density: "Ogranicza siedlisko: zadrzewienie (za rzadko lub za gęsto)",
+  twi: "Ogranicza siedlisko: położenie (za sucho lub za mokro)",
+  exposure: "Ogranicza siedlisko: stromy stok południowy",
+  habitat: "Ogranicza siedlisko: typ siedliskowy mniej korzystny",
+  age: "Ogranicza siedlisko: wiek drzewostanu",
 };
 export const SOIL_DRY = 0.15;
 export const SOIL_WET = 0.3;
@@ -93,11 +107,27 @@ export function actionLinks(lat, lon) {
   return row;
 }
 
+export function renderParking(props, lngLat) {
+  const root = el("div", null, "popup popup-parking");
+  const title = el("div", "Parking", "popup-score");
+  title.style.borderLeftColor = "#1a237e";
+  root.append(title);
+  if (props.name) root.append(el("div", props.name, "popup-place"));
+  if (props.fee === "yes") root.append(el("div", "płatny", "popup-fee"));
+  else if (props.fee === "no") root.append(el("div", "bezpłatny", "popup-fee"));
+  root.append(actionLinks(lngLat.lat, lngLat.lng));
+  return root;
+}
+
 export function formatWx(wx) {
-  return {
+  const out = {
     rain: `Deszcz (5–21 dni wcześniej): ${dec(wx.rain_mm)} mm`,
     soil: `Gleba: ${dec(wx.soil_t)} °C, ${moistureLabel(wx.soil_m)}`,
   };
+  if (wx.et0_mm != null) {
+    out.et0 = `Parowanie (5–21 dni): ${dec(wx.et0_mm)} mm`;
+  }
+  return out;
 }
 
 export function trendArrow(dir) {
@@ -136,13 +166,17 @@ function speciesBars(props, list, pogoda, dayIdx) {
 
 export function renderPopup(props, ctx) {
   const { pogoda = null, dayIdx, todayIso, onDaySelect, nazwy = null, lngLat = null, onShare = null, speciesList = SPECIES } = ctx;
-  const isAll = ctx.species === ALL;
+  // ctx.keys: gatunki wyboru (grupa lub wszystkie); bez nich — z ctx.species ("all" albo jeden klucz).
+  const keys = ctx.keys ?? (ctx.species === ALL ? speciesList.map((s) => s.key) : [ctx.species]);
+  const isAll = keys.length > 1;
+  const listed = keys.map((k) => speciesList.find((s) => s.key === k) ?? { key: k, name: k });
   const hAll = {};
-  for (const sp of speciesList) hAll[sp.key] = props["h_" + sp.key] == null ? null : Number(props["h_" + sp.key]);
+  // brak atrybutu h_* w kafelku = 0 (zera nie są zapisywane)
+  for (const k of keys) hAll[k] = Number(props["h_" + k] ?? 0);
   const best = isAll && pogoda ? bestFor(pogoda, props.cell, hAll, dayIdx) : null;
-  let species = ctx.species;
+  let species = keys[0];
   if (isAll) {
-    species = best?.species ?? Object.keys(hAll).reduce((a, k) => ((hAll[k] ?? -1) > (hAll[a] ?? -1) ? k : a), speciesList[0].key);
+    species = best?.species ?? keys.reduce((a, k) => (hAll[k] > hAll[a] ? k : a), keys[0]);
   }
   const scoreAtAll = (idx) => (idx < 0 ? null : bestFor(pogoda, props.cell, hAll, idx)?.score ?? null);
   const root = el("div", null, "popup");
@@ -179,7 +213,7 @@ export function renderPopup(props, ctx) {
     } else {
       root.append(el("div", "Brak danych pogodowych dla tego miejsca", "popup-score popup-nodata"));
     }
-    if (isAll) root.append(speciesBars(props, speciesList, pogoda, dayIdx));
+    if (isAll) root.append(speciesBars(props, listed, pogoda, dayIdx));
     if (pogoda && todayIso) {
       const data = isAll ? chartDataBy(pogoda, scoreAtAll, todayIso) : chartData(pogoda, props.cell, species, h, todayIso);
       if (data.length) {
@@ -207,17 +241,24 @@ export function renderPopup(props, ctx) {
   row(t, "Wiek", props.age != null && props.age !== "" ? props.age + " lat" : "—");
   row(t, "Typ siedliskowy", props.hab || "—");
   row(t, "Siedlisko", pct(h / 100));
+  const weak = !isAll ? HAB_LIM_TEXT[props["hl_" + species]] : null;
+  if (weak && !props.rez) {
+    const tr = document.createElement("tr");
+    const td = el("td", weak, "popup-hablim");
+    td.colSpan = 2;
+    tr.append(td);
+    t.append(tr);
+  }
   if (weather && weather.wx && !props.rez) {
     const f = formatWx(weather.wx);
-    const r1 = document.createElement("tr");
-    const c1 = el("td", f.rain);
-    c1.colSpan = 2;
-    r1.append(c1);
-    const r2 = document.createElement("tr");
-    const c2 = el("td", f.soil);
-    c2.colSpan = 2;
-    r2.append(c2);
-    t.append(r1, r2);
+    for (const line of [f.rain, f.soil, f.et0]) {
+      if (line == null) continue;
+      const r = document.createElement("tr");
+      const c = el("td", line);
+      c.colSpan = 2;
+      r.append(c);
+      t.append(r);
+    }
   }
   root.append(t);
   if (weather && !props.rez) {
@@ -227,6 +268,12 @@ export function renderPopup(props, ctx) {
     row(dt, "Opad", pct(weather.rain));
     row(dt, "Temperatura", pct(weather.temp));
     row(dt, "Sezon", pct(weather.season));
+    if (typeof weather.pulse === "number") {
+      row(dt, "Ochłodzenie", `+${Math.round((weather.pulse - 1) * 100)}%`);
+    }
+    if (typeof weather.frost === "number") {
+      row(dt, "Przymrozek", pct(weather.frost));
+    }
     d.append(dt);
     root.append(d);
   }

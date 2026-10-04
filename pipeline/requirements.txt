@@ -5,3 +5,5 @@ pyogrio
 duckdb
 pyarrow
 boto3
+rasterio
+pysheds

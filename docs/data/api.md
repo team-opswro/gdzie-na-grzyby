@@ -16,7 +16,9 @@ v/<build>/centroidy/<lat0>_<lon0>.json  kafelek centroidów 0,5° (immutable)
 v/<build>/grid.json                   siatka pogodowa 0,1° (immutable)
 v/<build>/nazwy.json                  nazwy nadleśnictw i leśnictw (immutable)
 v/<build>/gatunki.json                treści i parametry gatunków (immutable)
-v/<build>/build.json                  metadane builda (informacyjnie, immutable)
+v/<build>/build.json                  metadane builda (informacyjnie, immutable): liczniki, `h_hist`
+                                      (liczba wydzieleń w przedziałach h 0–9 … 90–100 per gatunek),
+                                      `terrain` (progi tercyli TWI, źródło NMT) gdy liczono teren
 ```
 
 `<build>` = `YYYYMMDD-HHMM` (UTC, czas publikacji) + `-` + 7 znaków hasha gita, np.
@@ -76,9 +78,22 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
   - `cell` — identyfikator komórki pogodowej (`grid.json`, `pogoda.json`),
   - `sp` — kod gatunku panującego (BDL), `age` — jego wiek (lata; może brakować), `hab` — kod typu siedliska,
   - `h_<gatunek>` — ocena siedliska 0–100 dla każdego gatunku z `gatunki.json`
-    (np. `h_borowik`, `h_kurka`); wynik dnia = `round(h × w)`, gdzie `w` z `pogoda.json`,
+    (np. `h_borowik`, `h_kurka`); wynik dnia = `round(h × w)`, gdzie `w` z `pogoda.json`;
+    `h` uwzględnia partnera drzewnego i jego wiek, typ siedliskowy oraz (jako modyfikatory)
+    pokrywę runa, wilgotność, degradację, glebę, uszkodzenia i zadrzewienie z BDL oraz położenie
+    w terenie (wilgotność topograficzna TWI, strome stoki południowe) z Copernicus DEM GLO-30;
+    **brak atrybutu `h_<gatunek>` = 0** (zera nie są zapisywane, żeby zmniejszyć kafelki),
+  - `hl_<gatunek>` — „słaba strona siedliska”: nazwa najsłabszego modyfikatora (`veg`, `moist`, `degr`,
+    `soil`, `damage`, `density`, `twi`, `exposure`, `habitat`, `age`), gdy jego mnożnik < 0,8, a
+    `h_<gatunek>` ≥ 20; opcjonalny (brak = brak wyraźnej słabej strony),
   - `rez` — nazwa rezerwatu (lub `"rezerwat"`), gdy wydzielenie leży w rezerwacie (zbieranie zabronione).
 - `rezerwaty` — obrysy rezerwatów przyrody (GDOŚ), atrybut `name` (opcjonalny).
+- `parkingi` — parkingi z OpenStreetMap (punkty), atrybuty:
+  - `osm` — identyfikator OSM (`"n<id>"`, `"w<id>"` lub `"r<id>"`),
+  - `name` — nazwa parkingu (opcjonalna),
+  - `fee` — `"yes"` (płatny) lub `"no"` (bezpłatny) (opcjonalny);
+  - widoczna od zoomu 11.
+  Źródło: © OpenStreetMap contributors, ODbL.
 
 Przy małych zoomach tippecanoe może pomijać najmniejsze poligony (`--drop-smallest-as-needed`).
 
@@ -151,11 +166,16 @@ schemat: `schema/pogoda.schema.json`.
 
 - `days` — 8 dni: wczoraj, dziś i 6 kolejnych; każda tablica dzienna ma 8 elementów w tej kolejności.
 - `cells[cell][gatunek]` — mnożnik pogodowy `w` (0–1) i jego składowe `rain`, `temp`, `season` (0–1);
+  opcjonalnie `pulse` (1.0–1.2, premia za ochłodzenie gleby) i `frost` (0–1, kara za niedawny przymrozek) —
+  pomijane, gdy przez wszystkie dni wynoszą 1.0 (brak = 1.0); plik zapisywany bez zbędnych spacji;
   `lim` — czynnik ograniczający dnia: `dry` (za mało opadu), `dry_soil` (sucha gleba), `cold`, `hot`,
-  `season` (poza sezonem) albo `null`.
-- `wx[cell]` — wartości, z których liczony jest mnożnik dnia: `rain_mm` (suma opadu w oknie
-  poprzedzających dni, mm), `soil_t` (średnia temperatura gleby na 6 cm z ostatnich dni, °C),
-  `soil_m` (średnia wilgotność gleby 3–9 cm z ostatnich dni, m³/m³).
+  `season` (poza sezonem), `frost` (niedawny przymrozek) albo `null`.
+- `wx[cell]` — wartości, z których liczony jest mnożnik dnia: `rain_mm` (suma
+  opadu w oknie poprzedzających dni, mm), `soil_t` (średnia temperatura gleby na 6 cm z ostatnich dni,
+  °C), `soil_m` (średnia wilgotność gleby 3–9 cm z ostatnich dni, m³/m³). Gdy prognoza zawiera nowe
+  zmienne Open-Meteo, opcjonalnie dodawane są: `et0_mm` (suma parowania odniesienia ET0 w tym samym
+  oknie, mm), `soil_m_deep` (średnia wilgotność gleby 9–27 cm, m³/m³), `t2m_min` (minimum temperatury
+  powietrza z ostatnich 7 dni, °C).
 - Prognoza starsza niż 36 h jest nieaktualna (strona pokazuje wtedy baner i samą ocenę siedliska).
 
 ## Wersjonowanie i zgodność
@@ -166,3 +186,18 @@ schemat: `schema/pogoda.schema.json`.
   = nowy prefiks `v2/` i osobny `manifest.v2.json` (lub `v2/manifest.json`); stare `v/` i `manifest.json`
   są utrzymywane, dopóki wspierani klienci z nich korzystają.
 - `live/pogoda.json` podlega tej samej zasadzie (nowe pola dopuszczalne, zmiana znaczenia → `live/v2/`).
+
+### Wydanie modelu v2 (18 gatunków, grupy, pomijane zerowe `h_*`)
+
+Kolejność: **najpierw wdrożenie `web` i `forecast` z tej wersji kodu, potem `pipeline.publish` nowych
+danych**. Stary klient działa z nowymi danymi bez błędów, ale w trybie „Wszystkie gatunki” mapa liczy
+tylko 6 dawnych gatunków (zaszyta lista), a popup i ranking już 18 — wyniki się rozjeżdżają; stary
+kontener `forecast` nie liczy pogody dla 12 nowych gatunków.
+
+## Źródła i licencje
+
+- Bank Danych o Lasach (BDL), PGL Lasy Państwowe — wydzielenia i opisy taksacyjne.
+- Rezerwaty przyrody: GDOŚ. Parkingi: © OpenStreetMap (ODbL).
+- Pogoda: Open-Meteo (CC BY 4.0).
+- Model terenu: Copernicus DEM GLO-30 © DLR e.V. 2010–2014 i © Airbus Defence and Space GmbH
+  2014–2018, dostarczone w ramach programu Copernicus.

@@ -108,8 +108,12 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
             comps = [weather_multiplier(s, i, sp) for i in idx]
             per_species[key] = {
                 name: [round(getattr(c, name), DIGITS) for c in comps]
-                for name in ("w", "rain", "temp", "season")
+                for name in ("w", "rain", "temp", "season", "pulse", "frost")
             }
+            # neutralne składowe (same 1.0: brak ochłodzenia / przymrozku) pomijane — brak = 1.0
+            for name in ("pulse", "frost"):
+                if all(v == 1.0 for v in per_species[key][name]):
+                    del per_species[key][name]
             per_species[key]["lim"] = [
                 limiting_factor(c, s, i, sp) for c, i in zip(comps, idx)
             ]
@@ -120,6 +124,12 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
             "soil_t": [round(v.soil_t, 1) for v in vals],
             "soil_m": [round(v.soil_m, 3) for v in vals],
         }
+        if all(v.et0_mm is not None for v in vals):
+            wx[cid]["et0_mm"] = [round(v.et0_mm, 1) for v in vals]
+        if all(v.soil_m_deep is not None for v in vals):
+            wx[cid]["soil_m_deep"] = [round(v.soil_m_deep, 3) for v in vals]
+        if all(v.t2m_min is not None for v in vals):
+            wx[cid]["t2m_min"] = [round(v.t2m_min, 1) for v in vals]
     return {
         "generated_at": now.isoformat(timespec="seconds"),
         "days": [d.isoformat() for d in days],
@@ -131,7 +141,7 @@ def build_payload(cells: list[dict], series: dict[str, DailySeries], species: di
 def write_atomic(payload: dict, out: Path, schema: Path = SCHEMA_PATH) -> None:
     tmp = out.with_suffix(".tmp")
     try:
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False))
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")))
         validator = jsonschema.Draft202012Validator(
             json.loads(schema.read_text()), format_checker=jsonschema.FormatChecker()
         )

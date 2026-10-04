@@ -12,12 +12,35 @@ import shapely
 
 from forecast.species import Species
 from pipeline.grid import cell_id
-from pipeline.habitat import Stand, habitat_score
+from pipeline.habitat import HABITAT_FACTORS, habitat_components, habitat_score, stand_from_row
 
 CENTROID_THRESHOLD = 40
 CENTROID_TILE = 0.5
 MINZOOM, MAXZOOM = 8, 14
 ATTRS = ["id", "cell", "sp", "age", "hab"]
+# „Słabe strony siedliska” (spec J §3): najsłabszy modyfikator < HL_THRESHOLD, zapisywany przy h ≥ HL_MIN_H.
+HL_THRESHOLD = 0.8
+HL_MIN_H = 20
+# kolumny load_stands przekazywane do Stand (modyfikatory siedliska, spec F)
+STAND_EXTRA = ("moist", "degr", "soil", "veg", "damage", "density", "twi_class", "exposure")
+
+
+def weakest_factor(components: dict[str, float]) -> str | None:
+    """Najsłabszy czynnik poza partnerem (remis: kolejność HABITAT_FACTORS); None, gdy wszystkie ≥ próg."""
+    best = None
+    for name in HABITAT_FACTORS:
+        if name == "partner" or name not in components:
+            continue
+        if components[name] < HL_THRESHOLD and (best is None or components[name] < components[best]):
+            best = name
+    return best
+
+
+def _weak_point(st, sp) -> str | None:
+    c = habitat_components(st, sp)
+    if st.sp_main not in sp.partners:
+        c.pop("age")  # wiek panującego nie-partnera nie wpływa na ocenę
+    return weakest_factor(c)
 
 
 def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundary=None):
@@ -35,21 +58,22 @@ def compute_features(gdf: gpd.GeoDataFrame, species: dict[str, Species], boundar
     gdf["lon"] = pts.x.values
     gdf["cell"] = [cell_id(la, lo) for la, lo in zip(gdf["lat"], gdf["lon"])]
 
-    def _age(a):
-        return None if a is None or pd.isna(a) else int(a)
-
-    cache: dict[tuple, dict[str, int]] = {}
+    cache: dict = {}
     keys = list(species)
     rows = []
-    parts = gdf["partners"] if "partners" in gdf.columns else [()] * len(gdf)
-    for sp, adm, age, hab, pt in zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"], parts):
-        key = (sp, tuple(adm), _age(age), hab, tuple((c, s_, _age(a)) for c, s_, a in pt))
-        if key not in cache:
-            st = Stand(*key)
-            cache[key] = {k: int(round(100 * habitat_score(st, species[k]))) for k in keys}
-        rows.append(cache[key])
+    n = len(gdf)
+    parts = gdf["partners"] if "partners" in gdf.columns else [()] * n
+    extra = {c: (list(gdf[c]) if c in gdf.columns else [None] * n) for c in STAND_EXTRA}
+    for i, (sp, adm, age, hab, pt) in enumerate(
+            zip(gdf["sp_main"], gdf["sp_admix"], gdf["age"], gdf["hab"], parts)):
+        st = stand_from_row(sp, adm, age, hab, pt, **{c: extra[c][i] for c in STAND_EXTRA})
+        if st not in cache:
+            cache[st] = ({k: int(round(100 * habitat_score(st, species[k]))) for k in keys},
+                         {k: _weak_point(st, species[k]) for k in keys})
+        rows.append(cache[st])
     for k in keys:
-        gdf[f"h_{k}"] = [r[k] for r in rows]
+        gdf[f"h_{k}"] = [r[0][k] for r in rows]
+        gdf[f"hl_{k}"] = pd.Series([r[1][k] for r in rows], dtype=object).values
     return gdf
 
 
@@ -80,6 +104,24 @@ def write_reserves_seq(reserves: gpd.GeoDataFrame, path: Path) -> None:
         for name, geom in zip(reserves["name"], reserves.geometry):
             props = {"name": name} if isinstance(name, str) and name.strip() else {}
             fh.write(json.dumps({"type": "Feature", "properties": props,
+                                 "geometry": json.loads(shapely.to_geojson(geom))},
+                                ensure_ascii=False) + "\n")
+
+
+def write_parkings_seq(gdf: gpd.GeoDataFrame, path: Path) -> None:
+    """GeoJSONSeq parkingów z `tippecanoe: {minzoom: 11}`; atrybuty: osm, opcjonalnie name/fee."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    names = gdf["name"] if "name" in gdf.columns else [None] * len(gdf)
+    fees = gdf["fee"] if "fee" in gdf.columns else [None] * len(gdf)
+    with path.open("w", encoding="utf-8") as fh:
+        for osm, name, fee, geom in zip(gdf["osm"], names, fees, gdf.geometry):
+            props = {"osm": osm}
+            if isinstance(name, str) and name.strip():
+                props["name"] = name
+            if fee in ("yes", "no"):
+                props["fee"] = fee
+            fh.write(json.dumps({"type": "Feature", "tippecanoe": {"minzoom": 11},
+                                 "properties": props,
                                  "geometry": json.loads(shapely.to_geojson(geom))},
                                 ensure_ascii=False) + "\n")
 
@@ -139,8 +181,13 @@ def write_geojsonseq(gdf, keys: list[str], path: Path) -> None:
             props = {"id": rec.id, "cell": rec.cell, "sp": rec.sp_main,
                      "age": None if rec.age is None or rec.age != rec.age else int(rec.age),
                      "hab": rec.hab}
-            for c in hcols:
-                props[c] = int(getattr(rec, c))
+            for k, c in zip(keys, hcols):  # h = 0 pomijane (klient: brak atrybutu = 0), mniejsze kafelki
+                h = int(getattr(rec, c))
+                if h:
+                    props[c] = h
+                weak = getattr(rec, f"hl_{k}", None)
+                if h >= HL_MIN_H and isinstance(weak, str):
+                    props[f"hl_{k}"] = weak
             rez = getattr(rec, "rez", None)
             if isinstance(rez, str) and rez:
                 props["rez"] = rez

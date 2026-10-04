@@ -10,6 +10,10 @@ codes:
     BK: buk
     DB: dąb
     BRZ: brzoza
+    OS: osika
+    TP: topola
+    GB: grab
+    MD: modrzew
   habitats:
     BS: bór suchy
     BSW: bór świeży
@@ -54,6 +58,14 @@ codes:
     OLJG: ols jesionowy górski
     OLG: ols górski
     LMB: las mieszany bagienny
+
+# Grupy gatunków w aplikacji (klucze jak `group` w species.yaml).
+groups:
+  borowiki: {name: "Borowiki", all: "Wszystkie borowiki"}
+  podgrzybki: {name: "Podgrzybki", all: "Wszystkie podgrzybki"}
+  kozlarze: {name: "Koźlarze (kozaki)", all: "Wszystkie koźlarze"}
+  maslaki: {name: "Maślaki", all: "Wszystkie maślaki"}
+  rydze: {name: "Rydze", all: "Wszystkie rydze"}
 
 species:
   borowik:
@@ -142,7 +154,8 @@ species:
       Pomarańczowy mleczaj o lejkowatym kapeluszu z ciemniejszymi, koncentrycznymi
       pasami. Po uszkodzeniu wydziela marchewkowopomarańczowe mleczko, a miejsca
       zranione zielenieją. Trzon krótki, pusty, z ciemniejszymi dołkami. Rośnie pod
-      sosnami i świerkami, często w młodnikach i na trawiastych skrajach lasu.
+      sosnami, często w młodnikach i na trawiastych skrajach lasu. Pod świerkami
+      rośnie podobny rydz świerkowy (osobny gatunek).
     lookalikes:
       - name: Mleczaj wełnianka
         latin: Lactarius torminosus
@@ -150,3 +163,219 @@ species:
         how: >-
           Wydziela białe, bardzo ostre mleczko (rydz — pomarańczowe), a brzeg
           kapelusza jest kosmaty i podwinięty. Rośnie pod brzozami.
+  kozlarz_czerwony:
+    latin: Leccinum aurantiacum
+    wiki: https://pl.wikipedia.org/wiki/Koźlarz_czerwony
+    description: >-
+      Grzyb rurkowy o pomarańczowym do ceglastoczerwonego kapeluszu, którego skórka
+      wystaje poza brzeg. Rurki białawe, z wiekiem szarawe. Trzon białawy, pokryty
+      łuseczkami, które ciemnieją do rdzawobrązowych. Miąższ biały, po przekrojeniu
+      różowieje, a potem szarofioletowo ciemnieje. Rośnie pod osikami i topolami.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka z wiekiem różowieją, a trzon pokrywa ciemna siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+  kozlarz_pomaranczowy:
+    latin: Leccinum versipelle
+    wiki: https://pl.wikipedia.org/wiki/Koźlarz_pomarańczowożółty
+    description: >-
+      Grzyb rurkowy o pomarańczowożółtym do pomarańczowobrązowego kapeluszu ze
+      skórką wystającą poza brzeg. Trzon białawy, od młodości gęsto pokryty
+      czarnymi łuseczkami. Miąższ po przekrojeniu szybko różowofioletowo ciemnieje,
+      a w podstawie trzonu bywa sinozielony. Rośnie pod brzozami, chętnie na
+      wilgotnych, kwaśnych glebach i obrzeżach torfowisk.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka z wiekiem różowieją, a trzon pokrywa ciemna siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+  kozlarz_grabowy:
+    latin: Leccinum pseudoscabrum
+    wiki: https://pl.wikipedia.org/wiki/Koźlarz_grabowy
+    description: >-
+      Grzyb rurkowy o oliwkowobrązowym do szarobrązowego kapeluszu, często
+      nierównym i pomarszczonym, z wiekiem spękanym. Trzon z ciemnymi łuseczkami.
+      Miąższ po przekrojeniu różowieje lub szarzeje, a potem staje się
+      fioletowoczarny. Rośnie pod grabami i leszczyną, zwykle w grądach.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka z wiekiem różowieją, a trzon pokrywa ciemna siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+  kozlarz_debowy:
+    latin: Leccinum quercinum
+    wiki: https://pl.wikipedia.org/wiki/Koźlarz_dębowy
+    description: >-
+      Grzyb rurkowy o ceglastobrązowym do kasztanowego kapeluszu i białawych
+      rurkach. Trzon pokryty czerwonobrązowymi łuseczkami. Miąższ po przekrojeniu
+      czerwienieje, a potem ciemnieje. Rośnie pod dębami; część autorów uznaje go
+      za odmianę koźlarza czerwonego.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka z wiekiem różowieją, a trzon pokrywa ciemna siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+  borowik_sosnowy:
+    latin: Boletus pinophilus
+    wiki: https://pl.wikipedia.org/wiki/Borowik_sosnowy
+    description: >-
+      Duży borowik o ciemnym, czerwonobrązowym do winnobrązowego, matowym kapeluszu.
+      Rurki białe, potem żółtozielone. Trzon gruby, jasnobrązowy z czerwonawym
+      odcieniem i jasną siateczką. Miąższ biały, pod skórką kapelusza winnoczerwony,
+      nie sinieje. Rośnie pod sosnami w borach suchych i świeżych, często już
+      od czerwca.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka z wiekiem różowieją, a trzon pokrywa ciemna siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+      - name: Borowik szatański
+        latin: Rubroboletus satanas
+        risk: trujący
+        how: >-
+          Ma jasnoszary kapelusz, czerwone pory i pękaty trzon z czerwoną siateczką.
+          Rośnie pod dębami i bukami na glebach wapiennych; w Polsce rzadki i chroniony.
+          Nie zbieraj borowików o czerwonych porach.
+  borowik_usiatkowany:
+    latin: Boletus reticulatus
+    wiki: https://pl.wikipedia.org/wiki/Borowik_usiatkowany
+    description: >-
+      Borowik o jasnobrązowym, matowym, zamszowym kapeluszu, który w suchą pogodę
+      pęka w drobną siateczkę. Trzon jasnobrązowy, na całej długości pokryty wyraźną
+      siateczką. Miąższ biały, nie zmienia barwy. Najwcześniejszy z borowików
+      (od maja), rośnie pod dębami i bukami w ciepłych lasach liściastych.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka z wiekiem różowieją, a trzon pokrywa ciemna siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+      - name: Borowik szatański
+        latin: Rubroboletus satanas
+        risk: trujący
+        how: >-
+          Ma jasnoszary kapelusz, czerwone pory i pękaty trzon z czerwoną siateczką.
+          Rośnie pod dębami i bukami na glebach wapiennych; w Polsce rzadki i chroniony.
+          Nie zbieraj borowików o czerwonych porach.
+  podgrzybek_zajaczek:
+    latin: Xerocomus subtomentosus
+    wiki: https://pl.wikipedia.org/wiki/Podgrzybek_zajączek
+    description: >-
+      Grzyb rurkowy o oliwkowobrązowym, aksamitnym kapeluszu, który w suchą pogodę
+      pęka, odsłaniając jasnożółty miąższ. Rurki żółte, o dość dużych porach,
+      sinieją słabo lub wcale. Trzon żółtawy do brązowawego. Miąższ jasny, nie
+      sinieje lub sinieje nieznacznie. Rośnie w lasach liściastych i mieszanych.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka z wiekiem różowieją, a trzon pokrywa ciemna siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+      - name: Pieprzowiec pieprzowy
+        latin: Chalciporus piperatus
+        risk: niejadalny
+        how: >-
+          Mały grzyb o rdzawobrązowych porach i żółtym miąższu u podstawy trzonu,
+          bez pierścienia. Ma ostry, pieprzowy smak, który psuje potrawę.
+  podgrzybek_zlotawy:
+    latin: Xerocomellus chrysenteron
+    wiki: https://pl.wikipedia.org/wiki/Podgrzybek_złotawy
+    description: >-
+      Grzyb rurkowy o brązowym do oliwkowobrązowego kapeluszu, który szybko pęka;
+      w pęknięciach widać czerwonawy miąższ. Rurki żółte, po uciśnięciu sinieją.
+      Trzon żółty u góry, niżej z czerwonymi włókienkami. Miąższ żółtawy, lekko
+      sinieje. Rośnie w różnych lasach; szybko się psuje, więc zbiera się młode
+      owocniki.
+    lookalikes:
+      - name: Goryczak żółciowy
+        latin: Tylopilus felleus
+        risk: niejadalny
+        how: >-
+          Rurki goryczaka z wiekiem różowieją, a trzon pokrywa ciemna siateczka.
+          Miąższ jest bardzo gorzki — jeden owocnik psuje całą potrawę.
+      - name: Pieprzowiec pieprzowy
+        latin: Chalciporus piperatus
+        risk: niejadalny
+        how: >-
+          Mały grzyb o rdzawobrązowych porach i żółtym miąższu u podstawy trzonu,
+          bez pierścienia. Ma ostry, pieprzowy smak, który psuje potrawę.
+  podgrzybek_czerwonawy:
+    latin: Hortiboletus rubellus
+    wiki: https://pl.wikipedia.org/wiki/Podgrzybek_czerwonawy
+    description: >-
+      Niewielki grzyb rurkowy o karminowym do różowoczerwonego kapeluszu. Rurki
+      żółte, po uciśnięciu sinieją. Trzon żółty z czerwonymi włókienkami. Miąższ
+      żółty, w podstawie trzonu z pomarańczowymi plamkami, sinieje. Rośnie pod
+      dębami, na skrajach lasów i w parkach.
+    lookalikes:
+      - name: Borowik szatański
+        latin: Rubroboletus satanas
+        risk: trujący
+        how: >-
+          Ma jasnoszary kapelusz, czerwone pory i pękaty trzon z czerwoną siateczką.
+          Rośnie pod dębami i bukami na glebach wapiennych; w Polsce rzadki i chroniony.
+          Nie zbieraj borowików o czerwonych porach.
+  maslak_zolty:
+    latin: Suillus grevillei
+    wiki: https://pl.wikipedia.org/wiki/Maślak_żółty
+    description: >-
+      Maślak o złotożółtym do pomarańczowego, bardzo śluzowatym kapeluszu. Rurki
+      żółte. Trzon z białawym lub żółtawym, błoniastym pierścieniem. Miąższ żółty.
+      Rośnie wyłącznie pod modrzewiami. Przed przyrządzeniem zdejmuje się
+      śluzowatą skórkę.
+    lookalikes:
+      - name: Pieprzowiec pieprzowy
+        latin: Chalciporus piperatus
+        risk: niejadalny
+        how: >-
+          Mały grzyb o rdzawobrązowych porach i żółtym miąższu u podstawy trzonu,
+          bez pierścienia. Ma ostry, pieprzowy smak, który psuje potrawę.
+  maslak_sitarz:
+    latin: Suillus bovinus
+    wiki: https://pl.wikipedia.org/wiki/Maślak_sitarz
+    description: >-
+      Maślak o płowym, brązowopomarańczowym, lepkim kapeluszu. Rurki oliwkowożółte,
+      o dużych, kanciastych, złożonych porach przypominających sito. Trzon bez
+      pierścienia. Miąższ elastyczny, gumowaty. Rośnie w ubogich borach sosnowych,
+      często obok klejka różowego.
+    lookalikes:
+      - name: Pieprzowiec pieprzowy
+        latin: Chalciporus piperatus
+        risk: niejadalny
+        how: >-
+          Mały grzyb o rdzawobrązowych porach i żółtym miąższu u podstawy trzonu,
+          bez pierścienia. Ma ostry, pieprzowy smak, który psuje potrawę.
+  rydz_swierkowy:
+    latin: Lactarius deterrimus
+    wiki: https://pl.wikipedia.org/wiki/Mleczaj_świerkowy
+    description: >-
+      Pomarańczowy mleczaj o lejkowatym kapeluszu, często z zielonkawymi plamami
+      i słabo widocznymi pasami. Mleczko pomarańczowe, po kilkunastu minutach
+      czerwienieje. Blaszki pomarańczowe, miejsca uszkodzone zielenieją. Rośnie
+      pod świerkami, często w młodnikach.
+    lookalikes:
+      - name: Mleczaj wełnianka
+        latin: Lactarius torminosus
+        risk: trujący
+        how: >-
+          Wydziela białe, bardzo ostre mleczko, a brzeg kapelusza jest kosmaty
+          i podwinięty. Rośnie pod brzozami.
+      - name: Mleczaj omszony
+        latin: Lactarius pubescens
+        risk: trujący
+        how: >-
+          Jasny, kremowy do bladoróżowego, z kosmatym brzegiem kapelusza i białym,
+          ostrym mleczkiem. Rośnie pod brzozami.

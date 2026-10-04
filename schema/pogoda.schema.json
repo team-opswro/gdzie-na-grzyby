@@ -29,7 +29,13 @@
       "maxItems": 8,
       "items": {"type": "number", "minimum": 0, "maximum": 1}
     },
-    "lim": {"enum": ["dry", "dry_soil", "cold", "hot", "season", null]},
+    "series_pulse": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {"type": "number", "minimum": 1, "maximum": 1.2}
+    },
+    "lim": {"enum": ["dry", "dry_soil", "cold", "hot", "season", "frost", null]},
     "wxcell": {
       "type": "object",
       "required": ["rain_mm", "soil_t", "soil_m"],
@@ -37,7 +43,10 @@
       "properties": {
         "rain_mm": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0}},
         "soil_t": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number"}},
-        "soil_m": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}}
+        "soil_m": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}},
+        "et0_mm": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0}},
+        "soil_m_deep": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number", "minimum": 0, "maximum": 1}},
+        "t2m_min": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"type": "number"}}
       }
     },
     "species": {
@@ -49,6 +58,8 @@
         "rain": {"$ref": "#/$defs/series"},
         "temp": {"$ref": "#/$defs/series"},
         "season": {"$ref": "#/$defs/series"},
+        "pulse": {"$ref": "#/$defs/series_pulse"},
+        "frost": {"$ref": "#/$defs/series"},
         "lim": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"$ref": "#/$defs/lim"}}
       }
     },

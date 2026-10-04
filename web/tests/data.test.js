@@ -8,24 +8,40 @@ import { FETCH_TIMEOUT_MS } from "../js/config.js";
 const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
 
 test("SPECIES order", () => {
-  assert.deepEqual(SPECIES.map((s) => s.key), ["borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"]);
+  assert.deepEqual(SPECIES.map((s) => s.key).slice(0, 6), ["borowik", "podgrzybek", "kurka", "kozlarz", "maslak", "rydz"]);
+  assert.equal(SPECIES.length, 18);
 });
 test("weatherFor returns fixture values", () => {
   const w = weatherFor(P, "506_178", "borowik", 2);
   const src = P.cells["506_178"].borowik;
   assert.deepEqual(w, {
     w: src.w[2], rain: src.rain[2], temp: src.temp[2], season: src.season[2],
+    pulse: src.pulse?.[2] ?? null,
+    frost: src.frost?.[2] ?? null,
     lim: src.lim[2] ?? null,
     wx: { rain_mm: P.wx["506_178"].rain_mm[2], soil_t: P.wx["506_178"].soil_t[2], soil_m: P.wx["506_178"].soil_m[2] },
   });
   assert.equal(weatherFor(P, "507_178", "kurka", 0).w, 0);
+});
+
+test("weatherFor z nowymi polami wx", () => {
+  const Q = JSON.parse(JSON.stringify(P));
+  Q.cells["506_178"].borowik.pulse = [1.0, 1.0, 1.1];
+  Q.cells["506_178"].borowik.frost = [1.0, 1.0, 0.6];
+  Q.wx["506_178"].et0_mm = [10.0, 10.0, 12.0];
+  Q.wx["506_178"].soil_m_deep = [0.2, 0.2, 0.25];
+  Q.wx["506_178"].t2m_min = [5.0, 5.0, 4.0];
+  const w = weatherFor(Q, "506_178", "borowik", 2);
+  assert.equal(w.pulse, 1.1);
+  assert.equal(w.frost, 0.6);
+  assert.deepEqual(w.wx, { rain_mm: 32.0, soil_t: 8.8, soil_m: 0.222, et0_mm: 12.0, soil_m_deep: 0.25, t2m_min: 4.0 });
 });
 test("weatherFor on v1 fixture: lim and wx null", () => {
   const V1 = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda_v1.json", import.meta.url), "utf8"));
   const cell = Object.keys(V1.cells)[0];
   const src = V1.cells[cell].borowik;
   assert.deepEqual(weatherFor(V1, cell, "borowik", 0),
-    { w: src.w[0], rain: src.rain[0], temp: src.temp[0], season: src.season[0], lim: null, wx: null });
+    { w: src.w[0], rain: src.rain[0], temp: src.temp[0], season: src.season[0], pulse: null, frost: null, lim: null, wx: null });
 });
 test("weatherFor cell absent from wx → wx null", () => {
   const Q = { ...P, wx: {} };
@@ -211,4 +227,31 @@ test("loadData: hanging files → nulls after timeout (page not blocked)", async
 test("limity czasu: pliki danych 30 s, config/manifest 4 s", () => {
   assert.equal(DATA_TIMEOUT_MS, 30000);
   assert.equal(FETCH_TIMEOUT_MS, 4000);
+});
+
+
+import { GROUP_PREFIX, groupsOf, selectionKeys, isMulti, selectionValues } from "../js/data.js";
+
+const LIST = [{ key: "borowik" }, { key: "kozlarz" }, { key: "kozlarz_czerwony" }, { key: "kurka" }];
+const GROUPS = [{ key: "kozlarze", name: "Koźlarze (kozaki)", all: "Wszystkie koźlarze", species: ["kozlarz", "kozlarz_czerwony", "nieznany"] }];
+
+test("selectionKeys: grupa, all, gatunek, nieznane", () => {
+  assert.equal(GROUP_PREFIX, "g-");
+  assert.deepEqual(selectionKeys("g-kozlarze", LIST, GROUPS), ["kozlarz", "kozlarz_czerwony"]);
+  assert.deepEqual(selectionKeys("all", LIST, GROUPS), ["borowik", "kozlarz", "kozlarz_czerwony", "kurka"]);
+  assert.deepEqual(selectionKeys("kurka", LIST, GROUPS), ["kurka"]);
+  assert.deepEqual(selectionKeys("g-nie", LIST, GROUPS), []);
+  assert.deepEqual(selectionKeys("xyz", LIST, GROUPS), []);
+});
+
+test("isMulti i selectionValues", () => {
+  assert.equal(isMulti("all"), true);
+  assert.equal(isMulti("g-kozlarze"), true);
+  assert.equal(isMulti("kurka"), false);
+  assert.deepEqual(selectionValues(LIST, GROUPS), ["all", "g-kozlarze", "borowik", "kozlarz", "kozlarz_czerwony", "kurka"]);
+});
+
+test("groupsOf: brak gatunki.json -> brak grup", () => {
+  assert.deepEqual(groupsOf(null), []);
+  assert.deepEqual(groupsOf({ groups: GROUPS }), GROUPS);
 });

@@ -13,14 +13,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import geopandas as gpd
+import pyarrow.parquet as pq
 import yaml
 
 from forecast.species import load_species
 from pipeline.build_tiles import (compute_features, mark_reserves, tippecanoe_cmd,
-                                  write_centroid_tiles, write_geojsonseq, write_reserves_seq)
+                                  write_centroid_tiles, write_geojsonseq, write_parkings_seq,
+                                  write_reserves_seq)
 from pipeline.fetch_reserves import RESERVES_PATH
 from pipeline.grid import build_grid
-from pipeline.ingest import DATA_DIR, DEFAULT_DB, DEFAULT_PARQUET, load_stands
+from pipeline.ingest import DATA_DIR, DEFAULT_DB, DEFAULT_PARQUET, DEFAULT_TERRAIN, load_stands
 from pipeline.species_info import CONTENT_PATH, SPECIES_PATH, build_info
 
 DEFAULT_OUT = DATA_DIR / "out"
@@ -33,9 +35,21 @@ def _write_json(path: Path, obj, **kw) -> None:
     tmp.replace(path)
 
 
+def h_histogram(feats, keys: list[str]) -> dict[str, list[int]]:
+    """Liczba wydzieleń w przedziałach h 0–9, 10–19, …, 90–100 (porównanie rozkładu między buildami)."""
+    out = {}
+    for k in keys:
+        counts = [0] * 10
+        for v in feats[f"h_{k}"]:
+            counts[min(int(v) // 10, 9)] += 1
+        out[k] = counts
+    return out
+
+
 def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
         names_path: Path, tippecanoe=subprocess.run, now: str | None = None,
-        build: str | None = None) -> dict:
+        build: str | None = None,
+        parkings_path: Path | None = None, terrain_path: Path | None = None) -> dict:
     """Buduje wszystkie pliki w `out`; zwraca zawartość build.json."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -52,7 +66,18 @@ def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
     write_geojsonseq(feats, keys, seq)
     rseq = Path(build_dir) / "rezerwaty.geojsonseq"
     write_reserves_seq(reserves, rseq)
-    tippecanoe(tippecanoe_cmd(out, {"lasy": seq, "rezerwaty": rseq}), check=True)
+    layers = {"lasy": seq, "rezerwaty": rseq}
+
+    n_parkings = 0
+    if parkings_path and Path(parkings_path).exists():
+        pseq = Path(build_dir) / "parkingi.geojsonseq"
+        parkings = gpd.read_file(parkings_path).to_crs(4326)
+        write_parkings_seq(parkings, pseq)
+        layers["parkingi"] = pseq
+        n_parkings = len(parkings)
+        print(f"parkingi: {n_parkings}")
+
+    tippecanoe(tippecanoe_cmd(out, layers), check=True)
 
     index = write_centroid_tiles(feats, keys, out / "centroidy")
     n_centroids = sum(len(json.loads((out / "centroidy" / f"{t}.json").read_text())["rows"])
@@ -72,8 +97,13 @@ def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
         "generated_at": now or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "counts": {"stands": len(feats), "with_partners": with_partners, "rez": n_rez,
                    "centroids": n_centroids, "centroid_tiles": len(index["tiles"]),
-                   "grid_cells": len(grid["cells"])},
+                   "grid_cells": len(grid["cells"]), "parkings": n_parkings},
     }
+    meta["h_hist"] = h_histogram(feats, keys)
+    if terrain_path is not None and Path(terrain_path).exists():
+        tm = pq.read_schema(terrain_path).metadata or {}
+        meta["terrain"] = {"twi_terciles": json.loads(tm.get(b"twi_terciles", b"null")),
+                           "dem": tm.get(b"dem", b"").decode() or None}
     _write_json(out / "build.json", meta, indent=1)
     print(f"centroidy: {n_centroids} w {len(index['tiles'])} kafelkach, "
           f"komorki siatki: {len(grid['cells'])}")
@@ -102,7 +132,8 @@ def main(argv=None) -> int:
     stands = load_stands(args.db, args.parquet)
     reserves = gpd.read_file(args.reserves).to_crs(4326)
     run(stands, load_species(), reserves, args.out, args.build_dir, args.names,
-        tippecanoe=subprocess.run)
+        tippecanoe=subprocess.run, parkings_path=DATA_DIR / "parkingi.geojson",
+        terrain_path=DEFAULT_TERRAIN)
     return 0
 
 

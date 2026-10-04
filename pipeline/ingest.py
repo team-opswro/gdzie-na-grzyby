@@ -21,13 +21,14 @@ import pyarrow.parquet as pq
 import pyogrio
 import yaml
 
-from pipeline.habitat import normalize_habitat, normalize_species_code
+from pipeline.habitat import _ascii_upper, ascii_code, normalize_habitat, normalize_species_code
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PACKAGES = ROOT / "Nadlesnictwa"
 DEFAULT_DB = DATA_DIR / "bdl.duckdb"
 DEFAULT_PARQUET = DATA_DIR / "stands.parquet"
+DEFAULT_TERRAIN = DATA_DIR / "terrain.parquet"  # pipeline.terrain (spec I), opcjonalny
 DEFAULT_OUTLINE = DATA_DIR / "nadlesnictwa.geojson"
 DEFAULT_RAW = DATA_DIR / "raw"
 FIELDS_YAML = Path(__file__).resolve().parent / "bdl_fields.yaml"
@@ -442,20 +443,43 @@ part AS (
                          ss.rnk) AS partners
     FROM ss
     GROUP BY ALL
+),
+dens AS (
+    SELECT prefix, arodes_int_num, TRY_CAST(TRIM(density_cd) AS DOUBLE) AS density
+    FROM arod_storey
+    WHERE storey_cd IN {MAIN_STOREYS} AND TRY_CAST(TRIM(density_cd) AS DOUBLE) IS NOT NULL
+    QUALIFY row_number() OVER (PARTITION BY prefix, arodes_int_num
+                               ORDER BY CASE storey_cd WHEN 'DRZEW' THEN 0 ELSE 1 END) = 1
 )
 SELECT g.prefix, g.a_i_num,
        COALESCE(dom.species_cd, g.species_cd) AS sp_main,
        CASE WHEN dom.species_cd IS NOT NULL THEN dom.age ELSE g.spec_age END AS age,
        COALESCE(s.site_type_cd, g.site_type) AS hab,
        COALESCE(s.forest_func_cd, g.forest_fun) AS fun,
-       CASE WHEN dom.species_cd IS NOT NULL THEN part.partners END AS partners
+       CASE WHEN dom.species_cd IS NOT NULL THEN part.partners END AS partners,
+       NULLIF(TRIM(s.moisture_cd), '') AS moist,
+       NULLIF(TRIM(s.degradation_cd), '') AS degr,
+       NULLIF(TRIM(s.soil_subtype_cd), '') AS soil,
+       NULLIF(TRIM(s.veg_cover_cd), '') AS veg,
+       TRY_CAST(NULLIF(TRIM(s.damage_degree), '') AS INTEGER) AS damage,
+       dens.density
 FROM g_subarea g
 LEFT JOIN subarea s ON s.prefix = g.prefix AND s.arodes_int_num = g.a_i_num
 LEFT JOIN dom ON dom.prefix = g.prefix AND dom.arodes_int_num = g.a_i_num
 LEFT JOIN part ON part.prefix = g.prefix AND part.arodes_int_num = g.a_i_num
+LEFT JOIN dens ON dens.prefix = g.prefix AND dens.arodes_int_num = g.a_i_num
 WHERE COALESCE(s.area_type_cd, g.area_type) = 'D-STAN'
   AND COALESCE(dom.species_cd, g.species_cd) IS NOT NULL
 """
+
+
+def _codes(values, norm):
+    """Kody BDL znormalizowane `norm`; puste/NA -> brak (None lub NaN po złożeniu ramki)."""
+    out = []
+    for v in values:
+        t = None if v is None or (not isinstance(v, str) and pd.isna(v)) else norm(str(v))
+        out.append(t or None)
+    return pd.Series(out, dtype=object).values
 
 
 def _partners(items) -> tuple:
@@ -469,7 +493,8 @@ def _partners(items) -> tuple:
     return tuple(out)
 
 
-def load_stands(db_path: Path, parquet_path: Path) -> gpd.GeoDataFrame:
+def load_stands(db_path: Path, parquet_path: Path,
+                terrain_path: Path | None = DEFAULT_TERRAIN) -> gpd.GeoDataFrame:
     """Drzewostany (D-STAN z gatunkiem panującym) z bazy + geometrie; EPSG:4326.
 
     Kolumny: id, sp_main, sp_admix (kody partnerów bez panującego), partners
@@ -482,6 +507,12 @@ def load_stands(db_path: Path, parquet_path: Path) -> gpd.GeoDataFrame:
         con.close()
     geo = gpd.read_parquet(parquet_path)
     df = geo.merge(attrs, on=["prefix", "a_i_num"], how="inner")
+    if terrain_path is not None and Path(terrain_path).exists():
+        terr = pd.read_parquet(terrain_path, columns=["prefix", "a_i_num", "twi_class", "exposure"])
+        df = df.merge(terr.drop_duplicates(["prefix", "a_i_num"]), on=["prefix", "a_i_num"], how="left")
+    else:
+        df["twi_class"] = None
+        df["exposure"] = None
 
     sp_main = df["sp_main"].map(normalize_species_code)
     # partnerzy bez żadnego wiersza gatunku panującego (w dowolnym piętrze)
@@ -499,6 +530,16 @@ def load_stands(db_path: Path, parquet_path: Path) -> gpd.GeoDataFrame:
                     for v in df["hab"]],
             "fun": pd.Series([None if v is None or pd.isna(v) else v for v in df["fun"]],
                              dtype=object).values,
+            # kody modyfikatorów siedliska (spec F): ASCII, wielkie litery; gleba z zachowaniem
+            # wielkości liter (grupa gleby = wiodące wielkie litery)
+            "moist": _codes(df["moist"], _ascii_upper),
+            "degr": _codes(df["degr"], _ascii_upper),
+            "soil": _codes(df["soil"], ascii_code),
+            "veg": _codes(df["veg"], _ascii_upper),
+            "damage": pd.array(pd.to_numeric(df["damage"], errors="coerce"), dtype="Int64"),
+            "density": pd.to_numeric(df["density"], errors="coerce").astype(float).values,
+            "twi_class": _codes(df["twi_class"], str),
+            "exposure": _codes(df["exposure"], str),
             "prefix": df["prefix"].values,
         },
         geometry=df.geometry.values,

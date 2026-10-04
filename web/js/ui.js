@@ -1,11 +1,12 @@
-import { SPECIES, ALL, bestFor, loadData, loadSpecies, availableDays, bannerText } from "./data.js";
+import { SPECIES, bestFor, loadData, loadSpecies, availableDays, bannerText, groupsOf, selectionValues, selectionKeys, isMulti } from "./data.js";
+import { buildSpeciesOptions } from "./select.js";
 import { loadConfig, loadManifest, fileUrl } from "./config.js";
 import { createCentroidStore } from "./tiles.js";
 import { trend, trendBy } from "./chart.js";
-import { topN, haversineKm } from "./ranking.js";
+import { topN, haversineKm, renderLoading } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
 import { createMap, addForestLayers, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
-import { renderPopup, renderReserve, trendArrow, trendLabel, rankLabel } from "./popup.js";
+import { renderPopup, renderReserve, renderParking, trendArrow, trendLabel, rankLabel } from "./popup.js";
 import { shareUrl } from "./share.js";
 import { speciesCardModel, renderSpeciesCard, aboutForecastText } from "./dialogs.js";
 
@@ -27,9 +28,14 @@ function formatDay(iso) {
 const MAP_DATA_ERROR = "Nie udało się wczytać danych mapy";
 
 export async function init() {
+  // Rejestracja service workera (PWA) — tylko przez HTTP(S), nie z file://.
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW:", e));
+  }
+
   // Podkład powstaje od razu (zawieszony bucket ≠ pusta strona); warstwy lasów dochodzą po manifeście.
   // Wstępny hash: środek, zoom i podkład nie zależą od listy gatunków.
-  const pre = parseHash(location.hash, [...SPECIES.map((x) => x.key), ALL]);
+  const pre = parseHash(location.hash, selectionValues(SPECIES));
   const handlers = {}; // uzupełniane niżej, gdy stan jest gotowy
   const map = createMap($("map"), {
     center: pre.center ?? OPOLSKIE_CENTER,
@@ -37,6 +43,7 @@ export async function init() {
     basemap: pre.basemap,
     onFeatureClick: (props, lngLat) => handlers.feature?.(props, lngLat),
     onReserveClick: (name, lngLat) => handlers.reserve?.(name, lngLat),
+    onParkingClick: (props, lngLat) => handlers.parking?.(props, lngLat),
     onMove: () => handlers.move?.(),
   });
   const styleLoaded = new Promise((resolve) => map.once("load", resolve));
@@ -47,8 +54,11 @@ export async function init() {
   const mapDataError = manifest.missing || !pmtilesUrl;
   if (mapDataError) showBanner();
   const { list: speciesList, info: speciesInfo } = await loadSpecies(fileUrl(dataBase, manifest, "gatunki"));
-  const hash = parseHash(location.hash, [...speciesList.map((x) => x.key), ALL]);
+  const groups = groupsOf(speciesInfo);
+  const hash = parseHash(location.hash, selectionValues(speciesList, groups));
   const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place };
+  // Gatunki bieżącego wyboru: jeden klucz, grupa albo wszystkie (tryb wielu gatunków, gdy > 1).
+  const keys = () => selectionKeys(state.species, speciesList, groups);
   let data = { pogoda: null, centroidIndex: null, nazwy: null };
   let nazwy = null;
   let todayIso = todayLocalIso(); // stała data dnia, wspólna dla days i popupu
@@ -61,12 +71,11 @@ export async function init() {
   let placeTried = false; // jednorazowe otwarcie popupu z parametru w=
 
   const sel = $("species");
-  sel.append(new Option("Wszystkie gatunki", ALL));
-  for (const s of speciesList) sel.append(new Option(s.name, s.key));
+  buildSpeciesOptions(sel, speciesList, groups);
   sel.value = state.species;
   buildLegend();
   const infoBtn = $("species-info");
-  const syncInfoBtn = () => { infoBtn.disabled = state.species === ALL; };
+  const syncInfoBtn = () => { infoBtn.disabled = isMulti(state.species); };
   syncInfoBtn();
   infoBtn.addEventListener("click", () => {
     $("species-card-body").replaceChildren(renderSpeciesCard(speciesCardModel(speciesInfo, state.species)));
@@ -90,6 +99,14 @@ export async function init() {
   const dayIdx = () => (days.length ? days[state.day].idx : 0);
 
   handlers.feature = (props, lngLat) => showPopup(props, lngLat);
+  handlers.parking = (props, lngLat) => {
+    popup?.remove();
+    lastPopup = null;
+    const content = renderParking(props, lngLat);
+    const pp = new maplibregl.Popup({ maxWidth: "280px" }).setLngLat(lngLat).setDOMContent(content).addTo(map);
+    popup = pp;
+    pp.on("close", () => { if (popup === pp) popup = null; });
+  };
   handlers.reserve = (name, lngLat) => {
     popup?.remove();
     lastPopup = null;
@@ -104,11 +121,11 @@ export async function init() {
   };
   styleLoaded.then(() => {
     if (pmtilesUrl) {
-      addForestLayers(map, pmtilesUrl, { pogoda: effective, species: state.species, dayIdx: dayIdx(), basemap: state.basemap });
+      addForestLayers(map, pmtilesUrl, { pogoda: effective, species: keys(), dayIdx: dayIdx(), basemap: state.basemap });
     }
     mapReady = true;
     setBasemap(map, state.basemap); // przełączenie podkładu kliknięte przed końcem ładowania stylu
-    setView(map, effective, state.species, dayIdx());
+    setView(map, effective, keys(), dayIdx());
     if (loaded) map.once("idle", openInitialPlace);
   });
   map.on("idle", openInitialPlace);
@@ -146,6 +163,7 @@ export async function init() {
     const content = renderPopup(props, {
       pogoda: effective,
       species: state.species,
+      keys: keys(),
       speciesList,
       dayIdx: dayIdx(),
       todayIso,
@@ -239,20 +257,24 @@ export async function init() {
     const seq = ++rankingSeq;
     const list = $("ranking-list");
     const show = (...items) => { if (seq === rankingSeq) list.replaceChildren(...items); };
+    const setBusy = (v) => { if (seq === rankingSeq) list.setAttribute("aria-busy", v); };
     if (!loaded) return show();
     if (!centroids) return show(li("Nie udało się wczytać danych rankingu.", "empty"));
     if (!effective) return show(li("Brak danych pogodowych", "empty"));
     const o = origin();
     const radius = state.radius;
+    renderLoading(list);
     let top;
     try {
       const rows = await centroids.rowsNear(o, radius);
       if (seq !== rankingSeq) return;
-      top = topN({ species: centroids.species, rows }, effective, state.species, dayIdx(), o, radius);
+      top = topN({ species: centroids.species, rows }, effective, keys(), dayIdx(), o, radius);
     } catch (e) {
       console.warn("Ranking:", e);
+      setBusy("false");
       return show(li("Nie udało się wczytać danych rankingu.", "empty"));
     }
+    setBusy("false");
     list.replaceChildren();
     if (!top.length) {
       list.append(li(`Brak miejsc o dodatnim wyniku w promieniu ${radius} km`, "empty"));
@@ -267,9 +289,9 @@ export async function init() {
       sc.textContent = r.best.score;
       const tr = document.createElement("span");
       tr.className = "rank-trend";
-      const t = state.species === ALL
+      const t = r.best.hBy
         ? trendBy(effective, (i) => (i < 0 ? null : bestFor(effective, r.best.cell, r.best.hBy, i)?.score ?? null), dayIdx())
-        : trend(effective, r.best.cell, state.species, r.best.h, dayIdx());
+        : trend(effective, r.best.cell, keys()[0], r.best.h, dayIdx());
       if (t.dir) {
         tr.textContent = trendArrow(t.dir);
         tr.title = `${t.delta > 0 ? "+" : ""}${t.delta} względem poprzedniego dnia`;
@@ -313,7 +335,7 @@ export async function init() {
   }
 
   function refresh() {
-    if (mapReady) setView(map, effective, state.species, dayIdx());
+    if (mapReady) setView(map, effective, keys(), dayIdx());
     updateDayControls();
     updateRanking();
     writeHash();
@@ -409,15 +431,20 @@ export async function init() {
   effective = days.length ? pogoda : null;
   loaded = true;
   showBanner(bannerText(pogoda, days.length));
-  if (mapReady) setView(map, effective, state.species, dayIdx());
+  if (mapReady) setView(map, effective, keys(), dayIdx());
   updateDayControls();
   updateRanking();
   if (mapReady) map.once("idle", openInitialPlace);
   return map;
 
-  // Baner nad mapą: błąd danych mapy (manifest) + stan prognozy.
+  // Baner nad mapą: błąd danych mapy (manifest) + stan prognozy + tryb offline.
   function showBanner(weather = null) {
-    const text = [mapDataError ? MAP_DATA_ERROR : null, weather].filter(Boolean).join(". ");
+    const parts = [mapDataError ? MAP_DATA_ERROR : null, weather].filter(Boolean);
+    if (navigator.onLine === false && data.pogoda?.generated_at) {
+      const when = aboutForecastText(data.pogoda.generated_at).replace("Prognoza z: ", "");
+      parts.push(`Tryb offline — dane z ${when}`);
+    }
+    const text = parts.join(". ");
     $("stale").textContent = text;
     $("stale").hidden = !text;
   }
