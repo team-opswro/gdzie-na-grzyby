@@ -215,7 +215,9 @@ function evalExpr(e, props, env = {}) {
       for (let i = 0; i < a.length - 1; i += 2) en[a[i]] = ev(a[i + 1], en);
       return ev(a[a.length - 1], en);
     }
-    case "to-number": { const v = ev(a[0]); return v == null ? ev(a[1]) : Number(v); }
+    // jak w MapLibre: null -> 0 (nie kolejny argument)
+    case "to-number": { const v = ev(a[0]); return v == null ? 0 : Number(v); }
+    case "coalesce": { for (const x of a) { const v = ev(x); if (v != null) return v; } return null; }
     case "at": return ev(a[1])[a[0]];
     case "match": {
       const v = ev(a[0]);

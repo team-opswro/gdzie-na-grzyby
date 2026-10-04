@@ -19,7 +19,7 @@ const hExpr = (species) => ["to-number", ["get", "h_" + species], 0];
 
 // Mnożnik pogody wydzielenia (−1 = brak pogody w komórce), z korektą o wilgotność miejsca (spec L,
 // ten sam wzór co adjustW w data.js): w_eff = min(1, w · rain^(γ−1)), γ = G^(1 − 2·wet/100), G = wet_gamma gatunku;
-// brak atrybutu wet → 50 (γ = 1), brak rain w pogodzie → bez korekty.
+// brak atrybutu wet → 50 (γ = 1; coalesce, bo to-number(null) w MapLibre daje 0), brak rain → bez korekty.
 function weatherMatch(pogoda, species, dayIdx) {
   const args = [];
   for (const [cell, sp] of Object.entries(pogoda.cells ?? {})) {
@@ -32,7 +32,7 @@ function weatherMatch(pogoda, species, dayIdx) {
   if (args.length === 0) return -1;
   const w = ["at", 0, ["var", "wr"]];
   const rain = ["at", 1, ["var", "wr"]];
-  const gamma = ["^", wetGammaFor(species), ["-", 1, ["/", ["to-number", ["get", "wet"], 50], 50]]];
+  const gamma = ["^", wetGammaFor(species), ["-", 1, ["/", ["to-number", ["coalesce", ["get", "wet"], 50]], 50]]];
   return ["let", "wr", ["match", ["get", "cell"], ...args, ["literal", [-1, 0]]],
     ["case",
       ["<", w, 0], -1,
