@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from forecast.model import wet_adjust, wet_gamma
+from forecast.model import WET_GAMMA_BASE, wet_adjust, wet_gamma
 from forecast.model import (
     ET_ALPHA,
     FROST_FLOOR,
@@ -258,7 +258,8 @@ WET_CASES = json.loads((Path(__file__).parent / "fixtures" / "wet_cases.json").r
 
 @pytest.mark.parametrize("c", WET_CASES)
 def test_wet_adjust_shared_cases(c):
-    assert wet_adjust(c["w"], c["rain"], c["wet"]) == pytest.approx(c["expected"], abs=1e-6)
+    base = c.get("base", WET_GAMMA_BASE)
+    assert wet_adjust(c["w"], c["rain"], c["wet"], base) == pytest.approx(c["expected"], abs=1e-6)
 
 
 def test_wet_gamma_range():

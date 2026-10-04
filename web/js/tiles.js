@@ -1,6 +1,6 @@
 import { getJson } from "./config.js";
 
-// Centroidy w kafelkach 0,5°: centroidy/index.json = {tile, species, tiles}, centroidy/<lat0>_<lon0>.json = {rows}.
+// Centroidy w kafelkach 0,5°: centroidy/index.json = {tile, species, extra?, tiles}, centroidy/<lat0>_<lon0>.json = {rows}.
 
 const DEFAULT_TILE = 0.5;
 const rad = (d) => (d * Math.PI) / 180;
@@ -71,6 +71,7 @@ export function createCentroidStore(fetcher, base, index, { timeoutMs = TILE_TIM
   };
   return {
     species: index?.species ?? [],
+    extra: index?.extra ?? [],
     rowsNear: (origin, radiusKm) => rowsOf(tilesForRadius(origin, radiusKm, index)),
     // Najpierw kafelek środka, sąsiednie (3×3) dopiero gdy tam go nie ma.
     async findRow(id, lat, lon) {

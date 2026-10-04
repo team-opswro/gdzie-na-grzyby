@@ -1,4 +1,4 @@
-from forecast.species import load_species
+from forecast.species import ROOT, load_species
 
 
 def test_load_species_keys_in_order():
@@ -99,6 +99,8 @@ def test_yaml_factor_values():
     assert s["borowik"].factors["density"] == ((0.9, 1.0), (1.0, 0.9))
     assert s["borowik"].partner_weights == {"DB": 1.0, "BK": 0.9, "SO": 0.85, "SW": 0.85}
     assert s["podgrzybek"].partner_weights == {}
+    # spec L: siła efektu wilgotności miejsca (walidacja GBIF)
+    assert s["borowik"].wet_gamma == 1.5 and s["podgrzybek"].wet_gamma == 3.0
     assert s["borowik"].factors["damage"] == Ramp(40, 100, 0.6)
 
 
@@ -154,3 +156,11 @@ def test_new_species_values_from_spec():
     assert s["kozlarz_pomaranczowy"].factors["moist"] == s["kozlarz"].factors["moist"]
     assert s["maslak_sitarz"].factors["moist"] == s["maslak"].factors["moist"]
     assert s["rydz_swierkowy"].factors["degr"] == {}
+
+
+def test_wet_gamma_below_one_rejected(tmp_path):
+    p = tmp_path / "s.yaml"
+    p.write_text((ROOT / "species.yaml").read_text(encoding="utf-8").replace("wet_gamma: 1.5", "wet_gamma: 0.5"),
+                 encoding="utf-8")
+    with pytest.raises(ValueError, match="wet_gamma"):
+        load_species(p)

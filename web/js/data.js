@@ -51,7 +51,37 @@ export function selectionValues(speciesList, groups = []) {
 
 const STALE_HOURS = 36;
 
-export function weatherFor(pogoda, cell, species, dayIdx) {
+// Wilgotność miejsca (spec L, wzór jak forecast/model.py: wet_adjust; przypadki: tests/fixtures/wet_cases.json):
+// w_eff = min(1, w · rain^(γ−1)), γ = G^(1 − 2·wet/100), G = wet_gamma gatunku z gatunki.json (domyślnie 3).
+// Brak wet/rain lub rain ≤ 0 → w bez zmian.
+export const WET_GAMMA_BASE = 3;
+const wetGammas = new Map();
+
+// Lista gatunków z gatunki.json ([{key, wet_gamma?}]); brak pola → WET_GAMMA_BASE.
+export function setWetGammas(list) {
+  wetGammas.clear();
+  for (const s of list ?? []) if (Number.isFinite(s?.wet_gamma)) wetGammas.set(s.key, s.wet_gamma);
+}
+
+export function wetGammaFor(species) {
+  return wetGammas.get(species) ?? WET_GAMMA_BASE;
+}
+
+export function toWet(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function adjustW(w, rain, wet, base = WET_GAMMA_BASE) {
+  const x = toWet(wet);
+  if (w == null || rain == null || x == null || !(rain > 0)) return w;
+  const gamma = base ** (1 - (2 * x) / 100);
+  return Math.min(1, w * rain ** (gamma - 1));
+}
+
+// wet (atrybut wydzielenia, opcjonalny): w zwracane jest skorygowane, w_raw — z pogoda.json.
+export function weatherFor(pogoda, cell, species, dayIdx, wet = null) {
   const sp = pogoda?.cells?.[cell]?.[species];
   if (!sp || sp.w?.[dayIdx] == null) return null;
   const x = pogoda.wx?.[cell];
@@ -64,8 +94,13 @@ export function weatherFor(pogoda, cell, species, dayIdx) {
     ...(x.t2m_min && { t2m_min: x.t2m_min[dayIdx] }),
   } : null;
   const hasBaseWx = wx && wx.rain_mm != null && wx.soil_t != null && wx.soil_m != null;
+  const w = sp.w[dayIdx];
+  const rain = sp.rain?.[dayIdx] ?? null;
+  const wetN = toWet(wet);
   return {
-    w: sp.w[dayIdx], rain: sp.rain[dayIdx], temp: sp.temp[dayIdx], season: sp.season[dayIdx],
+    w: wetN == null ? w : adjustW(w, rain, wetN, wetGammaFor(species)),
+    ...(wetN != null && { w_raw: w, wet: wetN }),
+    rain, temp: sp.temp[dayIdx], season: sp.season[dayIdx],
     pulse: sp.pulse?.[dayIdx] ?? null,
     frost: sp.frost?.[dayIdx] ?? null,
     lim: sp.lim?.[dayIdx] ?? null,
@@ -78,11 +113,12 @@ export function score(hInt, w) {
 }
 
 // Najlepszy gatunek w komórce: max round(h_k * w_k); gatunki bez pogody lub bez h są pomijane.
-export function bestFor(pogoda, cell, hBySpecies, dayIdx) {
+// wet: wilgotność miejsca wydzielenia (spec L), opcjonalna.
+export function bestFor(pogoda, cell, hBySpecies, dayIdx, wet = null) {
   let best = null;
   for (const [species, h] of Object.entries(hBySpecies ?? {})) {
     if (h == null) continue;
-    const wx = weatherFor(pogoda, cell, species, dayIdx);
+    const wx = weatherFor(pogoda, cell, species, dayIdx, wet);
     if (!wx) continue;
     const s = score(h, wx.w);
     if (best == null || s > best.score) best = { species, score: s, wx };

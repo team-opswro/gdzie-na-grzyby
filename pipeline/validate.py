@@ -152,10 +152,11 @@ def stand_cells(stands: gpd.GeoDataFrame) -> list[str]:
 
 
 def wet_eval(key: str, sp: Species, pres_j: pd.DataFrame, stands: gpd.GeoDataFrame, cells: list[str],
-             series: Callable[[str, int], DailySeries | None], adjust=wet_adjust) -> dict:
+             series: Callable[[str, int], DailySeries | None], adjust=None) -> dict:
     """Wilgotność miejsca (spec L): obserwacja vs do WET_BG_PER_PRESENCE losowych wydzieleń z tej samej
     kratki i dnia (ten sam w); AUC h·w (= samo h w kratce) i h·w_eff, wszystkie dni i dni suche."""
     rng = rng_for(key + ":wet")
+    adjust = adjust or functools.partial(wet_adjust, base=sp.wet_gamma)
     by_cell: dict[str, list[int]] = defaultdict(list)
     for i, c in enumerate(cells):
         by_cell[c].append(i)
@@ -284,7 +285,8 @@ def main(argv=None) -> int:
     ap.add_argument("--refresh", action="store_true", help="pobierz ponownie zamiast z cache")
     ap.add_argument("--no-weather", action="store_true")
     ap.add_argument("--wet", action="store_true", help="raport wilgotności miejsca (spec L)")
-    ap.add_argument("--wet-gamma", type=float, help="podstawa G wzoru wilgotności (porównanie wariantów)")
+    ap.add_argument("--wet-gamma", type=float, help="podstawa G wzoru wilgotności dla wszystkich gatunków (porównanie wariantów; "
+                         "domyślnie wet_gamma gatunku)")
     ap.add_argument("--compare", type=Path, help="poprzedni walidacja.json (kolumna Δ AUC)")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--db", type=Path, default=DEFAULT_DB)
@@ -317,7 +319,7 @@ def main(argv=None) -> int:
         return cache[(cell, year)]
 
     cells = stand_cells(stands) if args.wet else []
-    adjust = functools.partial(wet_adjust, base=args.wet_gamma) if args.wet_gamma else wet_adjust
+    adjust = functools.partial(wet_adjust, base=args.wet_gamma) if args.wet_gamma else None
     per_species = {}
     for key in keys:
         presence = set(pres_j.loc[pres_j["species"] == key, "stand"])

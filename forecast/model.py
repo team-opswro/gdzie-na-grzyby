@@ -212,7 +212,7 @@ def limiting_factor(
 
 
 # --- wilgotność miejsca (spec L): korekta w per wydzielenie, liczona też w kliencie (web/js/data.js) ---
-WET_GAMMA_BASE = 3.0
+WET_GAMMA_BASE = 3.0  # = forecast.species.DEFAULT_WET_GAMMA; gatunek może mieć własne wet_gamma
 WET_NEUTRAL = 50
 
 

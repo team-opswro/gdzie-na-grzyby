@@ -1,5 +1,5 @@
 {
- "_opis": "Wsp\u00f3lne przypadki wzoru wilgotno\u015bci miejsca (spec L \u00a72): pytest i node --test.",
+ "_opis": "Wsp\u00f3lne przypadki wzoru wilgotno\u015bci miejsca (spec L \u00a72): pytest i node --test; base = wet_gamma (brak = 3).",
  "cases": [
   {
    "w": 0.8,
@@ -84,6 +84,27 @@
    "rain": 0.05,
    "wet": 100,
    "expected": 0.368403
+  },
+  {
+   "w": 0.797,
+   "rain": 0.797,
+   "wet": 3,
+   "base": 1.5,
+   "expected": 0.717365
+  },
+  {
+   "w": 0.797,
+   "rain": 0.797,
+   "wet": 97,
+   "base": 1.5,
+   "expected": 0.856422
+  },
+  {
+   "w": 0.4,
+   "rain": 0.5,
+   "wet": 0,
+   "base": 1.5,
+   "expected": 0.282843
   }
  ]
 }

@@ -207,3 +207,21 @@ test("renderParking: nazwa, płatny, Prowadź", () => {
   assert.match(t, /Prowadź/);
   assert.match(t, /OSM/);
 });
+
+// --- wilgotność miejsca (spec L) ---
+import { wetLabel, droughtNote } from "../js/popup.js";
+
+test("wetLabel: poziom i powód; brak wet -> null", () => {
+  assert.equal(wetLabel(92, "water"), "Wilgotność miejsca: wysoka (blisko wody)");
+  assert.equal(wetLabel(8, "hilltop"), "Wilgotność miejsca: niska (wyniesienie, woda spływa)");
+  assert.equal(wetLabel(50), "Wilgotność miejsca: średnia");
+  assert.equal(wetLabel(undefined, "water"), null);
+});
+
+test("droughtNote tylko w suchy dzień i przy wyraźnej korekcie", () => {
+  assert.match(droughtNote({ w: 0.88, w_raw: 0.8, lim: "dry" }), /lepiej/);
+  assert.match(droughtNote({ w: 0.6, w_raw: 0.8, lim: "dry_soil" }), /gorzej/);
+  assert.equal(droughtNote({ w: 0.82, w_raw: 0.8, lim: "dry" }), null);
+  assert.equal(droughtNote({ w: 0.6, w_raw: 0.8, lim: "cold" }), null);
+  assert.equal(droughtNote({ w: 0.6, lim: "dry" }), null);
+});

@@ -131,3 +131,17 @@ test("index.html ma tytuł Gdzie na grzyby?", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /<title>\s*Gdzie na grzyby\?\s*<\/title>/);
 });
+
+// --- wilgotność miejsca (spec L): kolumna wet za h_* (index.json "extra") ---
+import { weatherFor } from "../js/data.js";
+
+test("topN uwzględnia wet z kolumny extra; bez extra — po staremu", () => {
+  const rain = P.cells["506_178"].borowik.rain[0];
+  assert.ok(rain > 0 && rain < 1, "fixture: dzień z niepełnym opadem");
+  const rows = [[...row("a", 50.68, 17.92, "506_178", 60), 100], [...row("b", 50.68, 17.93, "506_178", 66), 0]];
+  const withWet = topN({ species: SP, extra: ["wet"], rows }, P, "borowik", 0, origin);
+  assert.deepEqual(withWet.map((g) => g.best.id), ["a", "b"]);
+  assert.equal(withWet[0].best.score, score(60, weatherFor(P, "506_178", "borowik", 0, 100).w));
+  const legacy = topN({ species: SP, rows }, P, "borowik", 0, origin);
+  assert.deepEqual(legacy.map((g) => g.best.id), ["b", "a"]);
+});

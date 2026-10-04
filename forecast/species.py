@@ -11,6 +11,7 @@ DEFAULT_RAIN_MIN = 10.0
 DEFAULT_RAIN_FULL = 40.0
 DEFAULT_SOIL_MOISTURE_MIN = 0.15
 DEFAULT_FROST_MIN = -2.0
+DEFAULT_WET_GAMMA = 3.0  # siła efektu wilgotności miejsca (spec L); 1.0 = brak efektu
 
 # Czynniki siedliska (spec F): tabele kod -> mnożnik, rampa liczbowa, przedziały liczbowe.
 TABLE_FACTORS = ("veg", "moist", "degr", "soil", "twi", "exposure")  # twi/exposure: spec I
@@ -47,6 +48,7 @@ class Species:
     group: str | None = None  # grupa w aplikacji (np. "kozlarze"); None = bez grupy
     # waga partnera (spec L §1b): kod drzewa -> mnożnik 0–1; brak kodu = 1.0
     partner_weights: Mapping[str, float] = field(default_factory=dict, hash=False)
+    wet_gamma: float = DEFAULT_WET_GAMMA
 
 
 def _md(text: str) -> tuple[int, int]:
@@ -123,7 +125,15 @@ def _parse(key: str, d: dict, defaults: Mapping[str, object] | None = None,
         group=d.get("group"),
         partner_weights={str(c).upper(): _mult(key, "partner_weights", v)
                          for c, v in (d.get("partner_weights") or {}).items()},
+        wet_gamma=_wet_gamma(key, d.get("wet_gamma", DEFAULT_WET_GAMMA)),
     )
+
+
+def _wet_gamma(key: str, v) -> float:
+    v = float(v)
+    if v < 1.0:
+        raise ValueError(f"{key}: wet_gamma musi być ≥ 1 (1 = brak efektu): {v}")
+    return v
 
 
 def load_species(path: Path = ROOT / "species.yaml") -> dict[str, Species]:
