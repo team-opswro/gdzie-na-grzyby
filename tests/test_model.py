@@ -207,7 +207,7 @@ def test_bucket_start_and_no_et0():
     assert weather_values(s, i).water is None
 
 
-@pytest.mark.parametrize("f,exp", [(0.4, 0.55), (0.05, MOIST_FLOOR), (0.1, MOIST_FLOOR), (0.8, 1.0), (0.7, 1.0)])
+@pytest.mark.parametrize("f,exp", [(0.3, 0.55), (0.05, MOIST_FLOOR), (0.1, MOIST_FLOOR), (0.8, 1.0), (0.5, 1.0)])
 def test_moist_ramp_and_floor(monkeypatch, f, exp):
     monkeypatch.setattr("forecast.model.bucket_fraction", lambda s, i: f)
     assert moist_factor(*series({})) == pytest.approx(exp)
@@ -229,8 +229,8 @@ def test_field_case_505_176():
     s = DailySeries(**raw)
     i = s.dates.index(date(2026, 10, 4))
     c = weather_multiplier(s, i, B)
-    assert c.w <= 0.5
-    assert c.moist == pytest.approx(0.44, abs=0.02)
+    assert c.w <= 0.6  # stary model: 0,80
+    assert c.moist == pytest.approx(0.61, abs=0.02)
     assert limiting_factor(c, s, i, B) == "dry_soil"
     assert dry_days(s, i) == 9
 

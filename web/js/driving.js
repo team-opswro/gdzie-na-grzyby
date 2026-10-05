@@ -9,7 +9,8 @@ const parkingKey = (p) => `${p.id}:${coord(p)}`;
 
 export function driveSettings(hash) {
   const params = new URLSearchParams((hash ?? "").replace(/^#/, ""));
-  const mode = params.get("t") === "car" || !hash ? "car" : "air";
+  // domyślnie „w linii prostej”: ranking od razu pokazuje miejsca; dojazd samochodem tylko z t=car lub z wyboru
+  const mode = params.get("t") === "car" ? "car" : "air";
   let origin = null;
   if (params.has("o")) {
     const parts = params.get("o").split(",");

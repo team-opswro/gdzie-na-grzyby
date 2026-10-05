@@ -87,7 +87,7 @@ test("link zachowuje tryb samochodowy, 50 km i przybliżony punkt wyjazdu", () =
   const hash = formatHash({ species: "all", day: 0, radius: 50, travel: "car", driveOrigin: origin });
   assert.equal(parseHash(hash).radius, 50);
   assert.deepEqual(driveSettings(hash), { mode: "car", origin });
-  assert.equal(driveSettings("").mode, "car");
+  assert.equal(driveSettings("").mode, "air");  // pierwsze wejście: ranking od razu, bez dojazdu
   assert.equal(driveSettings("#s=all&r=40").mode, "air");
   assert.equal(driveSettings("#t=car&o=999,999").origin, null);
   assert.equal(driveSettings("#t=car&o=,").origin, null);

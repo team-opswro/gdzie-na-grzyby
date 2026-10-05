@@ -57,8 +57,10 @@ test("wybór Twardogóry przenosi mapę i ranking oraz ignoruje spóźnioną odp
     const map = await init();
     assert.deepEqual(map.center, AREAS.wroclaw.center);
     assert.equal(node("area").value, "wroclaw");
-    assert.equal(node("travel").value, "car");
-    assert.equal(node("radius").value, "50");
+    // pierwsze wejście bez hasha: ranking w linii prostej, promień domyślny — lista od razu, bez „Oblicz dojazd”
+    assert.equal(node("travel").value, "air");
+    assert.equal(node("radius").value, "20");
+    assert.equal(node("drive-search").hidden, true);
 
     node("locate").events.click();
     node("area").value = "twardogora";
@@ -74,6 +76,9 @@ test("wybór Twardogóry przenosi mapę i ranking oraz ignoruje spóźnioną odp
     assert.deepEqual(map.center, AREAS.twardogora.center);
     assert.equal(node("area").value, "twardogora");
 
+    node("travel").value = "car";
+    node("travel").events.change();
+    assert.equal(node("drive-search").hidden, false);
     node("drive-search").events.click();
     assert.equal(node("ranking-source").textContent, "od wybranego punktu wyjazdu");
     assert.match(globals.location.hash, /t=car&o=51\.365,17\.468/);

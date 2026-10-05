@@ -158,3 +158,18 @@ zgodna z terenem i wyraźnie rozdzielona; pagórek spada do „słabo/brak”.
 
 Uwaga: `MOIST_HIGH` = 0,7 wybrano przy znajomości przypadku 4.10 (przy 0,5 `w` = 0,56) — uzasadnienie fizyczne
 w §1, ale to jedyny parametr, przy którym przypadek wpłynął na wybór.
+
+### Zmiana 2026-10-05: `MOIST_HIGH` 0,7 → 0,5
+
+Po wdrożeniu, w trwającej suszy, mapa była prawie w całości „brak” (5.10, podgrzybek: mediana `w` 0,12, maksimum 0,55;
+nigdzie „bardzo dobrze”). Próg 0,7 był jedynym parametrem dobranym przy znajomości przypadku 4.10 — wracamy do wartości
+z literatury (FAO-56, p ≈ 0,5). Walidacja GBIF praktycznie bez zmian:
+
+| `MOIST_HIGH` | AUC `w` borowik / podgrzybek | h·w_eff borowik / podgrzybek | 4.10: `w` | 5.10 podgrzybek: p50 / p90 / max |
+|---|---|---|---|---|
+| 0,7 | 0,565 / 0,627 | 0,552 / 0,619 | 0,40 | 0,12 / 0,37 / 0,55 |
+| 0,6 | 0,566 / 0,625 | 0,553 / 0,617 | 0,46 | 0,14 / 0,43 / 0,65 |
+| **0,5** | 0,568 / 0,624 | 0,554 / 0,616 | 0,56 | 0,16 / 0,52 / 0,78 |
+
+Przypadek 4.10 (podgrzybek, wynik z wilgotnością miejsca): pagórek 379-b 18 („słabo”), brzeg stawu 370-a 47 („dobrze”) —
+kolejność i rozdzielenie zgodne z terenem; stary model: 40 / 58.

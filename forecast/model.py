@@ -18,7 +18,7 @@ ET_ALPHA = 0.0  # spec M: parowanie liczy wiadro (moist); rain = czysty impuls o
 BUCKET_MM = 25.0
 BUCKET_KC = 0.8
 MOIST_LOW = 0.1  # poniżej: podłoże przesuszone
-MOIST_HIGH = 0.7  # od tego zapasu bez ograniczeń (owocnikowanie wymaga podłoża bliskiego pojemności polowej)
+MOIST_HIGH = 0.5  # od połowy zapasu bez ograniczeń (FAO-56: p ≈ 0,5); 0,7 dawało w suszy prawie samo „brak”
 MOIST_FLOOR = 0.1  # > 0, żeby korekta wilgotności miejsca (spec L) mogła podnieść wynik w suszy
 DRY_DAY_MM = 1.0  # opad dobowy, od którego dzień nie liczy się do „dni bez deszczu”
 PULSE_MAX = 0.2

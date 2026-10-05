@@ -58,7 +58,7 @@ export async function init() {
   const groups = groupsOf(speciesInfo);
   const hash = parseHash(location.hash, selectionValues(speciesList, groups));
   const driveConfig = driveSettings(location.hash);
-  const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: location.hash ? hash.radius : 50, place: hash.place, travel: driveConfig.mode };
+  const state = { species: hash.species, day: hash.day, basemap: hash.basemap, radius: hash.radius, place: hash.place, travel: driveConfig.mode };
   let driveOrigin = driveConfig.origin;
   let driveRequested = false;
   const drivePlanner = pmtilesUrl ? createDrivePlanner(createParkingStore(new pmtiles.PMTiles(new URL(pmtilesUrl, location.href).href))) : null;
