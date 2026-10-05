@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p web/vendor
-MAPLIBRE=4.7.1
+MAPLIBRE=5.24.0
 PMTILES=3.2.1
 curl -fsSL "https://unpkg.com/maplibre-gl@${MAPLIBRE}/dist/maplibre-gl.js" -o web/vendor/maplibre-gl.js
 curl -fsSL "https://unpkg.com/maplibre-gl@${MAPLIBRE}/dist/maplibre-gl.css" -o web/vendor/maplibre-gl.css

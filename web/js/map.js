@@ -30,15 +30,18 @@ const STEPS = [10, 25, 45, 66];
 
 const hExpr = (species) => ["to-number", ["get", "h_" + species], 0];
 
-// Wynik dnia (0–100) dla wydzielenia albo −1, gdy kratka nie ma pogody. Jeden `match` po kratce zwraca
-// dla wszystkich gatunków wyboru pary [w, m] (płaska tablica; w = −1 = brak pogody gatunku) — tryb wielu
-// gatunków nie powtarza już dopasowania kratki osobno dla każdego gatunku.
-// Wilgotność miejsca (spec L, ten sam wzór co adjustW w data.js): w_eff = min(1, w · m^(γ−1)),
-// γ = G^(1 − 2·wet/100), G = wet_gamma gatunku, m = moist (spec M), a w starszym pliku rain; brak atrybutu
-// wet → 50 (γ = 1; coalesce, bo to-number(null) w MapLibre daje 0), m ≤ 0 → bez korekty.
-function scoreMatch(pogoda, keys, dayIdx) {
-  const args = [];
-  for (const [cell, sp] of Object.entries(pogoda.cells ?? {})) {
+// Pogoda dnia trzymana jest w stanie globalnym mapy (MapLibre `global-state`), a nie w wyrażeniu koloru:
+// wyrażenie ma stały, mały rozmiar, a MapLibre przesyła je przy każdym kafelku z workera — z danymi
+// 665 kratek × 18 gatunków (≈ 150 KB) przesuwanie mapy w trybie wielu gatunków się zacinało.
+export const WX_STATE = "wx";
+
+// Stan dla wyboru i dnia: { <kratka>: [w_1, m_1, w_2, m_2, …] } w kolejności kluczy wyboru;
+// w = −1 — brak pogody gatunku w kratce; kratki bez żadnej pogody pominięte (→ „brak danych”).
+// m = moist (spec M), a w starszym pliku rain.
+export function weatherState(pogoda, sel, dayIdx) {
+  const keys = keysOf(sel);
+  const out = {};
+  for (const [cell, sp] of Object.entries(pogoda?.cells ?? {})) {
     const row = [];
     let any = false;
     for (const k of keys) {
@@ -47,10 +50,19 @@ function scoreMatch(pogoda, keys, dayIdx) {
       row.push(w == null ? -1 : w, m == null ? 0 : m);
       any ||= w != null;
     }
-    if (any) args.push(cell, ["literal", row]);
+    if (any) out[cell] = row;
   }
-  // match wymaga co najmniej jednej pary; bez niej wszystko jest „brak danych”
-  if (args.length === 0) return -1;
+  return out;
+}
+
+// Wynik dnia (0–100) dla wydzielenia albo −1, gdy kratka nie ma pogody; tryb wielu gatunków: max po gatunkach.
+// Wilgotność miejsca (spec L, ten sam wzór co adjustW w data.js): w_eff = min(1, w · m^(γ−1)),
+// γ = G^(1 − 2·wet/100), G = wet_gamma gatunku; brak atrybutu wet → 50 (γ = 1; coalesce, bo to-number(null)
+// w MapLibre daje 0), m ≤ 0 → bez korekty.
+function scoreExpr(keys) {
+  const fallback = ["literal", keys.flatMap(() => [-1, 0])];
+  const row = ["array", "number", ["coalesce",
+    ["get", ["to-string", ["get", "cell"]], ["object", ["global-state", WX_STATE], ["literal", {}]]], fallback]];
   const wetShift = ["-", 1, ["/", ["to-number", ["coalesce", ["get", "wet"], 50]], 50]];
   const perSpecies = keys.map((k, i) => {
     const w = ["at", 2 * i, ["var", "wr"]];
@@ -58,9 +70,7 @@ function scoreMatch(pogoda, keys, dayIdx) {
     const weff = ["case", [">", m, 0], ["min", 1, ["*", w, ["^", m, ["-", ["^", wetGammaFor(k), ["var", "ws"]], 1]]]], w];
     return ["case", ["<", w, 0], -1, ["round", ["*", hExpr(k), weff]]];
   });
-  const fallback = ["literal", keys.flatMap(() => [-1, 0])];
-  return ["let", "wr", ["match", ["get", "cell"], ...args, fallback], "ws", wetShift,
-    perSpecies.length === 1 ? perSpecies[0] : ["max", ...perSpecies]];
+  return ["let", "wr", row, "ws", wetShift, perSpecies.length === 1 ? perSpecies[0] : ["max", ...perSpecies]];
 }
 
 const stepOn = (input, values) => {
@@ -74,12 +84,14 @@ const keysOf = (sel) => (Array.isArray(sel) ? sel : sel === ALL ? SPECIES.map((s
 
 // sel: klucz gatunku, "all" albo lista kluczy (grupa); wynik: kolor rgba (z kryciem). Tryb wielu gatunków:
 // max po skorygowanych wynikach; gatunek bez pogody w kratce daje −1. Bez pogody — samo h (max po gatunkach).
-export function fillColorExpression(pogoda, sel, dayIdx) {
+// Pogoda dnia przychodzi ze stanu globalnego (weatherState → map.setGlobalStateProperty), więc wyrażenie
+// zależy tylko od wyboru gatunków i tego, czy prognoza w ogóle jest (bez niej — samo h).
+export function fillColorExpression(pogoda, sel) {
   const keys = keysOf(sel);
   const fills = COLORS.classes.map((_, i) => classFill(i));
   const body = pogoda == null
     ? stepOn(keys.length === 1 ? hExpr(keys[0]) : ["max", ...keys.map(hExpr)], fills)
-    : ["let", "sc", scoreMatch(pogoda, keys, dayIdx),
+    : ["let", "sc", scoreExpr(keys),
       ["case", ["<", ["var", "sc"], 0], NO_DATA_FILL, stepOn(["var", "sc"], fills)]];
   return ["case", ["has", "rez"], RESERVE_FILL, body];
 }
@@ -184,7 +196,8 @@ export function setBasemap(map, key) {
 
 export function setView(map, pogoda, species, dayIdx) {
   if (!map.getLayer("lasy-fill")) return;
-  map.setPaintProperty("lasy-fill", "fill-color", fillColorExpression(pogoda, species, dayIdx));
+  map.setGlobalStateProperty(WX_STATE, weatherState(pogoda, species, dayIdx));
+  map.setPaintProperty("lasy-fill", "fill-color", fillColorExpression(pogoda, species));
 }
 
 // Warstwy lasów i rezerwatów z PMTiles; dodawane po załadowaniu stylu i manifestu (podkład jest od razu).
@@ -192,6 +205,7 @@ export function setView(map, pogoda, species, dayIdx) {
 export function addForestLayers(map, pmtilesUrl, { pogoda = null, species = "borowik", dayIdx = 0, basemap = "osm" } = {}) {
   const tilesUrl = new URL(pmtilesUrl, globalThis.location?.href).href;
   const lc = lineColor(basemap);
+  map.setGlobalStateProperty(WX_STATE, weatherState(pogoda, species, dayIdx));
   map.addSource("lasy", { type: "vector", url: "pmtiles://" + tilesUrl, minzoom: 8, maxzoom: 14 });
   map.addImage("hatch", hatchPattern());
   map.addImage("parking", parkingIcon());
@@ -199,7 +213,7 @@ export function addForestLayers(map, pmtilesUrl, { pogoda = null, species = "bor
     {
       id: "lasy-fill", type: "fill", source: "lasy", "source-layer": "lasy",
       paint: {
-        "fill-color": fillColorExpression(pogoda, species, dayIdx),
+        "fill-color": fillColorExpression(pogoda, species),
       },
     },
     {
@@ -226,6 +240,8 @@ export function addForestLayers(map, pmtilesUrl, { pogoda = null, species = "bor
   ];
   for (const l of layers) map.addLayer(l);
 }
+
+const HOVER_LAYERS = ["parkingi", "lasy-fill", "rezerwaty-fill"];
 
 export function createMap(container, { center, zoom, onFeatureClick, onReserveClick, onParkingClick, onMove, basemap = "osm" }) {
   const protocol = new pmtiles.Protocol();
@@ -269,12 +285,20 @@ export function createMap(container, { center, zoom, onFeatureClick, onReserveCl
     const r = map.queryRenderedFeatures(e.point, { layers: ["rezerwaty-fill"] })[0];
     if (r && onReserveClick) onReserveClick(r.properties?.name, e.lngLat);
   });
-  map.on("mouseenter", "lasy-fill", () => (map.getCanvas().style.cursor = "pointer"));
-  map.on("mouseleave", "lasy-fill", () => (map.getCanvas().style.cursor = ""));
-  map.on("mouseenter", "rezerwaty-fill", () => (map.getCanvas().style.cursor = "pointer"));
-  map.on("mouseleave", "rezerwaty-fill", () => (map.getCanvas().style.cursor = ""));
-  map.on("mouseenter", "parkingi", () => (map.getCanvas().style.cursor = "pointer"));
-  map.on("mouseleave", "parkingi", () => (map.getCanvas().style.cursor = ""));
+  // Kursor „rączka” nad klikalnymi obiektami. Jeden handler zamiast mouseenter/mouseleave per warstwa
+  // (MapLibre robi wtedy queryRenderedFeatures dla każdej warstwy przy każdym ruchu myszy, także w trakcie
+  // przeciągania mapy): najwyżej raz na klatkę i wcale, gdy mapa się przesuwa.
+  let hoverPoint = null;
+  map.on("mousemove", (e) => {
+    if (hoverPoint === null) requestAnimationFrame(() => {
+      const pt = hoverPoint;
+      hoverPoint = null;
+      if (map.isMoving() || !map.getLayer("lasy-fill")) return;
+      const hit = map.queryRenderedFeatures(pt, { layers: HOVER_LAYERS }).length > 0;
+      map.getCanvas().style.cursor = hit ? "pointer" : "";
+    });
+    hoverPoint = e.point;
+  });
   if (onMove) map.on("moveend", () => onMove(map));
   return map;
 }

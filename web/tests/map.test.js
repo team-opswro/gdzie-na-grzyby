@@ -1,15 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { fillColorExpression, COLORS, FILL_OPACITY, classFill, NO_DATA_FILL, RESERVE_FILL, rgba, hatchPattern, BASEMAPS, lineColor } from "../js/map.js";
+import { fillColorExpression, weatherState, WX_STATE, COLORS, FILL_OPACITY, classFill, NO_DATA_FILL, RESERVE_FILL, rgba, hatchPattern, BASEMAPS, lineColor } from "../js/map.js";
 import { BASEMAP_KEYS } from "../js/hash.js";
 import { parkingIcon } from "../js/map.js";
 
 const P = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/pogoda.json", import.meta.url), "utf8"));
 
-test("expression contains match on cell with fallback -1", () => {
+test("pogoda w stanie globalnym: wyrażenie czyta kratkę z global-state, bez danych kratek w wyrażeniu", () => {
   const e = JSON.stringify(fillColorExpression(P, "borowik", 0));
-  assert.ok(e.includes('"match"') && e.includes('"cell"') && e.includes("-1"));
+  assert.ok(e.includes('["global-state","wx"]') && e.includes('"cell"') && e.includes("-1"));
+  assert.ok(!e.includes('"match"') && !e.includes('"506_178"'));
+  // rozmiar wyrażenia nie zależy od liczby kratek ani dnia
+  assert.equal(JSON.stringify(fillColorExpression(P, "all", 0)), JSON.stringify(fillColorExpression(P, "all", 5)));
+  assert.ok(JSON.stringify(fillColorExpression(P, "all", 0)).length < 20000);
+});
+
+test("weatherState: [w, m] gatunków wyboru po kratkach, brak pogody gatunku = −1", () => {
+  const p = { cells: { a: { borowik: { w: [0.5], moist: [0.4], rain: [1] }, kurka: { w: [0.2], rain: [0.9] } }, b: { kurka: {} } } };
+  assert.deepEqual(weatherState(p, ["borowik", "kurka"], 0), { a: [0.5, 0.4, 0.2, 0.9] });
+  assert.deepEqual(weatherState(p, ["rydz", "borowik"], 0), { a: [-1, 0, 0.5, 0.4] });
+  assert.deepEqual(weatherState(null, "borowik", 0), {});
 });
 
 test("expression without pogoda uses h only", () =>
@@ -69,10 +80,10 @@ test("all: reserve outermost, max of per-species expressions with h_ and match",
   const e = fillColorExpression(P, "all", 0);
   assert.deepEqual(e.slice(0, 2), ["case", ["has", "rez"]]);
   const s = JSON.stringify(e);
-  assert.ok(s.includes('"max"') && s.includes('"match"'));
+  assert.ok(s.includes('"max"') && s.includes('"global-state"'));
   for (const k of SPECIES) assert.ok(s.includes("h_" + k.key));
-  // jedno dopasowanie kratki dla wszystkich gatunków (wydajność), nie osobny match na gatunek
-  assert.equal(s.split('"match"').length - 1, 1);
+  // jedno odczytanie kratki ze stanu dla wszystkich gatunków
+  assert.equal(s.split('"global-state"').length - 1, 1);
 });
 test("all without pogoda: max of h_*, no match", () => {
   for (const e of [fillColorExpression(null, "all", 0)]) {
@@ -97,6 +108,7 @@ function fakeMap(layers = []) {
     addImage: (id, img) => calls.push(["image", id, img]),
     addLayer: (l) => { have.add(l.id); calls.push(["layer", l.id, l]); },
     setPaintProperty: (id, k) => calls.push(["paint", id, k]),
+    setGlobalStateProperty: (k, v) => calls.push(["state", k, v]),
     setLayoutProperty: (id, k, v) => calls.push(["layout", id, k, v]),
   };
 }
@@ -111,6 +123,10 @@ test("addForestLayers: pmtiles source from absolute URL, layers in order", () =>
     ["lasy-fill", "lasy-rez-hatch", "lasy-line", "rezerwaty-fill", "rezerwaty-line", "parkingi"]);
   assert.ok(m.calls.some((c) => c[0] === "image" && c[1] === "hatch"));
   assert.ok(m.calls.some((c) => c[0] === "image" && c[1] === "parking"));
+  // pogoda dnia w stanie globalnym, zanim powstanie warstwa z wyrażeniem, które go czyta
+  const st = m.calls.findIndex((c) => c[0] === "state" && c[1] === WX_STATE);
+  assert.ok(st >= 0 && st < m.calls.findIndex((c) => c[0] === "layer"));
+  assert.deepEqual(m.calls[st][2], weatherState(P, "borowik", 0));
 });
 
 test("setView/setBasemap before forest layers exist: only basemap visibility changes", () => {
@@ -207,13 +223,28 @@ test("klik: parking ma pierwszeństwo przed wydzieleniem", () => {
 // --- wilgotność miejsca (spec L): mały ewaluator wyrażeń MapLibre (tylko używane operatory) ---
 import { adjustW, score, scoreClass } from "../js/data.js";
 
+// Stan globalny mapy (global-state) dla ewaluatora; fce ustawia go jak setView.
+let STATE = {};
+const fce = (p, sel, day) => {
+  STATE = { [WX_STATE]: weatherState(p, sel, day) };
+  return fillColorExpression(p, sel, day);
+};
+
 function evalExpr(e, props, env = {}) {
   if (!Array.isArray(e)) return e;
   const [op, ...a] = e;
   const ev = (x, en = env) => evalExpr(x, props, en);
   switch (op) {
     case "literal": return a[0];
-    case "get": return props[a[0]];
+    case "get": {
+      if (a.length === 1) return props[a[0]];
+      const obj = ev(a[1]);
+      return obj?.[ev(a[0])] ?? null;
+    }
+    case "global-state": return STATE[a[0]];
+    case "object": { const v = ev(a[0]); return v && typeof v === "object" && !Array.isArray(v) ? v : ev(a[1]); }
+    case "array": return ev(a[a.length - 1]);
+    case "to-string": return String(ev(a[0]));
     case "has": return a[0] in props;
     case "var": return env[a[0]];
     case "let": {
@@ -256,7 +287,7 @@ function evalExpr(e, props, env = {}) {
 const WET_P = { days: ["2026-10-04"], cells: { c1: { borowik: { w: [0.797], rain: [0.797] }, podgrzybek: { w: [0.6], rain: [0.9] } } } };
 
 test("mapa: kolor wydzielenia zgodny z adjustW dla różnych wet", () => {
-  const expr = fillColorExpression(WET_P, "borowik", 0);
+  const expr = fce(WET_P, "borowik", 0);
   for (const wet of [undefined, 0, 8, 50, 92, 100]) {
     for (const h of [40, 63, 85]) {
       const props = { cell: "c1", h_borowik: h, ...(wet != null && { wet }) };
@@ -267,7 +298,7 @@ test("mapa: kolor wydzielenia zgodny z adjustW dla różnych wet", () => {
 });
 
 test("mapa: tryb wszystkich gatunków — max po skorygowanych wynikach, brak komórki = noData", () => {
-  const expr = fillColorExpression(WET_P, ["borowik", "podgrzybek"], 0);
+  const expr = fce(WET_P, ["borowik", "podgrzybek"], 0);
   const props = { cell: "c1", h_borowik: 85, h_podgrzybek: 80, wet: 8 };
   const best = Math.max(score(85, adjustW(0.797, 0.797, 8)), score(80, adjustW(0.6, 0.9, 8)));
   assert.equal(evalExpr(expr, props), classFill(scoreClass(best)));
@@ -276,7 +307,7 @@ test("mapa: tryb wszystkich gatunków — max po skorygowanych wynikach, brak ko
 
 test("mapa: pogoda bez rain (stary format) — bez korekty", () => {
   const p = { days: ["d"], cells: { c1: { borowik: { w: [0.5] } } } };
-  const expr = fillColorExpression(p, "borowik", 0);
+  const expr = fce(p, "borowik", 0);
   assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 90, wet: 0 }), classFill(scoreClass(45)));
 });
 
@@ -285,7 +316,7 @@ import { setWetGammas } from "../js/data.js";
 test("mapa: wet_gamma gatunku w wyrażeniu", () => {
   setWetGammas([{ key: "borowik", wet_gamma: 1.5 }]);
   try {
-    const expr = fillColorExpression(WET_P, "borowik", 0);
+    const expr = fce(WET_P, "borowik", 0);
     for (const wet of [0, 30, 100]) {
       const s = score(85, adjustW(0.797, 0.797, wet, 1.5));
       assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 85, wet }), classFill(scoreClass(s)));
@@ -297,7 +328,7 @@ test("mapa: wet_gamma gatunku w wyrażeniu", () => {
 
 test("mapa: korekta wilgotności miejsca z moist (spec M), nie z rain", () => {
   const p = { days: ["d"], cells: { c1: { borowik: { w: [0.4], rain: [1], moist: [0.5] } } } };
-  const expr = fillColorExpression(p, "borowik", 0);
+  const expr = fce(p, "borowik", 0);
   for (const wet of [0, 50, 100]) {
     const s = score(85, adjustW(0.4, 0.5, wet));
     assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 85, wet }), classFill(scoreClass(s)), `wet=${wet}`);
