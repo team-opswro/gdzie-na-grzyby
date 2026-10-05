@@ -42,7 +42,7 @@ test("strategyFor: powłoka network-first (nowe wdrożenie widać od razu), tak�
   assert.equal(strat(scope), "network-first");
   assert.equal(strat(scope + "index.html"), "network-first");
   assert.equal(strat(scope + "js/ui.js"), "network-first");
-  assert.equal(strat(scope + "vendor/pmtiles.js"), "network-first");
+  assert.equal(strat(scope + "vendor/pmtiles-3.2.1.js"), "network-first");
   assert.equal(strat(scope + "manifest.webmanifest"), "network-first");
   assert.equal(strat(scope + "icons/icon.svg"), "network-first");
   assert.equal(strat("https://example.com/app/", "GET", "https://example.com/app/"), "network-first");
