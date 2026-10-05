@@ -65,10 +65,11 @@ def run(stands: gpd.GeoDataFrame, species, reserves, out: Path, build_dir: Path,
     print(f"wydzielenia: {len(feats)}, z domieszkami: {with_partners}, w rezerwatach: {n_rez}")
 
     seq = Path(build_dir) / "lasy.geojsonseq"
-    write_geojsonseq(feats, keys, seq)
+    lo_seq = Path(build_dir) / "lasy_lo.geojsonseq"  # uproszczona kopia na z8–z10
+    write_geojsonseq(feats, keys, seq, lo_seq)
     rseq = Path(build_dir) / "rezerwaty.geojsonseq"
     write_reserves_seq(reserves, rseq)
-    layers = {"lasy": seq, "rezerwaty": rseq}
+    layers = {"lasy": [seq, lo_seq], "rezerwaty": rseq}
 
     n_parkings = 0
     if parkings_path and Path(parkings_path).exists():

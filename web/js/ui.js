@@ -5,7 +5,7 @@ import { createCentroidStore } from "./tiles.js";
 import { trend, trendBy } from "./chart.js";
 import { topN, haversineKm, renderLoading } from "./ranking.js";
 import { parseHash, formatHash } from "./hash.js";
-import { createMap, addForestLayers, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY } from "./map.js";
+import { createMap, addForestLayers, setView, setBasemap, BASEMAPS, COLORS, CLASS_LABELS, FILL_OPACITY, DETAIL_ZOOM } from "./map.js";
 import { renderPopup, renderReserve, renderParking, trendArrow, trendLabel, rankLabel } from "./popup.js";
 import { shareUrl } from "./share.js";
 import { speciesCardModel, renderSpeciesCard, aboutForecastText } from "./dialogs.js";
@@ -164,10 +164,12 @@ export async function init() {
       return;
     }
     const lngLat = { lng: row[2], lat: row[1] };
-    if (map.getBounds().contains([lngLat.lng, lngLat.lat])) open(lngLat);
+    // poniżej DETAIL_ZOOM kafelki nie mają id wydzieleń — link z niskim zoomem najpierw przybliża
+    const lowZoom = map.getZoom() < DETAIL_ZOOM;
+    if (!lowZoom && map.getBounds().contains([lngLat.lng, lngLat.lat])) open(lngLat);
     else {
       map.once("idle", () => open(lngLat));
-      map.jumpTo({ center: [lngLat.lng, lngLat.lat] });
+      map.jumpTo({ center: [lngLat.lng, lngLat.lat], ...(lowZoom && { zoom: DETAIL_ZOOM + 2 }) });
     }
   }
 

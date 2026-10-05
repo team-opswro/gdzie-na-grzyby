@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { fillColorExpression, fillOpacityExpression, COLORS, FILL_OPACITY, hatchPattern, BASEMAPS, lineColor } from "../js/map.js";
+import { fillColorExpression, COLORS, FILL_OPACITY, classFill, NO_DATA_FILL, RESERVE_FILL, rgba, hatchPattern, BASEMAPS, lineColor } from "../js/map.js";
 import { BASEMAP_KEYS } from "../js/hash.js";
 import { parkingIcon } from "../js/map.js";
 
@@ -16,29 +16,34 @@ test("expression without pogoda uses h only", () =>
   assert.ok(!JSON.stringify(fillColorExpression(null, "borowik", 0)).includes('"match"')));
 
 test("noData color is distinct from every class color", () =>
-  assert.ok(!COLORS.classes.includes(COLORS.noData)));
+  assert.ok(!COLORS.classes.includes(NO_DATA_FILL)));
 
-test("missing-cell branch yields the noData color and opacity", () => {
+test("missing-cell branch yields the noData fill (kolor z kryciem)", () => {
   const c = fillColorExpression(P, "borowik", 0)[3];
-  assert.deepEqual(c[3], ["case", ["<", ["var", "wv"], 0], COLORS.noData, c[3][3]]);
-  const o = fillOpacityExpression(P, "borowik", 0)[3];
-  assert.equal(o[3][2], FILL_OPACITY.noData);
-  assert.notEqual(FILL_OPACITY.noData, FILL_OPACITY.weak);
+  assert.deepEqual(c[3], ["case", ["<", ["var", "sc"], 0], NO_DATA_FILL, c[3][3]]);
+  assert.equal(NO_DATA_FILL, rgba(COLORS.noData, FILL_OPACITY.noData));
+  assert.notEqual(NO_DATA_FILL, classFill(0));
+});
+
+test("rgba i krycie klas: „brak” słabszy niż pozostałe, ale widoczny", () => {
+  assert.equal(rgba("#9e9e9e", 0.55), "rgba(158,158,158,0.55)");
+  assert.equal(classFill(0), rgba(COLORS.classes[0], FILL_OPACITY.weak));
+  assert.equal(classFill(3), rgba(COLORS.classes[3], FILL_OPACITY.normal));
+  assert.ok(FILL_OPACITY.weak >= 0.5 && FILL_OPACITY.weak < FILL_OPACITY.normal);
 });
 
 test("expression reads h_<species> and uses 5 class colors", () => {
   const e = JSON.stringify(fillColorExpression(P, "rydz", 0));
   assert.ok(e.includes("h_rydz"));
-  for (const c of COLORS.classes) assert.ok(e.includes(c));
+  for (let i = 0; i < COLORS.classes.length; i++) assert.ok(e.includes(classFill(i)));
 });
 
 test("reserve branch comes first", () => {
   for (const p of [P, null]) {
     const c = fillColorExpression(p, "borowik", 0);
-    assert.deepEqual(c.slice(0, 3), ["case", ["has", "rez"], COLORS.reserve]);
-    assert.equal(fillOpacityExpression(p, "borowik", 0)[2], FILL_OPACITY.reserve);
+    assert.deepEqual(c.slice(0, 3), ["case", ["has", "rez"], RESERVE_FILL]);
   }
-  assert.ok(!COLORS.classes.includes(COLORS.reserve) && COLORS.reserve !== COLORS.noData);
+  assert.ok(!COLORS.classes.includes(COLORS.reserve) && COLORS.reserve !== NO_DATA_FILL);
 });
 test("hatch pattern is 8x8 RGBA with transparent and opaque pixels", () => {
   const h = hatchPattern();
@@ -66,17 +71,18 @@ test("all: reserve outermost, max of per-species expressions with h_ and match",
   const s = JSON.stringify(e);
   assert.ok(s.includes('"max"') && s.includes('"match"'));
   for (const k of SPECIES) assert.ok(s.includes("h_" + k.key));
-  assert.equal(fillOpacityExpression(P, "all", 0)[1][0], "has");
+  // jedno dopasowanie kratki dla wszystkich gatunków (wydajność), nie osobny match na gatunek
+  assert.equal(s.split('"match"').length - 1, 1);
 });
 test("all without pogoda: max of h_*, no match", () => {
-  for (const e of [fillColorExpression(null, "all", 0), fillOpacityExpression(null, "all", 0)]) {
+  for (const e of [fillColorExpression(null, "all", 0)]) {
     const s = JSON.stringify(e);
     assert.ok(s.includes('"max"') && !s.includes('"match"'));
     for (const k of SPECIES) assert.ok(s.includes("h_" + k.key));
   }
 });
 test("all with old pogoda_v1 does not throw", () => {
-  assert.doesNotThrow(() => { fillColorExpression(V1, "all", 0); fillOpacityExpression(V1, "all", 3); });
+  assert.doesNotThrow(() => { fillColorExpression(V1, "all", 0); fillColorExpression(V1, "all", 3); });
 });
 
 import { addForestLayers, setView, setBasemap } from "../js/map.js";
@@ -129,7 +135,7 @@ test("fillColorExpression dla listy kluczy = max po gatunkach z listy", () => {
 
 test("fillColorExpression: jednoelementowa lista jak pojedynczy klucz", () => {
   assert.deepEqual(fillColorExpression(P, ["borowik"], 0), fillColorExpression(P, "borowik", 0));
-  assert.deepEqual(fillOpacityExpression(null, ["rydz"], 2), fillOpacityExpression(null, "rydz", 2));
+  assert.deepEqual(fillColorExpression(null, ["rydz"], 2), fillColorExpression(null, "rydz", 2));
 });
 
 test("parkingIcon ma wymiary i nieprzezroczyste piksele", () => {
@@ -255,7 +261,7 @@ test("mapa: kolor wydzielenia zgodny z adjustW dla różnych wet", () => {
     for (const h of [40, 63, 85]) {
       const props = { cell: "c1", h_borowik: h, ...(wet != null && { wet }) };
       const s = score(h, adjustW(0.797, 0.797, wet ?? null));
-      assert.equal(evalExpr(expr, props), COLORS.classes[scoreClass(s)], `wet=${wet} h=${h}`);
+      assert.equal(evalExpr(expr, props), classFill(scoreClass(s)), `wet=${wet} h=${h}`);
     }
   }
 });
@@ -264,14 +270,14 @@ test("mapa: tryb wszystkich gatunków — max po skorygowanych wynikach, brak ko
   const expr = fillColorExpression(WET_P, ["borowik", "podgrzybek"], 0);
   const props = { cell: "c1", h_borowik: 85, h_podgrzybek: 80, wet: 8 };
   const best = Math.max(score(85, adjustW(0.797, 0.797, 8)), score(80, adjustW(0.6, 0.9, 8)));
-  assert.equal(evalExpr(expr, props), COLORS.classes[scoreClass(best)]);
-  assert.equal(evalExpr(expr, { cell: "zzz", h_borowik: 85, wet: 8 }), COLORS.noData);
+  assert.equal(evalExpr(expr, props), classFill(scoreClass(best)));
+  assert.equal(evalExpr(expr, { cell: "zzz", h_borowik: 85, wet: 8 }), NO_DATA_FILL);
 });
 
 test("mapa: pogoda bez rain (stary format) — bez korekty", () => {
   const p = { days: ["d"], cells: { c1: { borowik: { w: [0.5] } } } };
   const expr = fillColorExpression(p, "borowik", 0);
-  assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 90, wet: 0 }), COLORS.classes[scoreClass(45)]);
+  assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 90, wet: 0 }), classFill(scoreClass(45)));
 });
 
 import { setWetGammas } from "../js/data.js";
@@ -282,7 +288,7 @@ test("mapa: wet_gamma gatunku w wyrażeniu", () => {
     const expr = fillColorExpression(WET_P, "borowik", 0);
     for (const wet of [0, 30, 100]) {
       const s = score(85, adjustW(0.797, 0.797, wet, 1.5));
-      assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 85, wet }), COLORS.classes[scoreClass(s)]);
+      assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 85, wet }), classFill(scoreClass(s)));
     }
   } finally {
     setWetGammas([]);
@@ -294,6 +300,36 @@ test("mapa: korekta wilgotności miejsca z moist (spec M), nie z rain", () => {
   const expr = fillColorExpression(p, "borowik", 0);
   for (const wet of [0, 50, 100]) {
     const s = score(85, adjustW(0.4, 0.5, wet));
-    assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 85, wet }), COLORS.classes[scoreClass(s)], `wet=${wet}`);
+    assert.equal(evalExpr(expr, { cell: "c1", h_borowik: 85, wet }), classFill(scoreClass(s)), `wet=${wet}`);
   }
+});
+
+import { DETAIL_ZOOM } from "../js/map.js";
+
+test("klik w las poniżej DETAIL_ZOOM przybliża mapę zamiast otwierać popup", () => {
+  globalThis.pmtiles = { Protocol: class { tile() {} } };
+  const calls = [];
+  let mapObj;
+  globalThis.maplibregl = {
+    addProtocol: () => {},
+    Map: class {
+      constructor() { mapObj = this; this.zoom = 9.5; }
+      getLayer() { return { id: "lasy-fill" }; }
+      getZoom() { return this.zoom; }
+      easeTo(o) { calls.push(["ease", o.zoom]); }
+      queryRenderedFeatures(pt, opts) { return opts.layers[0] === "lasy-fill" ? [{ properties: { cell: "c1" } }] : []; }
+      getCanvas() { return { style: {} }; }
+      on(ev, fn) { if (ev === "click") this._click = fn; }
+      once() {}
+      addControl() {}
+    },
+    NavigationControl: class {},
+  };
+  createMap("m", { center: [0, 0], zoom: 9, onFeatureClick: () => calls.push(["feature"]) });
+  mapObj._click({ point: [1, 1], lngLat: { lat: 50, lng: 17 } });
+  mapObj.zoom = DETAIL_ZOOM;
+  mapObj._click({ point: [1, 1], lngLat: { lat: 50, lng: 17 } });
+  assert.deepEqual(calls, [["ease", DETAIL_ZOOM + 1], ["feature"]]);
+  delete globalThis.pmtiles;
+  delete globalThis.maplibregl;
 });

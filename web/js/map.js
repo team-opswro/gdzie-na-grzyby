@@ -10,40 +10,57 @@ export const COLORS = {
   classes: ["#9e9e9e", "#fff59d", "#fdd835", "#fb8c00", "#d32f2f"],
 };
 export const CLASS_LABELS = ["brak", "słabo", "średnio", "dobrze", "bardzo dobrze"];
-export const FILL_OPACITY = { weak: 0.3, normal: 0.65, noData: 0.5, reserve: 0.5 };
+export const FILL_OPACITY = { weak: 0.55, normal: 0.65, noData: 0.5, reserve: 0.5 };
+
+// Krycie jest wliczone w kolor (rgba): jedno wyrażenie na wydzielenie zamiast dwóch (kolor i krycie).
+export function rgba(hex, alpha) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+// Kolor wypełnienia klasy (0–4) z kryciem, jak na mapie.
+export const classFill = (cls) => rgba(COLORS.classes[cls], cls === 0 ? FILL_OPACITY.weak : FILL_OPACITY.normal);
+export const NO_DATA_FILL = rgba(COLORS.noData, FILL_OPACITY.noData);
+export const RESERVE_FILL = rgba(COLORS.reserve, FILL_OPACITY.reserve);
+
+// Od tego zoomu kafelki mają pełne opisy wydzieleń (pipeline/build_tiles.py: LO_MAXZOOM + 1).
+export const DETAIL_ZOOM = 11;
 
 // Progi dla całkowitego wyniku; scoreClass: s <= 65 → "dobrze", więc klasa 4 zaczyna się od 66.
 const STEPS = [10, 25, 45, 66];
 
 const hExpr = (species) => ["to-number", ["get", "h_" + species], 0];
 
-// Mnożnik pogody wydzielenia (−1 = brak pogody w komórce), z korektą o wilgotność miejsca (spec L,
-// ten sam wzór co adjustW w data.js): w_eff = min(1, w · m^(γ−1)), γ = G^(1 − 2·wet/100), G = wet_gamma gatunku,
-// m = moist (spec M), a w starszym pliku rain; brak atrybutu wet → 50 (γ = 1; coalesce, bo to-number(null)
-// w MapLibre daje 0), brak m → bez korekty.
-function weatherMatch(pogoda, species, dayIdx) {
+// Wynik dnia (0–100) dla wydzielenia albo −1, gdy kratka nie ma pogody. Jeden `match` po kratce zwraca
+// dla wszystkich gatunków wyboru pary [w, m] (płaska tablica; w = −1 = brak pogody gatunku) — tryb wielu
+// gatunków nie powtarza już dopasowania kratki osobno dla każdego gatunku.
+// Wilgotność miejsca (spec L, ten sam wzór co adjustW w data.js): w_eff = min(1, w · m^(γ−1)),
+// γ = G^(1 − 2·wet/100), G = wet_gamma gatunku, m = moist (spec M), a w starszym pliku rain; brak atrybutu
+// wet → 50 (γ = 1; coalesce, bo to-number(null) w MapLibre daje 0), m ≤ 0 → bez korekty.
+function scoreMatch(pogoda, keys, dayIdx) {
   const args = [];
   for (const [cell, sp] of Object.entries(pogoda.cells ?? {})) {
-    const w = sp?.[species]?.w?.[dayIdx];
-    if (w == null) continue;
-    const m = sp[species].moist?.[dayIdx] ?? sp[species].rain?.[dayIdx];
-    args.push(cell, ["literal", [w, m == null ? 0 : m]]);
+    const row = [];
+    let any = false;
+    for (const k of keys) {
+      const w = sp?.[k]?.w?.[dayIdx];
+      const m = sp?.[k]?.moist?.[dayIdx] ?? sp?.[k]?.rain?.[dayIdx];
+      row.push(w == null ? -1 : w, m == null ? 0 : m);
+      any ||= w != null;
+    }
+    if (any) args.push(cell, ["literal", row]);
   }
   // match wymaga co najmniej jednej pary; bez niej wszystko jest „brak danych”
   if (args.length === 0) return -1;
-  const w = ["at", 0, ["var", "wr"]];
-  const rain = ["at", 1, ["var", "wr"]];
-  const gamma = ["^", wetGammaFor(species), ["-", 1, ["/", ["to-number", ["coalesce", ["get", "wet"], 50]], 50]]];
-  return ["let", "wr", ["match", ["get", "cell"], ...args, ["literal", [-1, 0]]],
-    ["case",
-      ["<", w, 0], -1,
-      [">", rain, 0], ["min", 1, ["*", w, ["^", rain, ["-", gamma, 1]]]],
-      w]];
-}
-
-// Wyrażenie wyniku (0–100) dla wydzielenia; gdy brak pogody → samo h.
-function scoreExpr(species, wvVar) {
-  return wvVar ? ["round", ["*", hExpr(species), wvVar]] : hExpr(species);
+  const wetShift = ["-", 1, ["/", ["to-number", ["coalesce", ["get", "wet"], 50]], 50]];
+  const perSpecies = keys.map((k, i) => {
+    const w = ["at", 2 * i, ["var", "wr"]];
+    const m = ["at", 2 * i + 1, ["var", "wr"]];
+    const weff = ["case", [">", m, 0], ["min", 1, ["*", w, ["^", m, ["-", ["^", wetGammaFor(k), ["var", "ws"]], 1]]]], w];
+    return ["case", ["<", w, 0], -1, ["round", ["*", hExpr(k), weff]]];
+  });
+  const fallback = ["literal", keys.flatMap(() => [-1, 0])];
+  return ["let", "wr", ["match", ["get", "cell"], ...args, fallback], "ws", wetShift,
+    perSpecies.length === 1 ? perSpecies[0] : ["max", ...perSpecies]];
 }
 
 const stepOn = (input, values) => {
@@ -52,48 +69,19 @@ const stepOn = (input, values) => {
   return out;
 };
 
-const reserveFirst = (reserveValue, base) => ["case", ["has", "rez"], reserveValue, base];
-
 // Wybór -> lista kluczy: tablica bez zmian, "all" -> wszystkie gatunki, inny napis -> [klucz].
 const keysOf = (sel) => (Array.isArray(sel) ? sel : sel === ALL ? SPECIES.map((s) => s.key) : [sel]);
 
-// Tryb wielu gatunków (wszystkie lub grupa): max po kluczach; gatunek bez pogody w komórce daje -1.
-const multiHExpr = (keys) => ["max", ...keys.map(hExpr)];
-const multiSpeciesExpr = (pogoda, keys, dayIdx) => ["max", ...keys.map((k) => ["let", "wv", weatherMatch(pogoda, k, dayIdx),
-  ["case", ["<", ["var", "wv"], 0], -1, scoreExpr(k, ["var", "wv"])]])];
-
-function multiExpression(pogoda, keys, dayIdx, noData, values) {
-  if (pogoda == null) return reserveFirst(values.reserve, stepOn(multiHExpr(keys), values.steps));
-  return reserveFirst(values.reserve, ["let", "sc", multiSpeciesExpr(pogoda, keys, dayIdx),
-    ["case", ["<", ["var", "sc"], 0], noData, stepOn(["var", "sc"], values.steps)]]);
-}
-
-// sel: klucz gatunku, "all" albo lista kluczy (grupa).
+// sel: klucz gatunku, "all" albo lista kluczy (grupa); wynik: kolor rgba (z kryciem). Tryb wielu gatunków:
+// max po skorygowanych wynikach; gatunek bez pogody w kratce daje −1. Bez pogody — samo h (max po gatunkach).
 export function fillColorExpression(pogoda, sel, dayIdx) {
   const keys = keysOf(sel);
-  if (keys.length > 1) return multiExpression(pogoda, keys, dayIdx, COLORS.noData, { reserve: COLORS.reserve, steps: COLORS.classes });
-  const species = keys[0];
-  if (pogoda == null) return reserveFirst(COLORS.reserve, stepOn(scoreExpr(species, null), COLORS.classes));
-  return reserveFirst(COLORS.reserve, [
-    "let", "wv", weatherMatch(pogoda, species, dayIdx),
-    ["case",
-      ["<", ["var", "wv"], 0], COLORS.noData,
-      stepOn(scoreExpr(species, ["var", "wv"]), COLORS.classes)],
-  ]);
-}
-
-export function fillOpacityExpression(pogoda, sel, dayIdx) {
-  const opacities = [FILL_OPACITY.weak, ...Array(4).fill(FILL_OPACITY.normal)];
-  const keys = keysOf(sel);
-  if (keys.length > 1) return multiExpression(pogoda, keys, dayIdx, FILL_OPACITY.noData, { reserve: FILL_OPACITY.reserve, steps: opacities });
-  const species = keys[0];
-  if (pogoda == null) return reserveFirst(FILL_OPACITY.reserve, stepOn(scoreExpr(species, null), opacities));
-  return reserveFirst(FILL_OPACITY.reserve, [
-    "let", "wv", weatherMatch(pogoda, species, dayIdx),
-    ["case",
-      ["<", ["var", "wv"], 0], FILL_OPACITY.noData,
-      stepOn(scoreExpr(species, ["var", "wv"]), opacities)],
-  ]);
+  const fills = COLORS.classes.map((_, i) => classFill(i));
+  const body = pogoda == null
+    ? stepOn(keys.length === 1 ? hExpr(keys[0]) : ["max", ...keys.map(hExpr)], fills)
+    : ["let", "sc", scoreMatch(pogoda, keys, dayIdx),
+      ["case", ["<", ["var", "sc"], 0], NO_DATA_FILL, stepOn(["var", "sc"], fills)]];
+  return ["case", ["has", "rez"], RESERVE_FILL, body];
 }
 
 // Wzór kreskowania rezerwatów: ukośne linie #424242 na przezroczystym tle (RGBA).
@@ -197,7 +185,6 @@ export function setBasemap(map, key) {
 export function setView(map, pogoda, species, dayIdx) {
   if (!map.getLayer("lasy-fill")) return;
   map.setPaintProperty("lasy-fill", "fill-color", fillColorExpression(pogoda, species, dayIdx));
-  map.setPaintProperty("lasy-fill", "fill-opacity", fillOpacityExpression(pogoda, species, dayIdx));
 }
 
 // Warstwy lasów i rezerwatów z PMTiles; dodawane po załadowaniu stylu i manifestu (podkład jest od razu).
@@ -213,7 +200,6 @@ export function addForestLayers(map, pmtilesUrl, { pogoda = null, species = "bor
       id: "lasy-fill", type: "fill", source: "lasy", "source-layer": "lasy",
       paint: {
         "fill-color": fillColorExpression(pogoda, species, dayIdx),
-        "fill-opacity": fillOpacityExpression(pogoda, species, dayIdx),
       },
     },
     {
@@ -274,7 +260,10 @@ export function createMap(container, { center, zoom, onFeatureClick, onReserveCl
     }
     const f = map.queryRenderedFeatures(e.point, { layers: ["lasy-fill"] })[0];
     if (f) {
-      if (onFeatureClick) onFeatureClick(f.properties, e.lngLat);
+      // Poniżej DETAIL_ZOOM kafelki mają uproszczone wydzielenia (bez opisu, drobne doklejone do sąsiednich) —
+      // zamiast popupu z niepełnymi danymi przybliżamy mapę.
+      if (map.getZoom() < DETAIL_ZOOM) map.easeTo({ center: e.lngLat, zoom: DETAIL_ZOOM + 1 });
+      else if (onFeatureClick) onFeatureClick(f.properties, e.lngLat);
       return;
     }
     const r = map.queryRenderedFeatures(e.point, { layers: ["rezerwaty-fill"] })[0];

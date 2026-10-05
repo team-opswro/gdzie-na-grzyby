@@ -17,6 +17,10 @@ from pipeline.habitat import HABITAT_FACTORS, habitat_components, habitat_score,
 CENTROID_THRESHOLD = 40
 CENTROID_TILE = 0.5
 MINZOOM, MAXZOOM = 8, 14
+# Niskie zoomy (≤ LO_MAXZOOM): uproszczona kopia wydzieleń tylko z polami potrzebnymi do koloru mapy (LO_ATTRS
+# + h_*). Pełne atrybuty (≈ 45 pól) zapychały kafelki z8–z10 i tippecanoe wyrzucał do 60% powierzchni lasów.
+LO_MAXZOOM = 10
+LO_ATTRS = ("cell", "rez", "wet")
 ATTRS = ["id", "cell", "sp", "age", "hab"]
 # „Słabe strony siedliska” (spec J §3): najsłabszy modyfikator < HL_THRESHOLD, zapisywany przy h ≥ HL_MIN_H.
 HL_THRESHOLD = 0.8
@@ -126,11 +130,14 @@ def write_parkings_seq(gdf: gpd.GeoDataFrame, path: Path) -> None:
                                 ensure_ascii=False) + "\n")
 
 
-def tippecanoe_cmd(out: Path, layers: dict[str, Path]) -> list[str]:
+def tippecanoe_cmd(out: Path, layers: dict[str, Path | list[Path]]) -> list[str]:
+    """Warstwa może mieć kilka plików (np. `lasy`: pełne + uproszczone na niskie zoomy). Za duże kafelki:
+    najmniejsze obiekty są doklejane do sąsiednich (coalesce) zamiast usuwane — bez dziur w lesie na z8–z10."""
     cmd = ["tippecanoe", "-o", str(out / "lasy.pmtiles")]
-    for name, seq in layers.items():
-        cmd += ["-L", f"{name}:{seq}"]
-    return cmd + [f"-Z{MINZOOM}", f"-z{MAXZOOM}", "--drop-smallest-as-needed", "--force"]
+    for name, seqs in layers.items():
+        for seq in seqs if isinstance(seqs, list) else [seqs]:
+            cmd += ["-L", f"{name}:{seq}"]
+    return cmd + [f"-Z{MINZOOM}", f"-z{MAXZOOM}", "--coalesce-smallest-as-needed", "--force"]
 
 
 def tile_key(lat: float, lon: float) -> str:
@@ -182,31 +189,45 @@ def write_centroid_tiles(gdf, keys: list[str], out_dir: Path,
     return index
 
 
-def write_geojsonseq(gdf, keys: list[str], path: Path) -> None:
+def write_geojsonseq(gdf, keys: list[str], path: Path, lo_path: Path | None = None) -> None:
+    """GeoJSONSeq wydzieleń dla warstwy `lasy`. Z `lo_path`: pełne obiekty od zoomu LO_MAXZOOM + 1, a do `lo_path`
+    ta sama geometria z samymi polami koloru (LO_ATTRS, h_*) do zoomu LO_MAXZOOM — obie trafiają do jednej warstwy."""
     path.parent.mkdir(parents=True, exist_ok=True)
     hcols = [f"h_{k}" for k in keys]
-    with path.open("w", encoding="utf-8") as fh:
-        for rec, geom in zip(gdf.itertuples(index=False), gdf.geometry):
-            props = {"id": rec.id, "cell": rec.cell, "sp": rec.sp_main,
-                     "age": None if rec.age is None or rec.age != rec.age else int(rec.age),
-                     "hab": rec.hab}
-            for k, c in zip(keys, hcols):  # h = 0 pomijane (klient: brak atrybutu = 0), mniejsze kafelki
-                h = int(getattr(rec, c))
-                if h:
-                    props[c] = h
-                weak = getattr(rec, f"hl_{k}", None)
-                if h >= HL_MIN_H and isinstance(weak, str):
-                    props[f"hl_{k}"] = weak
-            rez = getattr(rec, "rez", None)
-            if isinstance(rez, str) and rez:
-                props["rez"] = rez
-            wet = _int_or_none(getattr(rec, "wet", None))  # wilgotność miejsca (spec L)
-            if wet is not None:
-                props["wet"] = wet
-                wl = getattr(rec, "wl", None)
-                if isinstance(wl, str) and wl:
-                    props["wl"] = wl
-            props = {k: v for k, v in props.items() if v is not None}
-            fh.write(json.dumps({"type": "Feature", "properties": props,
-                                 "geometry": json.loads(shapely.to_geojson(geom))},
-                                ensure_ascii=False) + "\n")
+    full_tc = {"minzoom": LO_MAXZOOM + 1} if lo_path else None
+    lo_fh = Path(lo_path).open("w", encoding="utf-8") if lo_path else None
+    try:
+        with path.open("w", encoding="utf-8") as fh:
+            for rec, geom in zip(gdf.itertuples(index=False), gdf.geometry):
+                props = {"id": rec.id, "cell": rec.cell, "sp": rec.sp_main,
+                         "age": None if rec.age is None or rec.age != rec.age else int(rec.age),
+                         "hab": rec.hab}
+                for k, c in zip(keys, hcols):  # h = 0 pomijane (klient: brak atrybutu = 0), mniejsze kafelki
+                    h = int(getattr(rec, c))
+                    if h:
+                        props[c] = h
+                    weak = getattr(rec, f"hl_{k}", None)
+                    if h >= HL_MIN_H and isinstance(weak, str):
+                        props[f"hl_{k}"] = weak
+                rez = getattr(rec, "rez", None)
+                if isinstance(rez, str) and rez:
+                    props["rez"] = rez
+                wet = _int_or_none(getattr(rec, "wet", None))  # wilgotność miejsca (spec L)
+                if wet is not None:
+                    props["wet"] = wet
+                    wl = getattr(rec, "wl", None)
+                    if isinstance(wl, str) and wl:
+                        props["wl"] = wl
+                props = {k: v for k, v in props.items() if v is not None}
+                geometry = json.loads(shapely.to_geojson(geom))
+                feat = {"type": "Feature", "properties": props, "geometry": geometry}
+                if full_tc:
+                    feat["tippecanoe"] = full_tc
+                fh.write(json.dumps(feat, ensure_ascii=False) + "\n")
+                if lo_fh:
+                    lo = {k: v for k, v in props.items() if k in LO_ATTRS or k.startswith("h_")}
+                    lo_fh.write(json.dumps({"type": "Feature", "tippecanoe": {"maxzoom": LO_MAXZOOM},
+                                            "properties": lo, "geometry": geometry}, ensure_ascii=False) + "\n")
+    finally:
+        if lo_fh:
+            lo_fh.close()

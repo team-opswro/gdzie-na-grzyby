@@ -61,6 +61,7 @@ def test_run_writes_out_dir(tmp_path):
 
     assert (out / "lasy.pmtiles").read_bytes() == b"PMTiles"
     assert len(tip.cmds) == 1 and "lasy:" + str(tmp_path / "b" / "lasy.geojsonseq") in tip.cmds[0]
+    assert "lasy:" + str(tmp_path / "b" / "lasy_lo.geojsonseq") in tip.cmds[0]
     idx = json.loads((out / "centroidy" / "index.json").read_text())
     assert idx["tiles"] == [tile_key(50.2, 17.2), tile_key(50.7, 17.9)]
     ids = [r[0] for t in idx["tiles"]

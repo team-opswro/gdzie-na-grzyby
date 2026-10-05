@@ -102,7 +102,12 @@ PMTiles v3, kafelki wektorowe MVT, zoom 8–14 (powyżej 14 — overzoom). Warst
   - widoczna od zoomu 11.
   Źródło: © OpenStreetMap contributors, ODbL.
 
-Przy małych zoomach tippecanoe może pomijać najmniejsze poligony (`--drop-smallest-as-needed`).
+Zoomy 8–10 warstwy `lasy` mają uproszczoną kopię wydzieleń: tylko `cell`, `rez`, `wet` i `h_<gatunek>`
+(bez `id`, `sp`, `age`, `hab`, `hl_*`, `wl`), a przy za dużym kafelku najmniejsze poligony są doklejane do sąsiednich
+(`--coalesce-smallest-as-needed`) — kolor mapy jest przybliżony, ale las nie ma dziur. Pełne atrybuty od zoomu 11;
+klient poniżej zoomu 11 nie otwiera popupu wydzielenia, tylko przybliża mapę. (Do buildu `20261004-1408-12d72c4`
+włącznie: pełne atrybuty na wszystkich zoomach i `--drop-smallest-as-needed`, które na z8–z10 usuwało 10–60%
+powierzchni lasów.)
 
 ## Centroidy (ranking „najlepsze miejsca w promieniu”)
 

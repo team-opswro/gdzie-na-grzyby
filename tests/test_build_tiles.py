@@ -150,6 +150,38 @@ def test_tippecanoe_cmd_two_layers(tmp_path):
     assert cmd[:3] == ["tippecanoe", "-o", str(tmp_path / "lasy.pmtiles")]
     assert "-L" in cmd and "lasy:a.seq" in cmd and "rezerwaty:r.seq" in cmd and "-l" not in cmd
     assert "-Z8" in cmd and "-z14" in cmd and "--force" in cmd
+    assert "--coalesce-smallest-as-needed" in cmd and "--drop-smallest-as-needed" not in cmd
+
+
+def test_tippecanoe_cmd_layer_with_two_files(tmp_path):
+    cmd = tippecanoe_cmd(tmp_path, {"lasy": [Path("a.seq"), Path("lo.seq")]})
+    assert [cmd[i + 1] for i, x in enumerate(cmd) if x == "-L"] == ["lasy:a.seq", "lasy:lo.seq"]
+
+
+def test_geojsonseq_low_zoom_copy(tmp_path):
+    from pipeline.build_tiles import LO_MAXZOOM
+    f = mark_reserves(compute_features(gdf_from([sq(50.2, 17.2), sq(50.8, 17.9)]), S), RES)
+    full, lo = tmp_path / "l.seq", tmp_path / "lo.seq"
+    write_geojsonseq(f, KEYS, full, lo)
+    fa = [json.loads(x) for x in full.read_text(encoding="utf-8").splitlines()]
+    la = [json.loads(x) for x in lo.read_text(encoding="utf-8").splitlines()]
+    assert len(fa) == len(la) == 2
+    assert all(x["tippecanoe"] == {"minzoom": LO_MAXZOOM + 1} for x in fa)
+    assert all(x["tippecanoe"] == {"maxzoom": LO_MAXZOOM} for x in la)
+    for a, b in zip(fa, la):
+        assert a["geometry"] == b["geometry"]
+        assert set(b["properties"]) <= {"cell", "rez", "wet"} | {k for k in a["properties"] if k.startswith("h_")}
+        assert {k: v for k, v in a["properties"].items() if k.startswith("h_")} == \
+               {k: v for k, v in b["properties"].items() if k.startswith("h_")}
+        assert b["properties"]["cell"] == a["properties"]["cell"] and "id" not in b["properties"]
+    assert la[0]["properties"]["rez"] == "Góra Św. Anny"
+
+
+def test_geojsonseq_without_low_copy_has_no_zoom_hints(tmp_path):
+    f = compute_features(gdf_from([sq(50.2, 17.2)]), S)
+    p = tmp_path / "l.seq"
+    write_geojsonseq(f, KEYS, p)
+    assert "tippecanoe" not in json.loads(p.read_text(encoding="utf-8").splitlines()[0])
 
 
 def test_mark_reserves_null_name_still_marked(tmp_path):
