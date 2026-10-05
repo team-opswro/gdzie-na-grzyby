@@ -46,12 +46,22 @@ function loadWorker(fetchImpl, scope = "https://app.example/") {
   });
   ctx.importScripts = () => vm.runInContext(CORE, ctx);
   vm.runInContext(SW, ctx);
-  const dispatch = (request) => {
+  // dispatch czeka też na zadania w tle (waitUntil), żeby testy widziały zapisany cache;
+  // respond() zwraca samą odpowiedź, bez czekania na tło.
+  const background = [];
+  const respond = (request) => {
     let p = null;
-    handlers.fetch({ request, respondWith: (x) => { p = x; } });
+    handlers.fetch({ request, respondWith: (x) => { p = x; }, waitUntil: (x) => background.push(x) });
     return p;
   };
-  return { dispatch, stores };
+  const dispatch = async (request) => {
+    const p = respond(request);
+    if (p == null) return p;
+    const resp = await p;
+    await Promise.all(background.splice(0));
+    return resp;
+  };
+  return { dispatch, respond, stores, background };
 }
 
 const PM = "https://app.example/dane/v/b1/lasy.pmtiles";
@@ -109,4 +119,17 @@ test("sw: nowy build danych usuwa wpisy starych buildów z grzyby-data", async (
   const keys = [...stores.get("grzyby-data").entries.keys()];
   assert.equal(keys.length, 1);
   assert.ok(keys[0].includes("/v/b2/"));
+});
+
+
+test("cache-first: odpowiedź nie czeka na zapis do cache (zapis w tle przez waitUntil)", async () => {
+  const fetchImpl = async () => new Response(bytes("abcd"), { status: 206, headers: { "Content-Range": "bytes 0-3/10" } });
+  const { respond, stores, background } = loadWorker(fetchImpl);
+  const resp = await respond(new Request(PM, { headers: { Range: "bytes=0-3" } }));
+  assert.equal(resp.status, 206);
+  assert.equal(new TextDecoder().decode(await resp.arrayBuffer()), "abcd");
+  assert.equal(background.length, 1);
+  await Promise.all(background);
+  const data = stores.get("grzyby-data");
+  assert.equal(data.entries.size, 1);
 });

@@ -5,6 +5,8 @@ const SHELL_CACHE = "grzyby-shell-" + SHELL_VERSION;
 const DATA_CACHE = "grzyby-data";
 const BASE_CACHE = "grzyby-base";
 const LIMITS = { data: 3000, base: 2000 };
+// Przycinanie cache (przegląd wszystkich wpisów) najwyżej co tyle zapisów; limit może chwilowo wzrosnąć o tyle.
+const TRIM_EVERY = 100;
 const NETWORK_TIMEOUT_MS = 4000;
 
 const SHELL_FILES = [
@@ -111,6 +113,7 @@ self.SWCore = {
   DATA_CACHE,
   BASE_CACHE,
   LIMITS,
+  TRIM_EVERY,
   NETWORK_TIMEOUT_MS,
   SHELL_FILES,
   strategyFor,

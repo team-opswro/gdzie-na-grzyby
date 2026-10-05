@@ -25,6 +25,12 @@ def run(tmp_path, resolv=RESOLV, **env):
     return r, cfg, conf
 
 
+def proxy_text(conf):
+    """Fragment lokalizacji razem z dołączanym plikiem wspólnych ustawień proxy."""
+    inc = conf.parent / "dane-proxy.inc"
+    return conf.read_text() + (inc.read_text() if inc.exists() else "")
+
+
 def test_local_mode_without_url(tmp_path):
     r, cfg, conf = run(tmp_path)
     assert r.returncode == 0, r.stderr
@@ -36,8 +42,21 @@ def test_proxy_mode_default(tmp_path):
     r, cfg, conf = run(tmp_path, DATA_BASE_URL="https://pub-abc123.r2.dev")
     assert r.returncode == 0, r.stderr
     assert json.loads(cfg.read_text()) == {"dataBase": "/dane/"}
-    c = conf.read_text()
-    assert "location ^~ /dane/ {" in c
+    inc = conf.parent / "dane-proxy.inc"
+    loc = conf.read_text()
+    c = loc + inc.read_text()
+    assert "location ^~ /dane/ {" in loc
+    # pliki wersjonowane: cache nginx w kawałkach (slice) — Range obsługiwany z cache
+    assert "location ^~ /dane/v/ {" in loc
+    assert loc.index("location ^~ /dane/v/ {") < loc.index("location ^~ /dane/ {")
+    assert loc.count(f"include {inc};") == 3
+    # cache tylko dla .pmtiles (JSON z R2 przy Range traci Content-Encoding)
+    assert "location ~ \\.pmtiles$ {" in loc
+    assert loc.index("location ~ \\.pmtiles$ {") < loc.index("slice 1m;")
+    for d in ("slice 1m;", "proxy_cache dane;", "proxy_cache_key $uri$slice_range;",
+              "proxy_set_header Range $slice_range;", "proxy_cache_valid 200 206 30d;", "proxy_cache_lock on;"):
+        assert d in loc, d
+    assert "location" not in inc.read_text()
     # Nazwa rozwiązywana przy żądaniu (zmienna + resolver), nie raz przy starcie nginx.
     assert 'set $dane_host "pub-abc123.r2.dev";' in c
     assert "rewrite ^/dane/(.*)$ /$1 break;" in c
@@ -61,14 +80,14 @@ def test_proxy_mode_default(tmp_path):
 def test_proxy_mode_resolver_fallback(tmp_path, resolv):
     r, cfg, conf = run(tmp_path, resolv=resolv, DATA_BASE_URL="https://pub-abc123.r2.dev")
     assert r.returncode == 0, r.stderr
-    assert "resolver 1.1.1.1 8.8.8.8 valid=300s ipv6=off;" in conf.read_text()
+    assert "resolver 1.1.1.1 8.8.8.8 valid=300s ipv6=off;" in proxy_text(conf)
 
 
 def test_proxy_mode_with_path_keeps_trailing_slash(tmp_path):
     r, cfg, conf = run(tmp_path, DATA_BASE_URL="https://dane.example.pl/grzyby/v_1", DATA_DIRECT="0")
     assert r.returncode == 0, r.stderr
     assert json.loads(cfg.read_text()) == {"dataBase": "/dane/"}
-    c = conf.read_text()
+    c = proxy_text(conf)
     assert "rewrite ^/dane/(.*)$ /grzyby/v_1/$1 break;" in c
     assert 'set $dane_host "dane.example.pl";' in c
 
@@ -94,6 +113,7 @@ def test_stale_proxy_conf_removed_on_restart(tmp_path):
     r, cfg, conf = run(tmp_path)
     assert r.returncode == 0
     assert not conf.exists()
+    assert not (conf.parent / "dane-proxy.inc").exists()
 
 
 @pytest.mark.parametrize("url", [

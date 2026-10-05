@@ -25,12 +25,13 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const strategy = core.strategyFor(event.request.url, event.request.method, self.registration.scope);
   if (strategy === "pass") return;
-  event.respondWith(handle(event.request, strategy));
+  event.respondWith(handle(event, strategy));
 });
 
-async function handle(request, strategy) {
+async function handle(event, strategy) {
+  const request = event.request;
   if (strategy === "network-first") return networkFirst(request);
-  if (strategy === "cache-first") return cacheFirst(request);
+  if (strategy === "cache-first") return cacheFirst(request, (p) => event.waitUntil(p));
   if (strategy === "swr") return staleWhileRevalidate(request);
   return fetch(request);
 }
@@ -63,7 +64,7 @@ async function cachedFallback(cache, request) {
   return null;
 }
 
-async function cacheFirst(request) {
+async function cacheFirst(request, background) {
   const dataCache = await caches.open(core.DATA_CACHE);
   const isVersioned = /\/v\/[^/]+\//.test(new URL(request.url).pathname);
   const cache = isVersioned ? dataCache : await caches.open(core.SHELL_CACHE);
@@ -79,17 +80,35 @@ async function cacheFirst(request) {
   if (!resp.ok) return resp;
   if (range && resp.status !== 206) return resp; // serwer zignorował Range — nie zapisujemy całości pod kluczem zakresu
 
-  // Kopia powstaje od razu (Cache API zużywa body zapisywanej odpowiedzi); oryginał wraca do strony.
+  // Odpowiedź wraca do strony od razu; zapis kopii i sprzątanie cache idą w tle (waitUntil) — wcześniej
+  // każdy kafelek czekał na dwa przeglądy całego cache (do 3000 wpisów) i na zapis na dysk.
   const copy = resp.clone();
-  if (isVersioned) await pruneOtherBuilds(cache, request.url);
-  await trimCache(cache, isVersioned ? core.LIMITS.data : core.SHELL_FILES.length + 100);
-  if (range) {
-    const contentRange = resp.headers.get("Content-Range");
-    if (contentRange) await storeRange(cache, key, copy, contentRange).catch(() => {});
-  } else {
-    await cache.put(key, copy).catch(() => {});
-  }
+  background((async () => {
+    await maintain(cache, request.url, isVersioned);
+    if (range) {
+      const contentRange = resp.headers.get("Content-Range");
+      if (contentRange) await storeRange(cache, key, copy, contentRange);
+    } else {
+      await cache.put(key, copy);
+    }
+  })().catch(() => {}));
   return resp;
+}
+
+// Sprzątanie rzadko, nie przy każdym zapisie: stare buildy raz na build (w czasie życia workera),
+// przycinanie co core.TRIM_EVERY zapisów.
+const prunedBuilds = new Set();
+let putsSinceTrim = Infinity; // pierwszy zapis po starcie workera sprawdza rozmiar
+async function maintain(cache, url, isVersioned) {
+  const build = isVersioned ? core.buildOf(url) : null;
+  if (build && !prunedBuilds.has(build)) {
+    prunedBuilds.add(build);
+    await pruneOtherBuilds(cache, url);
+  }
+  if (++putsSinceTrim >= core.TRIM_EVERY) {
+    putsSinceTrim = 0;
+    await trimCache(cache, isVersioned ? core.LIMITS.data : core.SHELL_FILES.length + 100);
+  }
 }
 
 // Pliki /v/<build>/ są niezmienne, ale po publikacji nowego buildu stare wpisy są bezużyteczne.
@@ -138,11 +157,7 @@ function rebuildRange(stored, range) {
 async function trimCache(cache, limit) {
   const keys = await cache.keys();
   if (keys.length <= limit) return;
+  const byUrl = new Map(keys.map((r) => [r.url, r]));
   const toDelete = core.trimPlan(keys.map((r) => r.url), limit);
-  await Promise.all(
-    toDelete.map((url) => {
-      const req = keys.find((r) => r.url === url);
-      return req ? cache.delete(req) : Promise.resolve();
-    }),
-  );
+  await Promise.all(toDelete.map((url) => cache.delete(byUrl.get(url))));
 }

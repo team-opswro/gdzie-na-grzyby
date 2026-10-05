@@ -31,7 +31,7 @@ write_config() {
 }
 
 # Restart kontenera zachowuje system plików — usuwamy fragment z poprzedniego startu.
-rm -f "$proxy_conf"
+rm -f "$proxy_conf" "$(dirname "$proxy_conf")/dane-proxy.inc"
 
 if [ -z "$url" ]; then
   write_config "data/"
@@ -74,38 +74,64 @@ fi
 [ -n "$resolvers" ] || resolvers="1.1.1.1 8.8.8.8"
 
 mkdir -p "$(dirname "$proxy_conf")"
+# Wspólne ustawienia proxy — plik bez .conf, bo dane.d/*.conf jest dołączane na poziomie server.
+proxy_inc="$(dirname "$proxy_conf")/dane-proxy.inc"
+cat > "$proxy_inc.tmp" <<EOF
+# Wygenerowane przez web-entrypoint z DATA_BASE_URL — nie edytować.
+limit_except GET { deny all; }
+resolver $resolvers valid=300s ipv6=off;
+resolver_timeout 5s;
+set \$dane_host "$host";
+# /dane/<plik>?<arg> -> https://<host><ścieżka><plik>?<arg> (argumenty zachowane).
+rewrite ^/dane/(.*)\$ $path\$1 break;
+proxy_pass https://\$dane_host;
+proxy_http_version 1.1;
+proxy_set_header Host \$dane_host;
+proxy_set_header Connection "";
+proxy_set_header Cookie "";
+proxy_set_header Authorization "";
+proxy_ssl_server_name on;
+proxy_ssl_name \$dane_host;
+proxy_ssl_verify on;
+proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+proxy_ssl_verify_depth 3;
+proxy_connect_timeout 5s;
+proxy_read_timeout 30s;
+proxy_send_timeout 30s;
+proxy_buffering on;
+proxy_hide_header Set-Cookie;
+proxy_ignore_headers Set-Cookie;
+# JSON w buckecie jest już skompresowany (Content-Encoding: gzip) — bez drugiej kompresji.
+gzip off;
+EOF
+mv "$proxy_inc.tmp" "$proxy_inc"
 tmp="$proxy_conf.tmp"
 cat > "$tmp" <<EOF
 # Wygenerowane przez web-entrypoint z DATA_BASE_URL — nie edytować.
 # Dane z bucketu pod tą samą domeną co strona (bez CORS na buckecie).
+# Kafelki wersjonowane (v/<build>/*.pmtiles) są niezmienne: cache na dysku serwera w kawałkach po 1 MB
+# (slice), z których nginx odpowiada na dowolne zakresy Range — kafelki nie czekają za każdym razem na
+# bucket (r2.dev). Tylko .pmtiles: JSON leży w buckecie jako gzip, a R2 na zapytanie z Range oddaje go
+# bez Content-Encoding — taki wpis w cache byłby dla przeglądarki uszkodzony.
+location ^~ /dane/v/ {
+    include $proxy_inc;
+    location ~ \.pmtiles\$ {
+        include $proxy_inc;
+        slice 1m;
+        proxy_cache dane;
+        proxy_cache_key \$uri\$slice_range;
+        proxy_set_header Range \$slice_range;
+        proxy_cache_valid 200 206 30d;
+        proxy_cache_lock on;
+        proxy_cache_lock_timeout 10s;
+        add_header X-Cache-Status \$upstream_cache_status always;
+    }
+}
+# manifest.json i live/pogoda.json — zawsze z bucketu.
 location ^~ /dane/ {
-    limit_except GET { deny all; }
-    resolver $resolvers valid=300s ipv6=off;
-    resolver_timeout 5s;
-    set \$dane_host "$host";
-    # /dane/<plik>?<arg> -> https://<host><ścieżka><plik>?<arg> (argumenty zachowane).
-    rewrite ^/dane/(.*)\$ $path\$1 break;
-    proxy_pass https://\$dane_host;
-    proxy_http_version 1.1;
-    proxy_set_header Host \$dane_host;
-    proxy_set_header Connection "";
-    proxy_set_header Cookie "";
-    proxy_set_header Authorization "";
-    proxy_ssl_server_name on;
-    proxy_ssl_name \$dane_host;
-    proxy_ssl_verify on;
-    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-    proxy_ssl_verify_depth 3;
-    proxy_connect_timeout 5s;
-    proxy_read_timeout 30s;
-    proxy_send_timeout 30s;
-    proxy_buffering on;
-    # Duże odpowiedzi (lasy.pmtiles bez Range) strumieniowane, nie buforowane na dysk.
+    include $proxy_inc;
+    # Duże odpowiedzi bez Range strumieniowane, nie buforowane na dysk.
     proxy_max_temp_file_size 0;
-    proxy_hide_header Set-Cookie;
-    proxy_ignore_headers Set-Cookie;
-    # JSON w buckecie jest już skompresowany (Content-Encoding: gzip) — bez drugiej kompresji.
-    gzip off;
 }
 EOF
 mv "$tmp" "$proxy_conf"
